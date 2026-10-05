@@ -211,6 +211,9 @@ public class MainActivity extends Activity {
         col.addView(navTile("Statistika",
                 "Po danima, kategorijama, aplikacijama i sajtovima",
                 v -> startActivity(new Intent(this, StatsActivity.class))), Ui.fill(this, 10));
+        col.addView(navTile("Vremenski režim",
+                (store.scheduleEnabled() ? "Uključen · " : "Isključen · ") + store.scheduleLabel(),
+                v -> startActivity(new Intent(this, ScheduleActivity.class))), Ui.fill(this, 10));
 
         if (hasPin) {
             TextView change = Ui.button(this, "Promeni PIN", false);

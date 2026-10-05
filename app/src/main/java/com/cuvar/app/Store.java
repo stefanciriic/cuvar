@@ -12,6 +12,7 @@ import java.security.MessageDigest;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -131,13 +132,80 @@ final class Store {
     }
 
     synchronized void setApp(String pkg, boolean lock, int limitMin) {
-        if (!lock && limitMin <= 0) {
+        setApp(pkg, lock, limitMin, appScheduled(pkg));
+    }
+
+    synchronized boolean appScheduled(String pkg) {
+        JSONObject o = apps.optJSONObject(pkg);
+        return o != null && o.optBoolean("scheduled", false);
+    }
+
+    synchronized boolean scheduleEnabled() { return sp.getBoolean("scheduleEnabled", false); }
+    synchronized int scheduleStart() { return sp.getInt("scheduleStart", 21 * 60); }
+    synchronized int scheduleEnd() { return sp.getInt("scheduleEnd", 9 * 60); }
+
+    synchronized void setSchedule(boolean enabled, int start, int end) {
+        sp.edit().putBoolean("scheduleEnabled", enabled).putInt("scheduleStart", start)
+                .putInt("scheduleEnd", end).apply();
+    }
+
+    synchronized boolean scheduleBlocks(String pkg) {
+        return appScheduled(pkg) && scheduleActive();
+    }
+
+    synchronized boolean scheduleActive() {
+        Calendar now = Calendar.getInstance();
+        return scheduleEnabled() && DailySchedule.contains(
+                scheduleStart(), scheduleEnd(), now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE));
+    }
+
+    synchronized String scheduleLabel() {
+        return DailySchedule.label(scheduleStart()) + "–" + DailySchedule.label(scheduleEnd());
+    }
+
+    synchronized List<String> scheduledApps() {
+        List<String> out = new ArrayList<>();
+        for (String pkg : keysOf(apps)) if (appScheduled(pkg)) out.add(pkg);
+        return out;
+    }
+
+    synchronized void setAppScheduled(String pkg, boolean selected) {
+        setApp(pkg, appLock(pkg), appLimit(pkg), selected);
+    }
+
+    synchronized List<String> scheduledSites() {
+        List<String> out = new ArrayList<>(sp.getStringSet("scheduledSites", Collections.emptySet()));
+        Collections.sort(out);
+        return out;
+    }
+
+    synchronized void setSiteScheduled(String domain, boolean selected) {
+        java.util.Set<String> out = new java.util.HashSet<>(scheduledSites());
+        if (selected) out.add(domain); else out.remove(domain);
+        sp.edit().putStringSet("scheduledSites", out).apply();
+    }
+
+    synchronized String matchScheduledSite(String host) {
+        return matchDomain(host, scheduledSites());
+    }
+
+    private static String matchDomain(String host, List<String> domains) {
+        String best = null;
+        for (String d : domains) {
+            if ((host.equals(d) || host.endsWith("." + d)) && (best == null || d.length() > best.length())) best = d;
+        }
+        return best;
+    }
+
+    synchronized void setApp(String pkg, boolean lock, int limitMin, boolean scheduled) {
+        if (!lock && limitMin <= 0 && !scheduled) {
             apps.remove(pkg);
         } else {
             try {
                 JSONObject o = new JSONObject();
                 o.put("lock", lock);
                 o.put("limit", Math.max(0, limitMin));
+                o.put("scheduled", scheduled);
                 apps.put(pkg, o);
             } catch (JSONException ignored) {
             }

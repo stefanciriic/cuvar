@@ -36,6 +36,11 @@ jobs:
           git commit -q -m "Projekat raspakovan iz zip fajla"
           git push -q
 
+      - name: Proveri vremenske periode
+        run: |
+          javac -encoding UTF-8 -d "$RUNNER_TEMP/schedule-tests" app/src/main/java/com/cuvar/app/DailySchedule.java tests/com/cuvar/app/DailyScheduleTest.java
+          java -cp "$RUNNER_TEMP/schedule-tests" com.cuvar.app.DailyScheduleTest
+
       - name: Napravi APK
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0" >/dev/null 2>&1 || true

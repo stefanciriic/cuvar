@@ -48,6 +48,7 @@ public class GuardService extends AccessibilityService {
     private static final int KIND_TIME = 2;       // istekao dnevni limit aplikacije
     private static final int KIND_SITE = 3;       // sajt uvek blokiran
     private static final int KIND_SITE_TIME = 4;  // istekao dnevni limit sajta
+    private static final int KIND_SCHEDULE = 5;
 
     /** Pregledači i ID polja sa adresom u svakom od njih. */
     private static final Map<String, String> BROWSERS = new HashMap<>();
@@ -75,6 +76,7 @@ public class GuardService extends AccessibilityService {
 
     private String currentPkg;    // aplikacija koja je trenutno na ekranu
     private String currentSite;   // domen sa liste koji je trenutno otvoren u pregledaču
+    private String currentScheduledSite;
     private String unlockedKey;   // šta je trenutno otključano PIN-om ("app:paket" ili "site:domen")
     private long unlockedLeftAt;
     private long lastTick;
@@ -296,12 +298,14 @@ public class GuardService extends AccessibilityService {
             return;
         }
         if (overlay != null && pkg.equals(getPackageName())) {
-            return; // to je naš ekran za blokadu
+            if (currentPkg == null) return;
+            pkg = currentPkg; // ponovo proveri pravila i dok je naš ekran preko aplikacije
         }
 
         if (!pkg.equals(currentPkg)) {
             currentPkg = pkg;
             currentSite = null;
+            currentScheduledSite = null;
         }
 
         String urlBarId = BROWSERS.get(pkg);
@@ -310,6 +314,7 @@ public class GuardService extends AccessibilityService {
             if (url != null) {
                 String host = Store.hostOf(url);
                 currentSite = host == null ? null : store.matchSite(host);
+                currentScheduledSite = host == null ? null : store.matchScheduledSite(host);
             }
         }
 
@@ -319,9 +324,16 @@ public class GuardService extends AccessibilityService {
         boolean lock = store.appLock(pkg);
         int limit = store.appLimit(pkg);
         boolean timeUp = limit > 0 && store.usedToday(pkg) >= limit * 60000L;
-        if (lock || timeUp) {
+        boolean scheduled = store.scheduleBlocks(pkg);
+        if (scheduled || lock || timeUp) {
             blockKey = "app:" + pkg;
-            kind = timeUp ? KIND_TIME : KIND_LOCK;
+            kind = scheduled ? KIND_SCHEDULE : timeUp ? KIND_TIME : KIND_LOCK;
+        }
+
+        if (!scheduled && urlBarId != null && currentScheduledSite != null
+                && store.scheduledSites().contains(currentScheduledSite) && store.scheduleActive()) {
+            blockKey = "site:" + currentScheduledSite;
+            kind = KIND_SCHEDULE;
         }
 
         if (blockKey == null && urlBarId != null && currentSite != null) {
@@ -350,7 +362,11 @@ public class GuardService extends AccessibilityService {
             }
         }
 
-        if (blockKey != null && !blockKey.equals(unlockedKey)) {
+        if (blockKey != null && (kind == KIND_SCHEDULE || !blockKey.equals(unlockedKey))) {
+            if (kind == KIND_SCHEDULE) {
+                unlockedKey = null;
+                unlockedLeftAt = 0;
+            }
             showOverlay(blockKey, kind);
         } else {
             hideOverlay();
@@ -428,7 +444,11 @@ public class GuardService extends AccessibilityService {
 
         String title;
         String sub;
-        if (kind == KIND_LOCK) {
+        if (kind == KIND_SCHEDULE) {
+            title = "Vremenski režim je aktivan";
+            sub = name + " je blokiran svakog dana od " + DailySchedule.label(store.scheduleStart())
+                    + " do " + DailySchedule.label(store.scheduleEnd()) + ".";
+        } else if (kind == KIND_LOCK) {
             title = name + " je zaključan";
             sub = "Unesi PIN da otvoriš aplikaciju.";
         } else if (kind == KIND_TIME) {
@@ -465,7 +485,7 @@ public class GuardService extends AccessibilityService {
         s.setGravity(Gravity.CENTER);
         box.addView(s, Ui.fill(c, 8));
 
-        if (store.hasPin()) {
+        if (store.hasPin() && kind != KIND_SCHEDULE) {
             final PinPad pad = new PinPad(c, true);
             pad.setListener(pin -> {
                 String err = store.tryPin(pin);

@@ -44,6 +44,8 @@
             android:name=".StatsActivity"
             android:exported="false" />
 
+        <activity android:name=".ScheduleActivity" android:exported="false" />
+
         <receiver
             android:name=".UpdateReceiver"
             android:exported="false">
