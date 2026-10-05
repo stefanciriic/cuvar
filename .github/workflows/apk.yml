@@ -1,0 +1,49 @@
+name: APK
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['**.md']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Preuzmi kod
+        run: |
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" .
+          if [ -n "${JAVA_HOME_17_X64:-}" ]; then echo "JAVA_HOME=${JAVA_HOME_17_X64}" >> "$GITHUB_ENV"; fi
+          echo "RUN_NO=$(( ${{ github.run_number }} + 100 ))" >> "$GITHUB_ENV"
+
+      # Radi samo jednom: raspakuje zip u obican projekat, dodaje Gradle wrapper i brise zip.
+      - name: Jednokratno - zip u obican projekat
+        run: |
+          ZIP="$(ls *.zip 2>/dev/null | sort -V | tail -n 1 || true)"
+          if [ -z "$ZIP" ]; then echo "Nema zip fajla, preskacem."; exit 0; fi
+          unzip -q -o "$ZIP"
+          curl -fsSL --retry 3 -o /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.9-bin.zip
+          unzip -q -o /tmp/gradle.zip -d /tmp
+          /tmp/gradle-8.9/bin/gradle --no-daemon wrapper --gradle-version 8.9
+          rm -f *.zip build.sh
+          printf '%s\n' '.gradle/' 'build/' 'local.properties' '*.apk' '.idea/' '*.iml' > .gitignore
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Projekat raspakovan iz zip fajla"
+          git push -q
+
+      - name: Napravi APK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0" >/dev/null 2>&1 || true
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleDebug
+
+      - name: Objavi u Releases
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk cuvar.apk
+          gh release delete "v$RUN_NO" --repo "$REPO" --yes --cleanup-tag >/dev/null 2>&1 || true
+          gh release create "v$RUN_NO" cuvar.apk --repo "$REPO" --title "Cuvar v$RUN_NO" --notes "Preuzmi cuvar.apk ispod (Assets)."
