@@ -40,6 +40,10 @@
             android:name=".SitesActivity"
             android:exported="false" />
 
+        <activity
+            android:name=".StatsActivity"
+            android:exported="false" />
+
         <receiver
             android:name=".UpdateReceiver"
             android:exported="false">

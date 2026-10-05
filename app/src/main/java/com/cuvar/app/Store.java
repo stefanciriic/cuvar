@@ -283,6 +283,38 @@ final class Store {
         return out;
     }
 
+    /** Ključevi poslednjih n dana koji imaju podatke (najstariji prvi); čuva se najviše 14 dana. */
+    synchronized List<String> recentDays(int n) {
+        List<String> days = keysOf(usage);
+        Collections.sort(days);
+        if (days.size() > n) {
+            days = days.subList(days.size() - n, days.size());
+        }
+        return days;
+    }
+
+    synchronized Map<String, Long> dayMap(String dayKey) {
+        Map<String, Long> out = new HashMap<>();
+        JSONObject d = usage.optJSONObject(dayKey);
+        if (d != null) {
+            for (String k : keysOf(d)) {
+                out.put(k, d.optLong(k, 0L));
+            }
+        }
+        return out;
+    }
+
+    /** Dan kao "pet 3.10." za prikaz u statistici. */
+    static String dayLabel(String dayKey) {
+        try {
+            Date d = new SimpleDateFormat("yyyyMMdd", Locale.US).parse(dayKey);
+            return new SimpleDateFormat("EEE d.M.",
+                    new Locale.Builder().setLanguage("sr").setScript("Latn").build()).format(d);
+        } catch (Exception e) {
+            return dayKey;
+        }
+    }
+
     synchronized void flush() {
         if (!dirty) {
             return;

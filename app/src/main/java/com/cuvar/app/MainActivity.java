@@ -208,6 +208,9 @@ public class MainActivity extends Activity {
         col.addView(navTile("Sajtovi",
                 siteRules == 0 ? "Blokiraj sajtove ili im postavi dnevni limit" : "Na listi: " + siteRules,
                 v -> startActivity(new Intent(this, SitesActivity.class))), Ui.fill(this, 10));
+        col.addView(navTile("Statistika",
+                "Po danima, kategorijama, aplikacijama i sajtovima",
+                v -> startActivity(new Intent(this, StatsActivity.class))), Ui.fill(this, 10));
 
         if (hasPin) {
             TextView change = Ui.button(this, "Promeni PIN", false);
