@@ -1,0 +1,38 @@
+plugins {
+    id 'com.android.application'
+}
+
+def runNo = (System.getenv('RUN_NO') ?: '1') as Integer
+
+android {
+    namespace 'com.cuvar.app'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.cuvar.app'
+        minSdk 26
+        targetSdk 34
+        versionCode runNo
+        versionName "1.${runNo}"
+    }
+
+    signingConfigs {
+        fixed {
+            storeFile file('cuvar.keystore')
+            storePassword 'cuvar123'
+            keyAlias 'cuvar'
+            keyPassword 'cuvar123'
+        }
+    }
+
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.fixed
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+}
