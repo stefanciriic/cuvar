@@ -220,6 +220,10 @@ public class MainActivity extends Activity {
                 13, Ui.MUTED, false);
         col.addView(note, Ui.fill(this, 18));
 
+        TextView version = Ui.text(this, "Verzija " + BuildConfig.VERSION_NAME, 12, Ui.MUTED, false);
+        version.setGravity(Gravity.CENTER);
+        col.addView(version, Ui.fill(this, 10));
+
         setScreen(col);
     }
 
