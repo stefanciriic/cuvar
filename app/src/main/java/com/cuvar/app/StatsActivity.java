@@ -19,7 +19,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
 
-/** Statistika kroz više dana: ukupno po danima, po kategorijama aplikacija, najkorišćenije aplikacije i sajtovi. */
+/** Statistika za danas ili više dana: ukupno po danima, sajtovi u pregledaču, kategorije i najkorišćenije aplikacije. */
 public class StatsActivity extends SubActivity {
 
     private static final class Row {
@@ -29,6 +29,7 @@ public class StatsActivity extends SubActivity {
 
     private int days = 7;
     private LinearLayout body;
+    private TextView tab1;
     private TextView tab7;
     private TextView tab14;
 
@@ -42,8 +43,13 @@ public class StatsActivity extends SubActivity {
 
         LinearLayout tabs = Ui.row(this);
         tabs.setPadding(Ui.dp(this, 20), 0, Ui.dp(this, 20), 0);
+        tab1 = chip("Danas");
         tab7 = chip("7 dana");
         tab14 = chip("14 dana");
+        tab1.setOnClickListener(v -> {
+            days = 1;
+            render();
+        });
         tab7.setOnClickListener(v -> {
             days = 7;
             render();
@@ -52,6 +58,7 @@ public class StatsActivity extends SubActivity {
             days = 14;
             render();
         });
+        tabs.addView(tab1, chipParams());
         tabs.addView(tab7, chipParams());
         tabs.addView(tab14, chipParams());
         root.addView(tabs, Ui.fill(this, 4));
@@ -88,6 +95,7 @@ public class StatsActivity extends SubActivity {
     }
 
     private void render() {
+        setChipActive(tab1, days == 1);
         setChipActive(tab7, days == 7);
         setChipActive(tab14, days == 14);
         body.removeAllViews();
@@ -102,15 +110,26 @@ public class StatsActivity extends SubActivity {
         List<Row> perDay = new ArrayList<>();
         long grandTotal = 0;
 
-        List<String> dayKeys = store.recentDays(days);
+        List<String> dayKeys = days == 1 ? Collections.singletonList(Store.day()) : store.recentDays(days);
         for (String dk : dayKeys) {
             long dayTotal = 0;
-            for (Map.Entry<String, Long> e : store.dayMap(dk).entrySet()) {
+            Map<String, Long> day = store.dayMap(dk);
+            // Dani pre merenja svih sajtova imaju samo sajtove sa liste; tada se prikazuju oni.
+            boolean hasWeb = false;
+            for (String key : day.keySet()) {
+                if (key.startsWith("web:")) {
+                    hasWeb = true;
+                    break;
+                }
+            }
+            for (Map.Entry<String, Long> e : day.entrySet()) {
                 String key = e.getKey();
                 long ms = e.getValue();
-                if (key.startsWith("site:")) {
-                    String domain = key.substring(5);
-                    perSite.put(domain, perSite.getOrDefault(domain, 0L) + ms);
+                if (key.startsWith("web:") || key.startsWith("site:")) {
+                    if (key.startsWith("web:") == hasWeb) {
+                        String domain = key.substring(key.indexOf(':') + 1);
+                        perSite.put(domain, perSite.getOrDefault(domain, 0L) + ms);
+                    }
                     continue; // vreme sajta je već deo vremena pregledača, ne broji se duplo u ukupno
                 }
                 if (key.equals(homePkg) || key.equals(me)) {
@@ -129,22 +148,24 @@ public class StatsActivity extends SubActivity {
         }
 
         body.addView(summaryCard(grandTotal, dayKeys.size()), Ui.fill(this, 14));
-        body.addView(barsCard("Po danima", perDay), Ui.fill(this, 16));
+        if (days > 1) {
+            body.addView(barsCard("Po danima", perDay), Ui.fill(this, 16));
+        }
+        body.addView(barsCard("Sajtovi u pregledaču", topRows(perSite, k -> k, 10)), Ui.fill(this, 16));
         body.addView(barsCard("Po kategorijama", categoryRows(perCategory)), Ui.fill(this, 16));
         body.addView(barsCard("Najkorišćenije aplikacije",
                 topRows(perApp, k -> labelOf(pm, k), 8)), Ui.fill(this, 16));
-        if (!perSite.isEmpty()) {
-            body.addView(barsCard("Najposećeniji sajtovi",
-                    topRows(perSite, k -> k, 8)), Ui.fill(this, 16));
-        }
     }
 
     private View summaryCard(long total, int dayCount) {
         LinearLayout card = Ui.card(this);
-        TextView eyebrow = Ui.text(this, "UKUPNO ZA PERIOD", 12, Ui.MUTED, true);
+        TextView eyebrow = Ui.text(this, days == 1 ? "UKUPNO DANAS" : "UKUPNO ZA PERIOD", 12, Ui.MUTED, true);
         eyebrow.setLetterSpacing(0.15f);
         card.addView(eyebrow);
         card.addView(Ui.text(this, Ui.fmt(total), 34, Ui.INK, true), Ui.fill(this, 4));
+        if (days == 1) {
+            return card;
+        }
         long avg = dayCount > 0 ? total / dayCount : 0;
         card.addView(Ui.text(this, "Prosečno " + Ui.fmt(avg) + " po danu", 14, Ui.MUTED, false),
                 Ui.fill(this, 4));

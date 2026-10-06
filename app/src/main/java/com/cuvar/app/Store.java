@@ -15,11 +15,14 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /** Sva podešavanja i izmereno vreme. Čuva se samo na telefonu. */
 final class Store {
@@ -389,9 +392,46 @@ final class Store {
         return s.isEmpty() ? null : s;
     }
 
+    /** Drugi nivo ispod državnog domena, npr. "co" u "bbc.co.uk" ili "org" u "nesto.org.rs". */
+    private static final Set<String> SECOND_LEVEL = new HashSet<>(Arrays.asList(
+            "co", "com", "org", "net", "edu", "gov", "ac", "in", "or", "ne", "go"));
+
+    /**
+     * Glavni domen hosta, da se poddomeni sabiraju zajedno:
+     * "m.youtube.com" -> "youtube.com", "news.bbc.co.uk" -> "bbc.co.uk". Null ako ne liči na domen.
+     */
+    static String mainDomain(String host) {
+        if (host == null || host.indexOf('.') < 0 || !host.matches("[\\p{L}\\p{N}.-]+")) {
+            return null;
+        }
+        if (host.matches("[0-9.]+")) {
+            return host; // IP adresa
+        }
+        List<String> parts = new ArrayList<>();
+        for (String part : host.split("\\.")) {
+            if (!part.isEmpty()) {
+                parts.add(part);
+            }
+        }
+        int n = parts.size();
+        if (n < 2) {
+            return null;
+        }
+        int keep = n >= 3 && parts.get(n - 1).length() == 2 && SECOND_LEVEL.contains(parts.get(n - 2)) ? 3 : 2;
+        StringBuilder sb = new StringBuilder();
+        for (int i = n - Math.min(keep, n); i < n; i++) {
+            if (sb.length() > 0) {
+                sb.append('.');
+            }
+            sb.append(parts.get(i));
+        }
+        return sb.toString();
+    }
+
     // ---------- Izmereno vreme ----------
 
-    private static String day() {
+    /** Ključ današnjeg dana ("yyyyMMdd"). */
+    static String day() {
         return new SimpleDateFormat("yyyyMMdd", Locale.US).format(new Date());
     }
 

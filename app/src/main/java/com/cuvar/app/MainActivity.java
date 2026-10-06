@@ -194,7 +194,7 @@ public class MainActivity extends Activity {
                 siteRules == 0 ? "Blokiraj sajtove ili im postavi dnevni limit" : "Na listi: " + siteRules,
                 v -> startActivity(new Intent(this, SitesActivity.class))), Ui.fill(this, 10));
         col.addView(navTile("Statistika",
-                "Po danima, kategorijama, aplikacijama i sajtovima",
+                "Po danima, sajtovima, kategorijama i aplikacijama",
                 v -> startActivity(new Intent(this, StatsActivity.class))), Ui.fill(this, 10));
         col.addView(navTile("Vremenski režim",
                 scheduleSummary(),
@@ -276,7 +276,7 @@ public class MainActivity extends Activity {
         long total = 0;
         for (Map.Entry<String, Long> e : store.todayMap().entrySet()) {
             String key = e.getKey();
-            if (key.startsWith("site:") || key.equals(home) || key.equals(me)) {
+            if (key.startsWith("site:") || key.startsWith("web:") || key.equals(home) || key.equals(me)) {
                 continue;
             }
             String label = labelOf(pm, key);

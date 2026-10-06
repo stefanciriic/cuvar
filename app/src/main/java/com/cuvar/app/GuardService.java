@@ -97,8 +97,14 @@ public class GuardService extends AccessibilityService {
                 boolean active = power.isInteractive() && !keyguard.isKeyguardLocked();
                 if (active && overlay == null && currentPkg != null && dt > 0 && dt <= 3 * TICK_MS) {
                     store.addUsage(currentPkg, dt);
-                    if (currentSite != null && BROWSERS.containsKey(currentPkg)) {
-                        store.addUsage("site:" + currentSite, dt);
+                    if (BROWSERS.containsKey(currentPkg)) {
+                        if (currentSite != null) {
+                            store.addUsage("site:" + currentSite, dt); // za limite sa liste sajtova
+                        }
+                        String web = Store.mainDomain(currentHost);
+                        if (web != null) {
+                            store.addUsage("web:" + web, dt); // za statistiku svih posećenih sajtova
+                        }
                     }
                 }
             } catch (Throwable ignored) {
