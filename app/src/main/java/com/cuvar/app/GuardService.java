@@ -76,7 +76,8 @@ public class GuardService extends AccessibilityService {
 
     private String currentPkg;    // aplikacija koja je trenutno na ekranu
     private String currentSite;   // domen sa liste koji je trenutno otvoren u pregledaču
-    private String currentScheduledSite;
+    private String currentHost;   // host trenutno otvoren u pregledaču (za vremenske režime)
+    private DailySchedule.Rule overlayRule; // režim prikazan na ekranu za blokadu
     private String unlockedKey;   // šta je trenutno otključano PIN-om ("app:paket" ili "site:domen")
     private long unlockedLeftAt;
     private long lastTick;
@@ -303,7 +304,7 @@ public class GuardService extends AccessibilityService {
         if (!pkg.equals(currentPkg)) {
             currentPkg = pkg;
             currentSite = null;
-            currentScheduledSite = null;
+            currentHost = null;
         }
 
         String urlBarId = BROWSERS.get(pkg);
@@ -312,7 +313,7 @@ public class GuardService extends AccessibilityService {
             if (url != null) {
                 String host = Store.hostOf(url);
                 currentSite = host == null ? null : store.matchSite(host);
-                currentScheduledSite = host == null ? null : store.matchScheduledSite(host);
+                currentHost = host;
             }
         }
 
@@ -322,16 +323,18 @@ public class GuardService extends AccessibilityService {
         boolean lock = store.appLock(pkg);
         int limit = store.appLimit(pkg);
         boolean timeUp = limit > 0 && store.usedToday(pkg) >= limit * 60000L;
-        boolean scheduled = store.scheduleBlocks(pkg);
-        if (scheduled || lock || timeUp) {
+        DailySchedule.Rule rule = store.scheduleBlockingApp(pkg);
+        if (rule != null || lock || timeUp) {
             blockKey = "app:" + pkg;
-            kind = scheduled ? KIND_SCHEDULE : timeUp ? KIND_TIME : KIND_LOCK;
+            kind = rule != null ? KIND_SCHEDULE : timeUp ? KIND_TIME : KIND_LOCK;
         }
 
-        if (!scheduled && urlBarId != null && currentScheduledSite != null
-                && store.scheduledSites().contains(currentScheduledSite) && store.scheduleActive()) {
-            blockKey = "site:" + currentScheduledSite;
-            kind = KIND_SCHEDULE;
+        if (rule == null && urlBarId != null && currentHost != null) {
+            rule = store.scheduleBlockingSite(currentHost);
+            if (rule != null) {
+                blockKey = "site:" + DailySchedule.matchDomain(currentHost, rule.sites);
+                kind = KIND_SCHEDULE;
+            }
         }
 
         if (blockKey == null && urlBarId != null && currentSite != null) {
@@ -365,7 +368,7 @@ public class GuardService extends AccessibilityService {
                 unlockedKey = null;
                 unlockedLeftAt = 0;
             }
-            showOverlay(blockKey, kind);
+            showOverlay(blockKey, kind, rule);
         } else {
             hideOverlay();
         }
@@ -399,13 +402,13 @@ public class GuardService extends AccessibilityService {
 
     // ---------- Ekran za blokadu ----------
 
-    private void showOverlay(String key, int kind) {
-        if (overlay != null && key.equals(overlayKey) && kind == overlayKind) {
+    private void showOverlay(String key, int kind, DailySchedule.Rule rule) {
+        if (overlay != null && key.equals(overlayKey) && kind == overlayKind && sameRule(rule, overlayRule)) {
             return;
         }
         hideOverlay();
         try {
-            View v = buildOverlay(key, kind);
+            View v = buildOverlay(key, kind, rule);
             WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
                     WindowManager.LayoutParams.MATCH_PARENT,
                     WindowManager.LayoutParams.MATCH_PARENT,
@@ -417,6 +420,7 @@ public class GuardService extends AccessibilityService {
             overlay = v;
             overlayKey = key;
             overlayKind = kind;
+            overlayRule = rule;
         } catch (Throwable t) {
             overlay = null;
             overlayKey = null;
@@ -432,20 +436,27 @@ public class GuardService extends AccessibilityService {
             overlay = null;
             overlayKey = null;
             overlayKind = 0;
+            overlayRule = null;
         }
     }
 
-    private View buildOverlay(final String key, int kind) {
+    /** Isti režim sa istim nazivom i periodom; inače ekran za blokadu treba osvežiti. */
+    private static boolean sameRule(DailySchedule.Rule a, DailySchedule.Rule b) {
+        if (a == null || b == null) return a == b;
+        return a.id.equals(b.id) && a.name.equals(b.name) && a.start == b.start && a.end == b.end;
+    }
+
+    private View buildOverlay(final String key, int kind, DailySchedule.Rule rule) {
         final Context c = this;
         final boolean isSite = key.startsWith("site:");
         String name = isSite ? key.substring(5) : appLabel(key.substring(4));
 
         String title;
         String sub;
-        if (kind == KIND_SCHEDULE) {
-            title = "Vremenski režim je aktivan";
-            sub = name + " je blokiran svakog dana od " + DailySchedule.label(store.scheduleStart())
-                    + " do " + DailySchedule.label(store.scheduleEnd()) + ".";
+        if (kind == KIND_SCHEDULE && rule != null) {
+            title = "Režim „" + rule.name + "“ je aktivan";
+            sub = name + " je blokiran svakog dana od " + DailySchedule.label(rule.start)
+                    + " do " + DailySchedule.label(rule.end) + ".";
         } else if (kind == KIND_LOCK) {
             title = name + " je zaključan";
             sub = "Unesi PIN da otvoriš aplikaciju.";

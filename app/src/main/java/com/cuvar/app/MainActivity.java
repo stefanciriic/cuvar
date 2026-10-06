@@ -197,7 +197,7 @@ public class MainActivity extends Activity {
                 "Po danima, kategorijama, aplikacijama i sajtovima",
                 v -> startActivity(new Intent(this, StatsActivity.class))), Ui.fill(this, 10));
         col.addView(navTile("Vremenski režim",
-                (store.scheduleEnabled() ? "Uključen · " : "Isključen · ") + store.scheduleLabel(),
+                scheduleSummary(),
                 v -> startActivity(new Intent(this, ScheduleActivity.class))), Ui.fill(this, 10));
 
         if (hasPin) {
@@ -238,6 +238,15 @@ public class MainActivity extends Activity {
             card.addView(hlp, Ui.fill(this, 6));
         }
         return card;
+    }
+
+    private String scheduleSummary() {
+        List<DailySchedule.Rule> rules = store.schedules();
+        if (rules.isEmpty()) return "Još nema režima";
+        int on = 0;
+        for (DailySchedule.Rule r : rules) if (r.enabled) on++;
+        if (rules.size() == 1) return (on == 1 ? "Uključen · " : "Isključen · ") + rules.get(0).label();
+        return rules.size() + " režima · uključeno " + on;
     }
 
     private View navTile(String title, String sub, View.OnClickListener onClick) {

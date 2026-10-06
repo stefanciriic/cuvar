@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.SystemClock;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -35,6 +36,7 @@ final class Store {
     private final JSONObject apps;   // paket -> {lock, limit}
     private final JSONObject sites;  // domen -> {limit}
     private final JSONObject usage;  // dan -> {ključ: ms}
+    private final List<DailySchedule.Rule> schedules = new ArrayList<>();
     private boolean dirty;
     private long lastSave;
     private int fails;
@@ -45,6 +47,8 @@ final class Store {
         apps = parse(sp.getString("apps", "{}"));
         sites = parse(sp.getString("sites", "{}"));
         usage = parse(sp.getString("usage", "{}"));
+        migrateSchedule();
+        loadSchedules();
         prune();
     }
 
@@ -132,85 +136,176 @@ final class Store {
     }
 
     synchronized void setApp(String pkg, boolean lock, int limitMin) {
-        setApp(pkg, lock, limitMin, appScheduled(pkg));
-    }
-
-    synchronized boolean appScheduled(String pkg) {
-        JSONObject o = apps.optJSONObject(pkg);
-        return o != null && o.optBoolean("scheduled", false);
-    }
-
-    synchronized boolean scheduleEnabled() { return sp.getBoolean("scheduleEnabled", false); }
-    synchronized int scheduleStart() { return sp.getInt("scheduleStart", 21 * 60); }
-    synchronized int scheduleEnd() { return sp.getInt("scheduleEnd", 9 * 60); }
-
-    synchronized void setSchedule(boolean enabled, int start, int end) {
-        sp.edit().putBoolean("scheduleEnabled", enabled).putInt("scheduleStart", start)
-                .putInt("scheduleEnd", end).apply();
-    }
-
-    synchronized boolean scheduleBlocks(String pkg) {
-        return appScheduled(pkg) && scheduleActive();
-    }
-
-    synchronized boolean scheduleActive() {
-        Calendar now = Calendar.getInstance();
-        return scheduleEnabled() && DailySchedule.contains(
-                scheduleStart(), scheduleEnd(), now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE));
-    }
-
-    synchronized String scheduleLabel() {
-        return DailySchedule.label(scheduleStart()) + "–" + DailySchedule.label(scheduleEnd());
-    }
-
-    synchronized List<String> scheduledApps() {
-        List<String> out = new ArrayList<>();
-        for (String pkg : keysOf(apps)) if (appScheduled(pkg)) out.add(pkg);
-        return out;
-    }
-
-    synchronized void setAppScheduled(String pkg, boolean selected) {
-        setApp(pkg, appLock(pkg), appLimit(pkg), selected);
-    }
-
-    synchronized List<String> scheduledSites() {
-        List<String> out = new ArrayList<>(sp.getStringSet("scheduledSites", Collections.emptySet()));
-        Collections.sort(out);
-        return out;
-    }
-
-    synchronized void setSiteScheduled(String domain, boolean selected) {
-        java.util.Set<String> out = new java.util.HashSet<>(scheduledSites());
-        if (selected) out.add(domain); else out.remove(domain);
-        sp.edit().putStringSet("scheduledSites", out).apply();
-    }
-
-    synchronized String matchScheduledSite(String host) {
-        return matchDomain(host, scheduledSites());
-    }
-
-    private static String matchDomain(String host, List<String> domains) {
-        String best = null;
-        for (String d : domains) {
-            if ((host.equals(d) || host.endsWith("." + d)) && (best == null || d.length() > best.length())) best = d;
-        }
-        return best;
-    }
-
-    synchronized void setApp(String pkg, boolean lock, int limitMin, boolean scheduled) {
-        if (!lock && limitMin <= 0 && !scheduled) {
+        if (!lock && limitMin <= 0) {
             apps.remove(pkg);
         } else {
             try {
                 JSONObject o = new JSONObject();
                 o.put("lock", lock);
                 o.put("limit", Math.max(0, limitMin));
-                o.put("scheduled", scheduled);
                 apps.put(pkg, o);
             } catch (JSONException ignored) {
             }
         }
         sp.edit().putString("apps", apps.toString()).apply();
+    }
+
+    // ---------- Vremenski režimi ----------
+
+    /** Prebacuje stari jedini režim (pre više režima) u prvi režim liste, bez gubitka izbora. */
+    private void migrateSchedule() {
+        if (sp.contains("schedules")) {
+            return;
+        }
+        DailySchedule.Rule first = new DailySchedule.Rule(newScheduleId(), "Režim 1",
+                sp.getBoolean("scheduleEnabled", false),
+                sp.getInt("scheduleStart", 21 * 60), sp.getInt("scheduleEnd", 9 * 60));
+        for (String pkg : keysOf(apps)) {
+            JSONObject o = apps.optJSONObject(pkg);
+            if (o == null || !o.has("scheduled")) continue;
+            if (o.optBoolean("scheduled", false)) first.apps.add(pkg);
+            o.remove("scheduled");
+            if (!o.optBoolean("lock", false) && o.optInt("limit", 0) <= 0) apps.remove(pkg);
+        }
+        first.sites.addAll(sp.getStringSet("scheduledSites", Collections.emptySet()));
+        boolean hadOld = sp.contains("scheduleEnabled") || !first.apps.isEmpty() || !first.sites.isEmpty();
+        if (hadOld) schedules.add(first);
+        sp.edit().putString("apps", apps.toString()).putString("schedules", schedulesJson())
+                .remove("scheduleEnabled").remove("scheduleStart").remove("scheduleEnd")
+                .remove("scheduledSites").apply();
+    }
+
+    private void loadSchedules() {
+        schedules.clear();
+        JSONArray arr;
+        try {
+            arr = new JSONArray(sp.getString("schedules", "[]"));
+        } catch (JSONException e) {
+            arr = new JSONArray();
+        }
+        for (int i = 0; i < arr.length(); i++) {
+            JSONObject o = arr.optJSONObject(i);
+            if (o == null) continue;
+            DailySchedule.Rule r = new DailySchedule.Rule(o.optString("id", newScheduleId()),
+                    o.optString("name", "Režim " + (i + 1)), o.optBoolean("enabled", false),
+                    o.optInt("start", 21 * 60), o.optInt("end", 9 * 60));
+            JSONArray a = o.optJSONArray("apps");
+            for (int k = 0; a != null && k < a.length(); k++) r.apps.add(a.optString(k));
+            JSONArray s = o.optJSONArray("sites");
+            for (int k = 0; s != null && k < s.length(); k++) r.sites.add(s.optString(k));
+            schedules.add(r);
+        }
+    }
+
+    private String schedulesJson() {
+        JSONArray arr = new JSONArray();
+        for (DailySchedule.Rule r : schedules) {
+            try {
+                JSONObject o = new JSONObject();
+                o.put("id", r.id);
+                o.put("name", r.name);
+                o.put("enabled", r.enabled);
+                o.put("start", r.start);
+                o.put("end", r.end);
+                o.put("apps", new JSONArray(r.apps));
+                o.put("sites", new JSONArray(r.sites));
+                arr.put(o);
+            } catch (JSONException ignored) {
+            }
+        }
+        return arr.toString();
+    }
+
+    private void saveSchedules() {
+        sp.edit().putString("schedules", schedulesJson()).apply();
+    }
+
+    private static String newScheduleId() {
+        return Long.toString(System.currentTimeMillis(), 36) + Integer.toString((int) (Math.random() * 1296), 36);
+    }
+
+    private DailySchedule.Rule rule(String id) {
+        for (DailySchedule.Rule r : schedules) if (r.id.equals(id)) return r;
+        return null;
+    }
+
+    private static DailySchedule.Rule copy(DailySchedule.Rule r) {
+        DailySchedule.Rule c = new DailySchedule.Rule(r.id, r.name, r.enabled, r.start, r.end);
+        c.apps.addAll(r.apps);
+        c.sites.addAll(r.sites);
+        return c;
+    }
+
+    /** Kopije režima, da ih ekran i servis ne menjaju mimo Store-a. */
+    synchronized List<DailySchedule.Rule> schedules() {
+        List<DailySchedule.Rule> out = new ArrayList<>();
+        for (DailySchedule.Rule r : schedules) out.add(copy(r));
+        return out;
+    }
+
+    synchronized DailySchedule.Rule schedule(String id) {
+        DailySchedule.Rule r = rule(id);
+        return r == null ? null : copy(r);
+    }
+
+    synchronized DailySchedule.Rule addSchedule() {
+        int n = schedules.size() + 1;
+        while (true) {
+            boolean taken = false;
+            for (DailySchedule.Rule r : schedules) if (r.name.equals("Režim " + n)) taken = true;
+            if (!taken) break;
+            n++;
+        }
+        DailySchedule.Rule r = new DailySchedule.Rule(newScheduleId(), "Režim " + n, false, 21 * 60, 9 * 60);
+        schedules.add(r);
+        saveSchedules();
+        return copy(r);
+    }
+
+    synchronized void removeSchedule(String id) {
+        DailySchedule.Rule r = rule(id);
+        if (r != null && schedules.remove(r)) saveSchedules();
+    }
+
+    synchronized void setSchedule(String id, String name, boolean enabled, int start, int end) {
+        DailySchedule.Rule r = rule(id);
+        if (r == null) return;
+        r.name = name;
+        r.enabled = enabled;
+        r.start = start;
+        r.end = end;
+        saveSchedules();
+    }
+
+    synchronized void setScheduleApp(String id, String pkg, boolean selected) {
+        DailySchedule.Rule r = rule(id);
+        if (r == null) return;
+        if (selected) r.apps.add(pkg); else r.apps.remove(pkg);
+        saveSchedules();
+    }
+
+    synchronized void setScheduleSite(String id, String domain, boolean selected) {
+        DailySchedule.Rule r = rule(id);
+        if (r == null) return;
+        if (selected) r.sites.add(domain); else r.sites.remove(domain);
+        saveSchedules();
+    }
+
+    private static int minuteNow() {
+        Calendar now = Calendar.getInstance();
+        return now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE);
+    }
+
+    /** Režim koji trenutno blokira aplikaciju, ili null. */
+    synchronized DailySchedule.Rule scheduleBlockingApp(String pkg) {
+        DailySchedule.Rule r = DailySchedule.blockingApp(schedules, pkg, minuteNow());
+        return r == null ? null : copy(r);
+    }
+
+    /** Režim koji trenutno blokira host (i poddomene), ili null. */
+    synchronized DailySchedule.Rule scheduleBlockingSite(String host) {
+        DailySchedule.Rule r = DailySchedule.blockingSite(schedules, host, minuteNow());
+        return r == null ? null : copy(r);
     }
 
     // ---------- Sajtovi ----------
