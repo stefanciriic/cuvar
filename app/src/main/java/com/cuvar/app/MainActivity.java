@@ -1,13 +1,11 @@
 package com.cuvar.app;
 
-import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.view.Gravity;
@@ -42,16 +40,11 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         store = Store.get(this);
         Ui.styleWindow(this);
-        if (Build.VERSION.SDK_INT >= 33
-                && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 1);
-        }
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        Updater.maybeCheck(this);
         if (store.hasPin() && !Session.valid()) {
             Session.authed = false;
             showGate();
@@ -176,14 +169,6 @@ public class MainActivity extends Activity {
 
         boolean hasPin = store.hasPin();
         boolean enabled = GuardService.isEnabled(this);
-
-        String pendingUpdateUrl = Updater.pendingUrl(this);
-        if (pendingUpdateUrl != null) {
-            col.addView(setupCard("Nova verzija Čuvara",
-                    "Dostupno je ažuriranje. Tapni da ga preuzmeš, pa potvrdi instalaciju kad te telefon pita.",
-                    "Preuzmi i instaliraj", v -> Updater.startDownload(this, pendingUpdateUrl), null, null),
-                    Ui.fill(this, 18));
-        }
 
         if (!hasPin) {
             col.addView(setupCard("Postavi PIN",

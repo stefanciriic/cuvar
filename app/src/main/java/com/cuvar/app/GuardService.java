@@ -103,7 +103,6 @@ public class GuardService extends AccessibilityService {
             } catch (Throwable ignored) {
             }
             safeCheck();
-            Updater.maybeCheck(GuardService.this);
             h.postDelayed(this, TICK_MS);
         }
     };
@@ -208,7 +207,6 @@ public class GuardService extends AccessibilityService {
         h.removeCallbacks(tick);
         h.postDelayed(tick, TICK_MS);
         safeCheck();
-        Updater.maybeCheck(this);
     }
 
     @Override
