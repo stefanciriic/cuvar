@@ -10,6 +10,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.graphics.PixelFormat;
+import android.graphics.Typeface;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
@@ -459,22 +460,25 @@ public class GuardService extends AccessibilityService {
 
         String title;
         String sub;
+        String joke;
         if (kind == KIND_SCHEDULE && rule != null) {
             title = "Režim „" + rule.name + "“ je aktivan";
             sub = name + " je blokiran svakog dana od " + DailySchedule.label(rule.start)
                     + " do " + DailySchedule.label(rule.end) + ".";
+            joke = Jokes.pick(Jokes.SCHEDULE);
         } else if (kind == KIND_LOCK) {
             title = name + " je zaključan";
             sub = "Unesi PIN da otvoriš aplikaciju.";
-        } else if (kind == KIND_TIME) {
-            title = "Vreme je isteklo";
-            sub = "Dnevni limit za " + name + " je potrošen. Sutra kreće ispočetka.";
+            joke = Jokes.pick(Jokes.LOCK);
         } else if (kind == KIND_SITE) {
             title = "Sajt je blokiran";
             sub = name + " je na tvojoj listi blokiranih sajtova.";
+            joke = Jokes.pick(Jokes.SITE);
         } else {
             title = "Vreme je isteklo";
-            sub = "Dnevni limit za " + name + " je potrošen. Sutra kreće ispočetka.";
+            long used = store.usedToday(isSite ? key : key.substring(4));
+            sub = "Danas si na " + name + " proveo " + Ui.fmt(used) + ". Dnevni limit je potrošen, sutra kreće ispočetka.";
+            joke = Jokes.pick(Jokes.TIME_UP);
         }
 
         ScrollView scroll = new ScrollView(c);
@@ -500,20 +504,25 @@ public class GuardService extends AccessibilityService {
         s.setGravity(Gravity.CENTER);
         box.addView(s, Ui.fill(c, 8));
 
+        TextView j = Ui.text(c, joke, 16, Ui.NIGHT_ACCENT, false);
+        j.setGravity(Gravity.CENTER);
+        j.setTypeface(Typeface.create("sans-serif", Typeface.ITALIC));
+        box.addView(j, Ui.fill(c, 16));
+
         if (store.hasPin() && kind != KIND_SCHEDULE) {
-            final PinPad pad = new PinPad(c, true);
-            pad.setListener(pin -> {
-                String err = store.tryPin(pin);
-                if (err == null) {
-                    unlockedKey = key;
-                    unlockedLeftAt = 0;
-                    hideOverlay();
-                } else {
-                    pad.clear();
-                    pad.setMessage(err);
-                }
-            });
-            box.addView(pad, Ui.fill(c, 22));
+            final LinearLayout unlock = Ui.column(c);
+            unlock.setGravity(Gravity.CENTER_HORIZONTAL);
+            box.addView(unlock, Ui.fill(c, 22));
+            // Zaključana aplikacija odmah traži PIN; kod isteklog vremena i blokiranog sajta prvo pitamo.
+            if (kind == KIND_LOCK) {
+                showPinPad(unlock, key);
+            } else {
+                TextView ask = overlayButton(c, "Ipak želim da otključam");
+                ask.setTextColor(Ui.NIGHT_MUTED);
+                ask.setBackground(null);
+                ask.setOnClickListener(v -> showAreYouSure(unlock, key));
+                unlock.addView(ask);
+            }
         }
 
         LinearLayout actions = Ui.row(c);
@@ -539,6 +548,48 @@ public class GuardService extends AccessibilityService {
         scroll.addView(box, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT));
         return scroll;
+    }
+
+    /** Šaljivo „Jesi li siguran?“ pre unosa PIN-a. */
+    private void showAreYouSure(final LinearLayout area, final String key) {
+        final Context c = this;
+        area.removeAllViews();
+        TextView q = Ui.text(c, "Jesi li siguran?", 22, 0xFFFFFFFF, true);
+        q.setGravity(Gravity.CENTER);
+        area.addView(q, Ui.fill(c, 0));
+        TextView why = Ui.text(c, Jokes.pick(Jokes.ARE_YOU_SURE), 15, Ui.NIGHT_MUTED, false);
+        why.setGravity(Gravity.CENTER);
+        area.addView(why, Ui.fill(c, 6));
+
+        TextView no = overlayButton(c, Jokes.pick(Jokes.NO));
+        no.setBackground(Ui.pressable(Ui.ACCENT, Ui.ACCENT_DOWN, Ui.dp(c, 14)));
+        no.setOnClickListener(v -> {
+            performGlobalAction(key.startsWith("site:") ? GLOBAL_ACTION_BACK : GLOBAL_ACTION_HOME);
+            h.removeCallbacks(recheckSoon);
+            h.postDelayed(recheckSoon, 600);
+        });
+        area.addView(no, Ui.fill(c, 16));
+
+        TextView yes = overlayButton(c, Jokes.pick(Jokes.YES));
+        yes.setOnClickListener(v -> showPinPad(area, key));
+        area.addView(yes, Ui.fill(c, 10));
+    }
+
+    private void showPinPad(final LinearLayout area, final String key) {
+        area.removeAllViews();
+        final PinPad pad = new PinPad(this, true);
+        pad.setListener(pin -> {
+            String err = store.tryPin(pin);
+            if (err == null) {
+                unlockedKey = key;
+                unlockedLeftAt = 0;
+                hideOverlay();
+            } else {
+                pad.clear();
+                pad.setMessage(err);
+            }
+        });
+        area.addView(pad, Ui.fill(this, 0));
     }
 
     private static TextView overlayButton(Context c, String label) {

@@ -1,6 +1,5 @@
 package com.cuvar.app;
 
-import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
@@ -12,7 +11,6 @@ import android.text.TextWatcher;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
-import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -244,28 +242,23 @@ public class AppsActivity extends SubActivity {
 
     private void showEdit(final Item it) {
         LinearLayout box = Ui.column(this);
-        int p = Ui.dp(this, 22);
-        box.setPadding(p, Ui.dp(this, 10), p, 0);
 
-        final CheckBox lock = new CheckBox(this);
-        lock.setText("Zaključaj PIN-om (traži PIN pri svakom otvaranju)");
+        final CheckRow lock = new CheckRow(this, null, "Zaključaj PIN-om", "Traži PIN pri svakom otvaranju");
         lock.setChecked(store.appLock(it.pkg));
         box.addView(lock);
 
-        box.addView(Ui.text(this, "Dnevni limit u minutima (0 = bez limita)", 14, Ui.MUTED, false), Ui.fill(this, 14));
-        final EditText limit = new EditText(this);
-        limit.setInputType(InputType.TYPE_CLASS_NUMBER);
-        limit.setSingleLine(true);
+        box.addView(Sheet.label(this, "Dnevni limit u minutima (0 = bez limita)"), Ui.fill(this, 16));
+        final EditText limit = Sheet.input(this, "0", true);
         limit.setText(String.valueOf(store.appLimit(it.pkg)));
-        box.addView(limit);
+        box.addView(limit, Ui.fill(this, 6));
 
         box.addView(Ui.text(this, "Danas korišćeno: " + Ui.fmt(store.usedToday(it.pkg)), 13, Ui.MUTED, false),
-                Ui.fill(this, 6));
+                Ui.fill(this, 8));
 
-        AlertDialog.Builder b = new AlertDialog.Builder(this)
-                .setTitle(it.label)
-                .setView(box)
-                .setPositiveButton("Sačuvaj", (d, w) -> {
+        Sheet sheet = new Sheet(this, it.label)
+                .view(box)
+                .secondary("Otkaži", null)
+                .primary("Sačuvaj", () -> {
                     boolean wantLock = lock.isChecked();
                     if (wantLock && !store.hasPin()) {
                         Toast.makeText(this, "Prvo postavi PIN na početnom ekranu", Toast.LENGTH_LONG).show();
@@ -273,14 +266,15 @@ public class AppsActivity extends SubActivity {
                     }
                     store.setApp(it.pkg, wantLock, Ui.parseInt(limit.getText().toString()));
                     applyFilter();
-                })
-                .setNegativeButton("Otkaži", null);
+                    return true;
+                });
         if (store.hasAppRule(it.pkg)) {
-            b.setNeutralButton("Ukloni", (d, w) -> {
+            sheet.danger("Ukloni sva ograničenja", () -> {
                 store.setApp(it.pkg, false, 0);
                 applyFilter();
+                return true;
             });
         }
-        b.show();
+        sheet.show();
     }
 }

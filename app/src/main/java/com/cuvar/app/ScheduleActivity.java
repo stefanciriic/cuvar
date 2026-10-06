@@ -1,20 +1,24 @@
 package com.cuvar.app;
 
-import android.app.AlertDialog;
 import android.app.TimePickerDialog;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.graphics.drawable.Drawable;
 import android.os.Bundle;
+import android.text.Editable;
 import android.text.InputType;
+import android.text.TextWatcher;
+import android.view.View;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
-import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -80,11 +84,12 @@ public class ScheduleActivity extends SubActivity {
             return;
         }
         page(rule.name, "Izaberi period i dodaj aplikacije i sajtove koji će tada biti blokirani svakog dana.");
-        Switch enabled = new Switch(this);
-        enabled.setText("Uključi režim");
+        CheckRow enabled = new CheckRow(this, null, "Režim je uključen", "Blokira svakog dana u izabranom periodu");
         enabled.setChecked(rule.enabled);
-        enabled.setOnCheckedChangeListener((button, checked) ->
-                store.setSchedule(id, rule.name, checked, rule.start, rule.end));
+        enabled.setListener(checked -> {
+            DailySchedule.Rule now = store.schedule(id);
+            if (now != null) store.setSchedule(id, now.name, checked, now.start, now.end);
+        });
         content.addView(enabled, Ui.fill(this, 12));
         action("Naziv: " + rule.name, () -> editName(rule));
         action("Period: " + rule.label(), () -> editTime(rule));
@@ -108,10 +113,11 @@ public class ScheduleActivity extends SubActivity {
         });
         empty("Blokada sajta obuhvata i poddomene. Radi u podržanim pregledačima; za ostale dodaj ceo pregledač u režim.");
         content.addView(Ui.text(this, "Brisanje", 20, Ui.INK, true), Ui.fill(this, 24));
-        action("Obriši režim", () -> new AlertDialog.Builder(this).setTitle("Obriši režim „" + rule.name + "“?")
-                .setMessage("Period i izbor aplikacija i sajtova ovog režima biće obrisani.")
-                .setPositiveButton("Obriši", (d, w) -> { store.removeSchedule(id); finish(); })
-                .setNegativeButton("Otkaži", null).show());
+        action("Obriši režim", () -> new Sheet(this, "Obriši režim „" + rule.name + "“?")
+                .message("Period i izbor aplikacija i sajtova ovog režima biće obrisani.")
+                .secondary("Otkaži", null)
+                .primary("Obriši", () -> { store.removeSchedule(id); finish(); return true; })
+                .show());
     }
 
     private void action(String label, Runnable run) {
@@ -125,70 +131,82 @@ public class ScheduleActivity extends SubActivity {
     }
 
     private void editName(DailySchedule.Rule rule) {
-        EditText name = new EditText(this);
+        EditText name = Sheet.input(this, "npr. Spavanje", false);
+        name.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
         name.setText(rule.name);
-        name.setSingleLine(true);
         name.setSelectAllOnFocus(true);
-        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Naziv režima").setView(name)
-                .setPositiveButton("Sačuvaj", null).setNegativeButton("Otkaži", null).create();
-        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
-            String value = name.getText().toString().trim();
-            if (value.isEmpty()) {
-                name.setError("Unesi naziv, npr. Spavanje");
-                return;
-            }
-            DailySchedule.Rule now = store.schedule(id);
-            if (now != null) store.setSchedule(id, value, now.enabled, now.start, now.end);
-            dialog.dismiss();
-            render();
-        }));
-        dialog.show();
+        new Sheet(this, "Naziv režima").view(name)
+                .secondary("Otkaži", null)
+                .primary("Sačuvaj", () -> {
+                    String value = name.getText().toString().trim();
+                    if (value.isEmpty()) {
+                        name.setError("Unesi naziv, npr. Spavanje");
+                        return false;
+                    }
+                    DailySchedule.Rule now = store.schedule(id);
+                    if (now != null) store.setSchedule(id, value, now.enabled, now.start, now.end);
+                    render();
+                    return true;
+                }).show();
     }
 
     private void editTime(DailySchedule.Rule rule) {
         int[] values = {rule.start, rule.end};
         LinearLayout box = Ui.column(this);
-        int p = Ui.dp(this, 22);
-        box.setPadding(p, p, p, p);
         for (int index = 0; index < 2; index++) {
             final int i = index;
             String prefix = i == 0 ? "Od " : "Do ";
             TextView button = Ui.button(this, prefix + DailySchedule.label(values[i]), false);
-            button.setOnClickListener(v -> new TimePickerDialog(this, (picker, hour, minute) -> {
+            button.setOnClickListener(v -> new TimePickerDialog(this, R.style.CuvarDialog, (picker, hour, minute) -> {
                 values[i] = hour * 60 + minute;
                 button.setText(prefix + DailySchedule.label(values[i]));
             }, values[i] / 60, values[i] % 60, true).show());
-            box.addView(button, Ui.fill(this, 12));
+            box.addView(button, Ui.fill(this, i == 0 ? 0 : 10));
         }
-        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Period režima").setView(box)
-                .setPositiveButton("Sačuvaj", null).setNegativeButton("Otkaži", null).create();
-        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
-            if (values[0] == values[1]) {
-                Toast.makeText(this, "Početak i kraj moraju biti različiti", Toast.LENGTH_LONG).show();
-                return;
-            }
-            DailySchedule.Rule now = store.schedule(id);
-            if (now != null) store.setSchedule(id, now.name, now.enabled, values[0], values[1]);
-            dialog.dismiss();
-            render();
-        }));
-        dialog.show();
+        new Sheet(this, "Period režima").view(box)
+                .secondary("Otkaži", null)
+                .primary("Sačuvaj", () -> {
+                    if (values[0] == values[1]) {
+                        Toast.makeText(this, "Početak i kraj moraju biti različiti", Toast.LENGTH_LONG).show();
+                        return false;
+                    }
+                    DailySchedule.Rule now = store.schedule(id);
+                    if (now != null) store.setSchedule(id, now.name, now.enabled, values[0], values[1]);
+                    render();
+                    return true;
+                }).show();
+    }
+
+    private static final class AppItem {
+        String pkg;
+        String label;
+        Drawable icon;
     }
 
     private void chooseApps(DailySchedule.Rule rule) {
         Toast.makeText(this, "Učitavam aplikacije…", Toast.LENGTH_SHORT).show();
         new Thread(() -> {
-            List<String[]> items = new ArrayList<>();
+            List<AppItem> items = new ArrayList<>();
             try {
+                PackageManager pm = getPackageManager();
                 Intent intent = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER);
                 Set<String> seen = new HashSet<>();
-                for (ResolveInfo info : getPackageManager().queryIntentActivities(intent, 0)) {
+                for (ResolveInfo info : pm.queryIntentActivities(intent, 0)) {
                     if (info.activityInfo == null) continue;
                     String pkg = info.activityInfo.packageName;
                     if (pkg.equals(getPackageName()) || !seen.add(pkg)) continue;
-                    items.add(new String[]{pkg, info.loadLabel(getPackageManager()).toString()});
+                    AppItem it = new AppItem();
+                    it.pkg = pkg;
+                    it.label = info.loadLabel(pm).toString();
+                    try { it.icon = info.loadIcon(pm); } catch (Throwable ignored) { }
+                    items.add(it);
                 }
-                items.sort((a, b) -> a[1].compareToIgnoreCase(b[1]));
+                // Već izabrane na vrh, ostale po abecedi.
+                items.sort((a, b) -> {
+                    boolean sa = rule.apps.contains(a.pkg), sb = rule.apps.contains(b.pkg);
+                    if (sa != sb) return sa ? -1 : 1;
+                    return a.label.compareToIgnoreCase(b.label);
+                });
             } catch (Exception ignored) { }
             runOnUiThread(() -> {
                 if (isFinishing() || isDestroyed()) return;
@@ -196,39 +214,73 @@ public class ScheduleActivity extends SubActivity {
                     Toast.makeText(this, "Nije moguće učitati aplikacije", Toast.LENGTH_LONG).show();
                     return;
                 }
-                String[] labels = new String[items.size()];
-                boolean[] selected = new boolean[items.size()];
-                for (int i = 0; i < items.size(); i++) {
-                    labels[i] = items.get(i)[1];
-                    selected[i] = rule.apps.contains(items.get(i)[0]);
-                }
-                new AlertDialog.Builder(this).setTitle("Aplikacije u režimu „" + rule.name + "“")
-                        .setMultiChoiceItems(labels, selected, (d, which, checked) -> selected[which] = checked)
-                        .setPositiveButton("Sačuvaj", (d, w) -> {
-                            for (int i = 0; i < items.size(); i++) store.setScheduleApp(id, items.get(i)[0], selected[i]);
-                            render();
-                        }).setNegativeButton("Otkaži", null).show();
+                showAppPicker(rule, items);
             });
         }).start();
     }
 
-    private void addSite() {
-        EditText address = new EditText(this);
-        address.setHint("npr. youtube.com");
-        address.setSingleLine(true);
-        address.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
-        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Dodaj sajt u režim").setView(address)
-                .setPositiveButton("Dodaj", null).setNegativeButton("Otkaži", null).create();
-        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
-            String host = Store.hostOf(address.getText().toString());
-            if (host == null || !host.contains(".") || !host.matches("[a-z0-9\\p{L}.-]+")) {
-                address.setError("Unesi adresu sajta, npr. youtube.com");
-                return;
+    private void showAppPicker(DailySchedule.Rule rule, List<AppItem> items) {
+        Set<String> selected = new HashSet<>(rule.apps);
+        LinearLayout box = Ui.column(this);
+        TextView count = Ui.text(this, "", 14, Ui.ACCENT, true);
+        Runnable updateCount = () -> count.setText(selected.isEmpty()
+                ? "Ništa nije izabrano" : "Izabrano: " + selected.size());
+        updateCount.run();
+
+        EditText search = Sheet.input(this, "Pretraži aplikacije", false);
+        search.setInputType(InputType.TYPE_CLASS_TEXT);
+        box.addView(search);
+        box.addView(count, Ui.fill(this, 10));
+
+        List<CheckRow> rows = new ArrayList<>();
+        for (AppItem it : items) {
+            CheckRow row = new CheckRow(this, it.icon, it.label, null);
+            row.setChecked(selected.contains(it.pkg));
+            row.setListener(checked -> {
+                if (checked) selected.add(it.pkg); else selected.remove(it.pkg);
+                updateCount.run();
+            });
+            rows.add(row);
+            box.addView(row, Ui.fill(this, 6));
+        }
+        search.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) { }
+            @Override public void onTextChanged(CharSequence s, int a, int b, int c) { }
+            @Override public void afterTextChanged(Editable s) {
+                String q = s.toString().trim().toLowerCase(Locale.ROOT);
+                for (int i = 0; i < rows.size(); i++) {
+                    boolean show = q.isEmpty() || items.get(i).label.toLowerCase(Locale.ROOT).contains(q);
+                    rows.get(i).setVisibility(show ? View.VISIBLE : View.GONE);
+                }
             }
-            store.setScheduleSite(id, host, true);
-            dialog.dismiss();
-            render();
-        }));
-        dialog.show();
+        });
+
+        new Sheet(this, "Aplikacije u režimu „" + rule.name + "“")
+                .message("Izabrane aplikacije biće blokirane svakog dana u periodu " + rule.label() + ".")
+                .view(box)
+                .secondary("Otkaži", null)
+                .primary("Sačuvaj", () -> {
+                    for (AppItem it : items) store.setScheduleApp(id, it.pkg, selected.contains(it.pkg));
+                    render();
+                    return true;
+                }).show();
+    }
+
+    private void addSite() {
+        EditText address = Sheet.input(this, "npr. youtube.com", false);
+        new Sheet(this, "Dodaj sajt u režim")
+                .message("Blokada obuhvata i poddomene, npr. m.youtube.com.")
+                .view(address)
+                .secondary("Otkaži", null)
+                .primary("Dodaj", () -> {
+                    String host = Store.hostOf(address.getText().toString());
+                    if (host == null || !host.contains(".") || !host.matches("[a-z0-9\\p{L}.-]+")) {
+                        address.setError("Unesi adresu sajta, npr. youtube.com");
+                        return false;
+                    }
+                    store.setScheduleSite(id, host, true);
+                    render();
+                    return true;
+                }).show();
     }
 }

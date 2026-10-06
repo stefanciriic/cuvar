@@ -1,8 +1,6 @@
 package com.cuvar.app;
 
-import android.app.AlertDialog;
 import android.os.Bundle;
-import android.text.InputType;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
@@ -99,47 +97,45 @@ public class SitesActivity extends SubActivity {
     /** domain == null znači dodavanje novog sajta. */
     private void showEdit(final String domain) {
         LinearLayout box = Ui.column(this);
-        int p = Ui.dp(this, 22);
-        box.setPadding(p, Ui.dp(this, 10), p, 0);
 
-        box.addView(Ui.text(this, "Adresa sajta", 14, Ui.MUTED, false));
-        final EditText address = new EditText(this);
-        address.setHint("npr. facebook.com");
-        address.setSingleLine(true);
-        address.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
+        box.addView(Sheet.label(this, "Adresa sajta"));
+        final EditText address = Sheet.input(this, "npr. facebook.com", false);
         if (domain != null) {
             address.setText(domain);
             address.setEnabled(false);
+            address.setTextColor(Ui.MUTED);
         }
-        box.addView(address);
+        box.addView(address, Ui.fill(this, 6));
 
-        box.addView(Ui.text(this, "Dnevni limit u minutima (0 = uvek blokiran)", 14, Ui.MUTED, false),
-                Ui.fill(this, 14));
-        final EditText limit = new EditText(this);
-        limit.setInputType(InputType.TYPE_CLASS_NUMBER);
-        limit.setSingleLine(true);
+        box.addView(Sheet.label(this, "Dnevni limit u minutima (0 = uvek blokiran)"), Ui.fill(this, 16));
+        final EditText limit = Sheet.input(this, "0", true);
         limit.setText(String.valueOf(domain == null ? 0 : Math.max(0, store.siteLimit(domain))));
-        box.addView(limit);
+        box.addView(limit, Ui.fill(this, 6));
+        if (domain != null && store.siteLimit(domain) > 0) {
+            box.addView(Ui.text(this, "Danas: " + Ui.fmt(store.usedToday("site:" + domain)), 13, Ui.MUTED, false),
+                    Ui.fill(this, 8));
+        }
 
-        AlertDialog.Builder b = new AlertDialog.Builder(this)
-                .setTitle(domain == null ? "Dodaj sajt" : domain)
-                .setView(box)
-                .setPositiveButton("Sačuvaj", (d, w) -> {
+        Sheet sheet = new Sheet(this, domain == null ? "Dodaj sajt" : domain)
+                .view(box)
+                .secondary("Otkaži", null)
+                .primary("Sačuvaj", () -> {
                     String host = Store.hostOf(address.getText().toString());
                     if (host == null || !host.contains(".")) {
-                        Toast.makeText(this, "Unesi adresu sajta, npr. facebook.com", Toast.LENGTH_LONG).show();
-                        return;
+                        address.setError("Unesi adresu sajta, npr. facebook.com");
+                        return false;
                     }
                     store.setSite(host, Ui.parseInt(limit.getText().toString()));
                     refresh();
-                })
-                .setNegativeButton("Otkaži", null);
+                    return true;
+                });
         if (domain != null) {
-            b.setNeutralButton("Obriši", (d, w) -> {
+            sheet.danger("Obriši sa liste", () -> {
                 store.removeSite(domain);
                 refresh();
+                return true;
             });
         }
-        b.show();
+        sheet.show();
     }
 }

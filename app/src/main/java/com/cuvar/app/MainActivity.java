@@ -1,7 +1,6 @@
 package com.cuvar.app;
 
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
@@ -362,23 +361,23 @@ public class MainActivity extends Activity {
     }
 
     private void showRestrictedHelp() {
-        new AlertDialog.Builder(this)
-                .setTitle("Ograničena podešavanja")
-                .setMessage("Android ovo blokira za aplikacije koje nisu iz Play prodavnice. Uradi ovako:\n\n"
+        new Sheet(this, "Ograničena podešavanja")
+                .message("Android ovo blokira za aplikacije koje nisu iz Play prodavnice. Uradi ovako:\n\n"
                         + "1. Tapni „Informacije o aplikaciji“ ispod.\n"
                         + "2. Tapni tri tačke gore desno.\n"
                         + "3. Izaberi „Dozvoli ograničena podešavanja“ i potvrdi.\n"
                         + "4. Vrati se ovde i ponovo otvori Pristupačnost.\n\n"
                         + "Ako ne vidiš tri tačke, prvo pokušaj da uključiš Čuvara u Pristupačnosti, "
                         + "pa kad te telefon odbije, vrati se na ovaj korak.")
-                .setPositiveButton("Informacije o aplikaciji", (d, w) -> {
+                .secondary("Zatvori", null)
+                .primary("Informacije o aplikaciji", () -> {
                     try {
                         startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                                 Uri.parse("package:" + getPackageName())));
                     } catch (Throwable ignored) {
                     }
+                    return true;
                 })
-                .setNegativeButton("Zatvori", null)
                 .show();
     }
 }
