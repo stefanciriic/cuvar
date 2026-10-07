@@ -19,3 +19,23 @@ Provera na Android telefonu:
 8. Proveri noćni period 21:00–09:00 i odbijanje jednakog početka i kraja.
 
 Automatske provere perioda pokreću se i u APK workflow-u. Provere na telefonu zahtevaju uređaj ili emulator sa aktivnim servisom.
+
+# Pitanja pre otključavanja
+
+Automatska provera banke pitanja (svaki red ispravno zapisan, bez duplikata, tačan odgovor ponuđen) i 20.000 nasumičnih pitanja (računica tačna, rimski brojevi, bez ponavljanja među poslednjih 40):
+
+```powershell
+javac -encoding UTF-8 -d .review/quiz app/src/main/java/com/cuvar/app/Quiz.java app/src/main/java/com/cuvar/app/QuizBank.java tests/com/cuvar/app/QuizTest.java
+java -cp .review/quiz com.cuvar.app.QuizTest
+```
+
+Nova pitanja se dodaju u `QuizBank.java`, jedan red po pitanju: `Pitanje|tačan|netačan|netačan|netačan` ili `Pitanje|broj` kad se odgovor kuca.
+
+Provera na Android telefonu:
+
+1. Zaključaj aplikaciju PIN-om i otvori je: prvo se pojavljuje pitanje, pa tek posle tačnog odgovora PIN.
+2. Kod isteklog limita ili blokiranog sajta: „Ipak želim da otključam“, pa „Jesi li siguran?“, pa pitanje, pa PIN.
+3. Tokom pauze posle otključavanja: „Hitno otključavanje“ prvo traži odgovor, pa PIN.
+4. Pogrešan odgovor pokazuje tačan odgovor i novo pitanje; isto pitanje se ne vraća odmah.
+5. Pitanja sa brojem se kucaju na tastaturi (vide se cifre), ostala imaju četiri ponuđena odgovora.
+6. Vremenski režim i dalje nema otključavanja.

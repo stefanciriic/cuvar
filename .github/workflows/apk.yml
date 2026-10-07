@@ -41,6 +41,11 @@ jobs:
           javac -encoding UTF-8 -d "$RUNNER_TEMP/schedule-tests" app/src/main/java/com/cuvar/app/DailySchedule.java tests/com/cuvar/app/DailyScheduleTest.java
           java -cp "$RUNNER_TEMP/schedule-tests" com.cuvar.app.DailyScheduleTest
 
+      - name: Proveri pitanja za otključavanje
+        run: |
+          javac -encoding UTF-8 -d "$RUNNER_TEMP/quiz-tests" app/src/main/java/com/cuvar/app/Quiz.java app/src/main/java/com/cuvar/app/QuizBank.java tests/com/cuvar/app/QuizTest.java
+          java -cp "$RUNNER_TEMP/quiz-tests" com.cuvar.app.QuizTest
+
       - name: Napravi APK
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0" >/dev/null 2>&1 || true

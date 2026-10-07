@@ -5,7 +5,7 @@ import android.view.Gravity;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
-/** Tastatura za PIN. Radi i u prozoru za blokadu, gde obična tastatura nije dostupna. */
+/** Tastatura za PIN i za brojčane odgovore. Radi i u prozoru za blokadu, gde obična tastatura nije dostupna. */
 final class PinPad extends LinearLayout {
 
     interface Listener {
@@ -19,6 +19,7 @@ final class PinPad extends LinearLayout {
     private final TextView dots;
     private final TextView msg;
     private Listener listener;
+    private boolean showDigits;
 
     PinPad(Context c, boolean dark) {
         super(c);
@@ -68,6 +69,12 @@ final class PinPad extends LinearLayout {
         listener = l;
     }
 
+    /** Prikazuje otkucane cifre umesto tačkica (za odgovor na pitanje). */
+    void showDigits() {
+        showDigits = true;
+        render();
+    }
+
     void setMessage(String s) {
         msg.setText(s == null || s.isEmpty() ? " " : s);
     }
@@ -99,6 +106,11 @@ final class PinPad extends LinearLayout {
         if (buf.length() == 0) {
             dots.setText("––––");
             dots.setAlpha(0.35f);
+            return;
+        }
+        if (showDigits) {
+            dots.setText(buf.toString());
+            dots.setAlpha(1f);
             return;
         }
         StringBuilder s = new StringBuilder();

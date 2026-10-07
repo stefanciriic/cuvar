@@ -523,16 +523,16 @@ public class GuardService extends AccessibilityService {
                 TextView ask = overlayButton(c, "Hitno otključavanje (" + Store.EMERGENCY_MS / 60000L + " min)");
                 ask.setTextColor(Ui.NIGHT_MUTED);
                 ask.setBackground(null);
-                ask.setOnClickListener(v -> showEmergencyPad(urgent, key));
+                ask.setOnClickListener(v -> showQuiz(urgent, () -> showEmergencyPad(urgent, key), null));
                 urgent.addView(ask);
             }
         } else if (store.hasPin() && kind != KIND_SCHEDULE) {
             final LinearLayout unlock = Ui.column(c);
             unlock.setGravity(Gravity.CENTER_HORIZONTAL);
             box.addView(unlock, Ui.fill(c, 22));
-            // Zaključana aplikacija odmah traži PIN; kod isteklog vremena i blokiranog sajta prvo pitamo.
+            // Zaključana aplikacija odmah traži odgovor pa PIN; kod isteklog vremena i blokiranog sajta prvo pitamo.
             if (kind == KIND_LOCK) {
-                showPinPad(unlock, key);
+                showQuiz(unlock, () -> showPinPad(unlock, key), null);
             } else {
                 TextView ask = overlayButton(c, "Ipak želim da otključam");
                 ask.setTextColor(Ui.NIGHT_MUTED);
@@ -589,8 +589,56 @@ public class GuardService extends AccessibilityService {
         area.addView(no, Ui.fill(c, 16));
 
         TextView yes = overlayButton(c, Jokes.pick(Jokes.YES));
-        yes.setOnClickListener(v -> showPinPad(area, key));
+        yes.setOnClickListener(v -> showQuiz(area, () -> showPinPad(area, key), null));
         area.addView(yes, Ui.fill(c, 10));
+    }
+
+    /** Pitanje pre PIN-a. Tačan odgovor vodi dalje, a pogrešan donosi novo pitanje. */
+    private void showQuiz(final LinearLayout area, final Runnable onPass, String notice) {
+        final Context c = this;
+        area.removeAllViews();
+        final Quiz.Question q = Quiz.next();
+
+        TextView head = Ui.text(c, "Prvo odgovori na pitanje", 20, 0xFFFFFFFF, true);
+        head.setGravity(Gravity.CENTER);
+        area.addView(head, Ui.fill(c, 0));
+        if (notice != null) {
+            TextView n = Ui.text(c, notice, 14, Ui.NIGHT_ACCENT, false);
+            n.setGravity(Gravity.CENTER);
+            area.addView(n, Ui.fill(c, 8));
+        }
+        TextView cat = Ui.text(c, q.category.toUpperCase(Locale.ROOT), 11, Ui.NIGHT_MUTED, true);
+        cat.setLetterSpacing(0.15f);
+        cat.setGravity(Gravity.CENTER);
+        area.addView(cat, Ui.fill(c, 16));
+        TextView text = Ui.text(c, q.text, 18, 0xFFFFFFFF, false);
+        text.setGravity(Gravity.CENTER);
+        area.addView(text, Ui.fill(c, 6));
+
+        if (q.typed()) {
+            final PinPad pad = new PinPad(c, true);
+            pad.showDigits();
+            pad.setListener(given -> {
+                if (q.isCorrect(given)) {
+                    onPass.run();
+                } else {
+                    showQuiz(area, onPass, "Netačno, tačan odgovor je " + q.answer + ". Evo novog pitanja.");
+                }
+            });
+            area.addView(pad, Ui.fill(c, 12));
+        } else {
+            for (final String choice : q.choices) {
+                TextView b = overlayButton(c, choice);
+                b.setOnClickListener(v -> {
+                    if (q.isCorrect(choice)) {
+                        onPass.run();
+                    } else {
+                        showQuiz(area, onPass, "Netačno, tačan odgovor je „" + q.answer + "“. Evo novog pitanja.");
+                    }
+                });
+                area.addView(b, Ui.fill(c, 10));
+            }
+        }
     }
 
     private void showPinPad(final LinearLayout area, final String key) {
@@ -614,7 +662,7 @@ public class GuardService extends AccessibilityService {
         area.addView(pad, Ui.fill(this, 12));
     }
 
-    /** Hitno otključavanje mimo pauze: upozorenje pa PIN. */
+    /** Hitno otključavanje mimo pauze: posle pitanja upozorenje pa PIN. */
     private void showEmergencyPad(final LinearLayout area, final String key) {
         final Context c = this;
         area.removeAllViews();
