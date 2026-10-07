@@ -47,11 +47,14 @@ final class Store {
     private long blockedUntil;
     private final int boot;          // redni broj paljenja telefona, -1 ako nije poznat
     private final JSONObject unlocks; // "app:paket" / "site:domen" -> kada je otključano PIN-om
+    private final JSONObject emergency; // hitno otključavanje: koliko je danas iskorišćeno i šta je otključano
+    private boolean stampMoved;        // elapsed() je posle restarta pomerio žig, treba ga sačuvati
 
     private Store(Context c) {
         sp = c.getSharedPreferences("cuvar", Context.MODE_PRIVATE);
         boot = bootCount(c);
         unlocks = parse(sp.getString("unlocks", "{}"));
+        emergency = parse(sp.getString("emergency", "{}"));
         apps = parse(sp.getString("apps", "{}"));
         sites = parse(sp.getString("sites", "{}"));
         usage = parse(sp.getString("usage", "{}"));
@@ -191,6 +194,121 @@ final class Store {
             return -1;
         }
         return since;
+    }
+
+    // ---------- Hitno otključavanje ----------
+
+    /** Koliko traje hitno otključavanje. Jedini izuzetak od pauze posle otključavanja. */
+    static final long EMERGENCY_MS = 10 * 60000L;
+    /** Koliko puta dnevno sme hitno otključavanje; brojač se vraća u ponoć. */
+    static final int EMERGENCY_PER_DAY = 1;
+
+    /** Da li danas još ima hitnog otključavanja. */
+    synchronized boolean emergencyAvailable() {
+        return emergency().optInt("used", 0) < EMERGENCY_PER_DAY;
+    }
+
+    /** Koliko je još ostalo od hitnog otključavanja ove stavke (0 ako ga nema). */
+    synchronized long emergencyLeft(String key) {
+        JSONObject o = emergency();
+        JSONObject at = o.optJSONObject("at");
+        if (at == null || !key.equals(o.optString("key"))) {
+            return 0;
+        }
+        long since = elapsed(at, EMERGENCY_MS);
+        if (since >= EMERGENCY_MS) {
+            o.remove("at");
+            o.remove("key");
+            saveEmergency();
+            return 0;
+        }
+        if (stampMoved) {
+            saveEmergency();
+        }
+        return EMERGENCY_MS - since;
+    }
+
+    /** Troši jedno hitno otključavanje za stavku; vraća false ako ga danas više nema. */
+    synchronized boolean startEmergency(String key) {
+        if (!emergencyAvailable()) {
+            return false;
+        }
+        JSONObject o = emergency();
+        try {
+            if (!o.has("day")) {
+                // Pamti se koliko je ostalo do ponoći, pa pomeranje sata ne donosi novi dan ranije.
+                Calendar midnight = Calendar.getInstance();
+                midnight.add(Calendar.DAY_OF_MONTH, 1);
+                midnight.set(Calendar.HOUR_OF_DAY, 0);
+                midnight.set(Calendar.MINUTE, 0);
+                midnight.set(Calendar.SECOND, 0);
+                midnight.set(Calendar.MILLISECOND, 0);
+                o.put("day", stamp());
+                o.put("toMidnight", midnight.getTimeInMillis() - System.currentTimeMillis());
+            }
+            o.put("used", o.optInt("used", 0) + 1);
+            o.put("key", key);
+            o.put("at", stamp());
+        } catch (JSONException e) {
+            return false;
+        }
+        saveEmergency();
+        return true;
+    }
+
+    /** Zapis o hitnom otključavanju; posle ponoći brojač kreće ispočetka, a započeto otključavanje traje. */
+    private JSONObject emergency() {
+        JSONObject day = emergency.optJSONObject("day");
+        if (day != null) {
+            long since = elapsed(day, 0L);
+            if (since >= emergency.optLong("toMidnight", 0L)) {
+                emergency.remove("day");
+                emergency.remove("toMidnight");
+                emergency.remove("used");
+                saveEmergency();
+            } else if (stampMoved) {
+                saveEmergency();
+            }
+        }
+        return emergency;
+    }
+
+    private void saveEmergency() {
+        sp.edit().putString("emergency", emergency.toString()).apply();
+    }
+
+    /** Vremenski žig koji se meri isto kao otključavanje: od paljenja telefona, a posle restarta po satu. */
+    private JSONObject stamp() throws JSONException {
+        JSONObject o = new JSONObject();
+        o.put("wall", System.currentTimeMillis());
+        o.put("el", SystemClock.elapsedRealtime());
+        o.put("boot", boot);
+        return o;
+    }
+
+    /**
+     * Koliko je prošlo od žiga; posle restarta žig se pomera da opet meri od paljenja.
+     * Ako je sat u međuvremenu vraćen unazad, uzima se ifBack.
+     */
+    private long elapsed(JSONObject t, long ifBack) {
+        stampMoved = false;
+        long since;
+        if (boot != -1 && t.optInt("boot", -2) == boot) {
+            since = SystemClock.elapsedRealtime() - t.optLong("el", 0L);
+        } else {
+            since = System.currentTimeMillis() - t.optLong("wall", 0L);
+            if (since < 0) {
+                since = ifBack;
+            }
+            try {
+                t.put("wall", System.currentTimeMillis() - since);
+                t.put("el", SystemClock.elapsedRealtime() - since);
+                t.put("boot", boot);
+                stampMoved = true;
+            } catch (JSONException ignored) {
+            }
+        }
+        return Math.max(0L, since);
     }
 
     private void saveUnlock(String key, long since) {

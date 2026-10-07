@@ -352,11 +352,11 @@ public class GuardService extends AccessibilityService {
             }
         }
 
-        // Otključavanje PIN-om važi 5 minuta, a zatim sat vremena nema otključavanja (vidi Store).
-        // Vremenski režim se nikad ne otključava.
+        // Otključavanje PIN-om važi 5 minuta, a zatim sat vremena nema otključavanja (vidi Store),
+        // osim jednog hitnog otključavanja dnevno. Vremenski režim se nikad ne otključava.
         long coolLeft = 0;
         if (blockKey != null && kind != KIND_SCHEDULE) {
-            if (store.unlockLeft(blockKey) > 0) {
+            if (store.unlockLeft(blockKey) > 0 || store.emergencyLeft(blockKey) > 0) {
                 blockKey = null;
             } else {
                 coolLeft = store.cooldownLeft(blockKey);
@@ -516,6 +516,16 @@ public class GuardService extends AccessibilityService {
             cooldownLabel = Ui.text(c, cooldownText(store.cooldownLeft(key)), 15, 0xFFFFFFFF, true);
             cooldownLabel.setGravity(Gravity.CENTER);
             box.addView(cooldownLabel, Ui.fill(c, 22));
+            if (store.emergencyAvailable()) {
+                final LinearLayout urgent = Ui.column(c);
+                urgent.setGravity(Gravity.CENTER_HORIZONTAL);
+                box.addView(urgent, Ui.fill(c, 16));
+                TextView ask = overlayButton(c, "Hitno otključavanje (" + Store.EMERGENCY_MS / 60000L + " min)");
+                ask.setTextColor(Ui.NIGHT_MUTED);
+                ask.setBackground(null);
+                ask.setOnClickListener(v -> showEmergencyPad(urgent, key));
+                urgent.addView(ask);
+            }
         } else if (store.hasPin() && kind != KIND_SCHEDULE) {
             final LinearLayout unlock = Ui.column(c);
             unlock.setGravity(Gravity.CENTER_HORIZONTAL);
@@ -602,6 +612,39 @@ public class GuardService extends AccessibilityService {
             }
         });
         area.addView(pad, Ui.fill(this, 12));
+    }
+
+    /** Hitno otključavanje mimo pauze: upozorenje pa PIN. */
+    private void showEmergencyPad(final LinearLayout area, final String key) {
+        final Context c = this;
+        area.removeAllViews();
+        TextView t = Ui.text(c, "Hitno otključavanje", 20, 0xFFFFFFFF, true);
+        t.setGravity(Gravity.CENTER);
+        area.addView(t, Ui.fill(c, 0));
+        String times = Store.EMERGENCY_PER_DAY == 1 ? "samo jednom dnevno"
+                : Store.EMERGENCY_PER_DAY + " puta dnevno";
+        TextView note = Ui.text(c, "Otključava na " + Store.EMERGENCY_MS / 60000L
+                + " min i može se iskoristiti " + times + ". Ako ga sada potrošiš, do ponoći ga više nemaš.",
+                13, Ui.NIGHT_MUTED, false);
+        note.setGravity(Gravity.CENTER);
+        area.addView(note, Ui.fill(c, 6));
+        final PinPad pad = new PinPad(c, true);
+        pad.setListener(pin -> {
+            if (!store.emergencyAvailable()) {
+                pad.clear();
+                pad.setMessage("Hitno otključavanje je danas već iskorišćeno");
+                return;
+            }
+            String err = store.tryPin(pin);
+            if (err == null) {
+                store.startEmergency(key);
+                hideOverlay();
+            } else {
+                pad.clear();
+                pad.setMessage(err);
+            }
+        });
+        area.addView(pad, Ui.fill(c, 12));
     }
 
     /** Upozorenje pre otključavanja: koliko traje i šta sledi posle. */
