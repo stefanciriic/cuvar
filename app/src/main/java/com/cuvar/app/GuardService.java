@@ -43,7 +43,6 @@ public class GuardService extends AccessibilityService {
     static volatile boolean running;
 
     private static final long TICK_MS = 5000L;
-    private static final long GRACE_MS = 15000L;
 
     private static final int KIND_LOCK = 1;       // aplikacija zaključana PIN-om
     private static final int KIND_TIME = 2;       // istekao dnevni limit aplikacije
@@ -79,14 +78,14 @@ public class GuardService extends AccessibilityService {
     private String currentSite;   // domen sa liste koji je trenutno otvoren u pregledaču
     private String currentHost;   // host trenutno otvoren u pregledaču (za vremenske režime)
     private DailySchedule.Rule overlayRule; // režim prikazan na ekranu za blokadu
-    private String unlockedKey;   // šta je trenutno otključano PIN-om ("app:paket" ili "site:domen")
-    private long unlockedLeftAt;
     private long lastTick;
     private boolean checkPending;
 
     private View overlay;
     private String overlayKey;
     private int overlayKind;
+    private boolean overlayCooling;   // prikazana je pauza posle otključavanja
+    private TextView cooldownLabel;  // odbrojavanje do sledećeg mogućeg otključavanja
 
     private final Runnable tick = new Runnable() {
         @Override
@@ -142,7 +141,6 @@ public class GuardService extends AccessibilityService {
         public void onReceive(Context context, Intent intent) {
             String a = intent == null ? null : intent.getAction();
             if (Intent.ACTION_SCREEN_OFF.equals(a)) {
-                unlockedKey = null;
                 hideOverlay();
                 if (store != null) {
                     store.flush();
@@ -286,7 +284,6 @@ public class GuardService extends AccessibilityService {
             return;
         }
         if (!power.isInteractive()) {
-            unlockedKey = null;
             hideOverlay();
             return;
         }
@@ -355,30 +352,30 @@ public class GuardService extends AccessibilityService {
             }
         }
 
-        // Otključavanje PIN-om važi dok si u toj aplikaciji / na tom sajtu, i još kratko posle izlaska.
-        long now = SystemClock.elapsedRealtime();
-        if (unlockedKey != null) {
-            boolean inside = unlockedKey.equals("app:" + pkg)
-                    || (currentSite != null && unlockedKey.equals("site:" + currentSite));
-            if (unlockedLeftAt != 0 && now - unlockedLeftAt > GRACE_MS) {
-                unlockedKey = null;
-                unlockedLeftAt = 0;
-            } else if (inside) {
-                unlockedLeftAt = 0;
-            } else if (unlockedLeftAt == 0) {
-                unlockedLeftAt = now;
+        // Otključavanje PIN-om važi 5 minuta, a zatim sat vremena nema otključavanja (vidi Store).
+        // Vremenski režim se nikad ne otključava.
+        long coolLeft = 0;
+        if (blockKey != null && kind != KIND_SCHEDULE) {
+            if (store.unlockLeft(blockKey) > 0) {
+                blockKey = null;
+            } else {
+                coolLeft = store.cooldownLeft(blockKey);
             }
         }
 
-        if (blockKey != null && (kind == KIND_SCHEDULE || !blockKey.equals(unlockedKey))) {
-            if (kind == KIND_SCHEDULE) {
-                unlockedKey = null;
-                unlockedLeftAt = 0;
+        if (blockKey != null) {
+            showOverlay(blockKey, kind, rule, coolLeft > 0);
+            if (cooldownLabel != null && coolLeft > 0) {
+                cooldownLabel.setText(cooldownText(coolLeft));
             }
-            showOverlay(blockKey, kind, rule);
         } else {
             hideOverlay();
         }
+    }
+
+    private static String cooldownText(long left) {
+        long min = (left + 59999L) / 60000L;
+        return "Otključavanje je iskorišćeno. Sledeće je moguće za " + min + " min.";
     }
 
     /**
@@ -409,13 +406,14 @@ public class GuardService extends AccessibilityService {
 
     // ---------- Ekran za blokadu ----------
 
-    private void showOverlay(String key, int kind, DailySchedule.Rule rule) {
-        if (overlay != null && key.equals(overlayKey) && kind == overlayKind && sameRule(rule, overlayRule)) {
+    private void showOverlay(String key, int kind, DailySchedule.Rule rule, boolean cooling) {
+        if (overlay != null && key.equals(overlayKey) && kind == overlayKind && sameRule(rule, overlayRule)
+                && cooling == overlayCooling) {
             return;
         }
         hideOverlay();
         try {
-            View v = buildOverlay(key, kind, rule);
+            View v = buildOverlay(key, kind, rule, cooling);
             WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
                     WindowManager.LayoutParams.MATCH_PARENT,
                     WindowManager.LayoutParams.MATCH_PARENT,
@@ -428,9 +426,11 @@ public class GuardService extends AccessibilityService {
             overlayKey = key;
             overlayKind = kind;
             overlayRule = rule;
+            overlayCooling = cooling;
         } catch (Throwable t) {
             overlay = null;
             overlayKey = null;
+            cooldownLabel = null;
         }
     }
 
@@ -444,7 +444,9 @@ public class GuardService extends AccessibilityService {
             overlayKey = null;
             overlayKind = 0;
             overlayRule = null;
+            overlayCooling = false;
         }
+        cooldownLabel = null;
     }
 
     /** Isti režim sa istim nazivom i periodom; inače ekran za blokadu treba osvežiti. */
@@ -453,7 +455,7 @@ public class GuardService extends AccessibilityService {
         return a.id.equals(b.id) && a.name.equals(b.name) && a.start == b.start && a.end == b.end;
     }
 
-    private View buildOverlay(final String key, int kind, DailySchedule.Rule rule) {
+    private View buildOverlay(final String key, int kind, DailySchedule.Rule rule, boolean cooling) {
         final Context c = this;
         final boolean isSite = key.startsWith("site:");
         String name = isSite ? key.substring(5) : appLabel(key.substring(4));
@@ -509,7 +511,12 @@ public class GuardService extends AccessibilityService {
         j.setTypeface(Typeface.create("sans-serif", Typeface.ITALIC));
         box.addView(j, Ui.fill(c, 16));
 
-        if (store.hasPin() && kind != KIND_SCHEDULE) {
+        if (cooling) {
+            // Pauza posle otključavanja: nema dugmeta ni PIN-a, samo odbrojavanje.
+            cooldownLabel = Ui.text(c, cooldownText(store.cooldownLeft(key)), 15, 0xFFFFFFFF, true);
+            cooldownLabel.setGravity(Gravity.CENTER);
+            box.addView(cooldownLabel, Ui.fill(c, 22));
+        } else if (store.hasPin() && kind != KIND_SCHEDULE) {
             final LinearLayout unlock = Ui.column(c);
             unlock.setGravity(Gravity.CENTER_HORIZONTAL);
             box.addView(unlock, Ui.fill(c, 22));
@@ -560,6 +567,7 @@ public class GuardService extends AccessibilityService {
         TextView why = Ui.text(c, Jokes.pick(Jokes.ARE_YOU_SURE), 15, Ui.NIGHT_MUTED, false);
         why.setGravity(Gravity.CENTER);
         area.addView(why, Ui.fill(c, 6));
+        area.addView(rulesNote(c), Ui.fill(c, 8));
 
         TextView no = overlayButton(c, Jokes.pick(Jokes.NO));
         no.setBackground(Ui.pressable(Ui.ACCENT, Ui.ACCENT_DOWN, Ui.dp(c, 14)));
@@ -577,19 +585,32 @@ public class GuardService extends AccessibilityService {
 
     private void showPinPad(final LinearLayout area, final String key) {
         area.removeAllViews();
+        area.addView(rulesNote(this), Ui.fill(this, 0));
         final PinPad pad = new PinPad(this, true);
         pad.setListener(pin -> {
+            if (store.cooldownLeft(key) > 0) {
+                safeCheck(); // pauza je počela dok je tastatura bila otvorena
+                return;
+            }
             String err = store.tryPin(pin);
             if (err == null) {
-                unlockedKey = key;
-                unlockedLeftAt = 0;
+                store.startUnlock(key);
                 hideOverlay();
             } else {
                 pad.clear();
                 pad.setMessage(err);
             }
         });
-        area.addView(pad, Ui.fill(this, 0));
+        area.addView(pad, Ui.fill(this, 12));
+    }
+
+    /** Upozorenje pre otključavanja: koliko traje i šta sledi posle. */
+    private static TextView rulesNote(Context c) {
+        TextView t = Ui.text(c, "Otključano je " + Store.UNLOCK_USE_MS / 60000L
+                + " min, a posle toga " + Store.UNLOCK_COOLDOWN_MS / 60000L
+                + " min nema otključavanja, ni PIN-om.", 13, Ui.NIGHT_MUTED, false);
+        t.setGravity(Gravity.CENTER);
+        return t;
     }
 
     private static TextView overlayButton(Context c, String label) {

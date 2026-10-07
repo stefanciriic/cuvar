@@ -3,6 +3,7 @@ package com.cuvar.app;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.SystemClock;
+import android.provider.Settings;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -44,9 +45,13 @@ final class Store {
     private long lastSave;
     private int fails;
     private long blockedUntil;
+    private final int boot;          // redni broj paljenja telefona, -1 ako nije poznat
+    private final JSONObject unlocks; // "app:paket" / "site:domen" -> kada je otključano PIN-om
 
     private Store(Context c) {
         sp = c.getSharedPreferences("cuvar", Context.MODE_PRIVATE);
+        boot = bootCount(c);
+        unlocks = parse(sp.getString("unlocks", "{}"));
         apps = parse(sp.getString("apps", "{}"));
         sites = parse(sp.getString("sites", "{}"));
         usage = parse(sp.getString("usage", "{}"));
@@ -116,6 +121,88 @@ final class Store {
         } catch (Exception e) {
             return "plain:" + pin;
         }
+    }
+
+    // ---------- Otključavanje sa pauzom ----------
+
+    /** Koliko se dugo sme koristiti posle otključavanja PIN-om. */
+    static final long UNLOCK_USE_MS = 5 * 60000L;
+    /** Koliko posle toga nema nikakvog otključavanja, ni PIN-om. */
+    static final long UNLOCK_COOLDOWN_MS = 60 * 60000L;
+
+    private static int bootCount(Context c) {
+        try {
+            return Settings.Global.getInt(c.getContentResolver(), Settings.Global.BOOT_COUNT, -1);
+        } catch (Throwable t) {
+            return -1;
+        }
+    }
+
+    /** Pamti da je stavka upravo otključana; ponovno otključavanje dok traje pauza ne pomera vreme. */
+    synchronized void startUnlock(String key) {
+        if (sinceUnlock(key) >= 0) {
+            return;
+        }
+        saveUnlock(key, 0);
+    }
+
+    /** Koliko je još ostalo od 5 minuta korišćenja (0 ako nije otključano). */
+    synchronized long unlockLeft(String key) {
+        long since = sinceUnlock(key);
+        return since >= 0 && since < UNLOCK_USE_MS ? UNLOCK_USE_MS - since : 0;
+    }
+
+    /** Koliko je još ostalo do kraja pauze u kojoj se ne može otključati (0 ako pauze nema). */
+    synchronized long cooldownLeft(String key) {
+        long since = sinceUnlock(key);
+        return since >= UNLOCK_USE_MS ? UNLOCK_USE_MS + UNLOCK_COOLDOWN_MS - since : 0;
+    }
+
+    /** Koliko još traju otključavanje i pauza zajedno; dotle se pravila za stavku ne mogu menjati. */
+    synchronized long unlockBusyLeft(String key) {
+        long since = sinceUnlock(key);
+        return since < 0 ? 0 : UNLOCK_USE_MS + UNLOCK_COOLDOWN_MS - since;
+    }
+
+    /**
+     * Koliko je prošlo od otključavanja, ili -1 ako je i pauza završena.
+     * U istom paljenju telefona meri se vremenom od paljenja, pa pomeranje sata ne pomaže.
+     * Posle restarta jedino ostaje sat telefona; vraćanje sata unazad ne daje novih 5 minuta.
+     */
+    private long sinceUnlock(String key) {
+        JSONObject o = unlocks.optJSONObject(key);
+        if (o == null) {
+            return -1;
+        }
+        long since;
+        if (boot != -1 && o.optInt("boot", -2) == boot) {
+            since = SystemClock.elapsedRealtime() - o.optLong("el", 0L);
+        } else {
+            since = System.currentTimeMillis() - o.optLong("wall", 0L);
+            if (since < 0) {
+                since = UNLOCK_USE_MS; // sat je vraćen unazad: kreće cela pauza, bez novih 5 minuta
+            }
+            saveUnlock(key, since); // od sada opet meri vremenom od paljenja
+        }
+        since = Math.max(0L, since);
+        if (since >= UNLOCK_USE_MS + UNLOCK_COOLDOWN_MS) {
+            unlocks.remove(key);
+            sp.edit().putString("unlocks", unlocks.toString()).apply();
+            return -1;
+        }
+        return since;
+    }
+
+    private void saveUnlock(String key, long since) {
+        try {
+            JSONObject o = new JSONObject();
+            o.put("wall", System.currentTimeMillis() - since);
+            o.put("el", SystemClock.elapsedRealtime() - since);
+            o.put("boot", boot);
+            unlocks.put(key, o);
+        } catch (JSONException ignored) {
+        }
+        sp.edit().putString("unlocks", unlocks.toString()).apply();
     }
 
     // ---------- Aplikacije ----------

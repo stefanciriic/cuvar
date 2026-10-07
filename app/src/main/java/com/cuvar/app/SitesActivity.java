@@ -96,6 +96,13 @@ public class SitesActivity extends SubActivity {
 
     /** domain == null znači dodavanje novog sajta. */
     private void showEdit(final String domain) {
+        long busy = domain == null ? 0 : store.unlockBusyLeft("site:" + domain);
+        if (busy > 0) {
+            // Inače bi se pauza posle otključavanja zaobišla brisanjem sajta sa liste.
+            Toast.makeText(this, "Nedavno je otključan. Može se menjati za " + Ui.fmt(busy) + ".",
+                    Toast.LENGTH_LONG).show();
+            return;
+        }
         LinearLayout box = Ui.column(this);
 
         box.addView(Sheet.label(this, "Adresa sajta"));
@@ -123,6 +130,11 @@ public class SitesActivity extends SubActivity {
                     String host = Store.hostOf(address.getText().toString());
                     if (host == null || !host.contains(".")) {
                         address.setError("Unesi adresu sajta, npr. facebook.com");
+                        return false;
+                    }
+                    String covering = store.matchSite(host);
+                    if (domain == null && covering != null && store.unlockBusyLeft("site:" + covering) > 0) {
+                        address.setError(covering + " je nedavno otključan, sačekaj kraj pauze");
                         return false;
                     }
                     store.setSite(host, Ui.parseInt(limit.getText().toString()));

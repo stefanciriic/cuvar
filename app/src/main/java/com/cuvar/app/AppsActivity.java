@@ -241,6 +241,13 @@ public class AppsActivity extends SubActivity {
     }
 
     private void showEdit(final Item it) {
+        long busy = store.unlockBusyLeft("app:" + it.pkg);
+        if (busy > 0) {
+            // Inače bi se pauza posle otključavanja zaobišla brisanjem ograničenja.
+            Toast.makeText(this, "Nedavno je otključana. Ograničenja se mogu menjati za "
+                    + Ui.fmt(busy) + ".", Toast.LENGTH_LONG).show();
+            return;
+        }
         LinearLayout box = Ui.column(this);
 
         final CheckRow lock = new CheckRow(this, null, "Zaključaj PIN-om", "Traži PIN pri svakom otvaranju");
