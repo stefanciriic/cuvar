@@ -27,6 +27,7 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -323,67 +324,80 @@ public class GuardService extends AccessibilityService {
             }
         }
 
-        String blockKey = null;
-        int kind = 0;
-
-        boolean lock = store.appLock(pkg);
-        int limit = store.appLimit(pkg);
-        boolean timeUp = limit > 0 && store.usedToday(pkg) >= limit * 60000L;
+        // Sva pravila koja sada važe, od najstrožeg: vremenski režim, pa aplikacija, pa sajt.
+        // Otključavanje jedne stavke ne otvara ostale (otključan pregledač ne otvara blokiran sajt).
+        List<Block> blocks = new ArrayList<>();
+        String appKey = "app:" + pkg;
         DailySchedule.Rule rule = store.scheduleBlockingApp(pkg);
-        // Van perioda režim sa dnevnom šifrom drži svoje aplikacije zaključane, a umesto PIN-a traži šifru.
-        boolean code = false;
-        DailySchedule.Rule codeRule = rule == null ? store.codeRuleForApp(pkg) : null;
-        if (rule != null || lock || timeUp || codeRule != null) {
-            blockKey = "app:" + pkg;
-            kind = rule != null ? KIND_SCHEDULE : timeUp ? KIND_TIME : codeRule != null ? KIND_CODE : KIND_LOCK;
-            code = codeRule != null;
+        if (rule != null) {
+            blocks.add(new Block(appKey, KIND_SCHEDULE, rule, false));
         }
-
-        if (rule == null && urlBarId != null && currentHost != null) {
-            rule = store.scheduleBlockingSite(currentHost);
-            if (rule != null) {
-                blockKey = "site:" + DailySchedule.matchDomain(currentHost, rule.sites);
-                kind = KIND_SCHEDULE;
-                code = false;
-            } else if (blockKey == null) {
-                codeRule = store.codeRuleForSite(currentHost);
-                if (codeRule != null) {
-                    blockKey = "site:" + DailySchedule.matchDomain(currentHost, codeRule.sites);
-                    kind = KIND_CODE;
-                    code = true;
-                }
+        boolean web = urlBarId != null && currentHost != null;
+        DailySchedule.Rule siteRule = web ? store.scheduleBlockingSite(currentHost) : null;
+        if (siteRule != null) {
+            blocks.add(new Block("site:" + DailySchedule.matchDomain(currentHost, siteRule.sites),
+                    KIND_SCHEDULE, siteRule, false));
+        }
+        if (rule == null) {
+            boolean lock = store.appLock(pkg);
+            int limit = store.appLimit(pkg);
+            boolean timeUp = limit > 0 && store.usedToday(pkg) >= limit * 60000L;
+            // Van perioda režim sa dnevnom šifrom drži svoje aplikacije zaključane, a umesto PIN-a traži šifru.
+            DailySchedule.Rule codeRule = store.codeRuleForApp(pkg);
+            if (lock || timeUp || codeRule != null) {
+                int k = timeUp ? KIND_TIME : codeRule != null ? KIND_CODE : KIND_LOCK;
+                blocks.add(new Block(appKey, k, null, codeRule != null));
             }
         }
-
-        if (blockKey == null && urlBarId != null && currentSite != null) {
+        if (web && siteRule == null) {
+            DailySchedule.Rule codeRule = store.codeRuleForSite(currentHost);
+            if (codeRule != null) {
+                blocks.add(new Block("site:" + DailySchedule.matchDomain(currentHost, codeRule.sites),
+                        KIND_CODE, null, true));
+            }
+        }
+        if (urlBarId != null && currentSite != null) {
             int siteLimit = store.siteLimit(currentSite);
             if (siteLimit == 0) {
-                blockKey = "site:" + currentSite;
-                kind = KIND_SITE;
+                blocks.add(new Block("site:" + currentSite, KIND_SITE, null, false));
             } else if (siteLimit > 0 && store.usedToday("site:" + currentSite) >= siteLimit * 60000L) {
-                blockKey = "site:" + currentSite;
-                kind = KIND_SITE_TIME;
+                blocks.add(new Block("site:" + currentSite, KIND_SITE_TIME, null, false));
             }
         }
 
         // Otključavanje PIN-om važi 5 minuta, a zatim sat vremena nema otključavanja (vidi Store),
         // osim jednog hitnog otključavanja dnevno. Vremenski režim se nikad ne otključava.
-        long coolLeft = 0;
-        if (blockKey != null && kind != KIND_SCHEDULE) {
-            if (store.unlockLeft(blockKey) > 0 || store.emergencyLeft(blockKey) > 0) {
-                blockKey = null;
-            } else {
-                coolLeft = store.cooldownLeft(blockKey);
+        Block show = null;
+        for (Block b : blocks) {
+            if (b.kind == KIND_SCHEDULE || (store.unlockLeft(b.key) <= 0 && store.emergencyLeft(b.key) <= 0)) {
+                show = b;
+                break;
             }
         }
+        long coolLeft = show == null || show.kind == KIND_SCHEDULE ? 0 : store.cooldownLeft(show.key);
 
-        if (blockKey != null) {
-            showOverlay(blockKey, kind, rule, coolLeft > 0, code);
+        if (show != null) {
+            showOverlay(show.key, show.kind, show.rule, coolLeft > 0, show.code);
             if (cooldownLabel != null && coolLeft > 0) {
                 cooldownLabel.setText(cooldownText(coolLeft));
             }
         } else {
             hideOverlay();
+        }
+    }
+
+    /** Jedno pravilo koje sada blokira aplikaciju ili sajt. */
+    private static final class Block {
+        final String key;
+        final int kind;
+        final DailySchedule.Rule rule;
+        final boolean code;
+
+        Block(String key, int kind, DailySchedule.Rule rule, boolean code) {
+            this.key = key;
+            this.kind = kind;
+            this.rule = rule;
+            this.code = code;
         }
     }
 

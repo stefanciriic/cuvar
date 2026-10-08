@@ -892,9 +892,11 @@ final class Store {
 
     // ---------- Izmereno vreme ----------
 
-    /** Ključ današnjeg dana ("yyyyMMdd"). */
-    static String day() {
-        return new SimpleDateFormat("yyyyMMdd", Locale.US).format(new Date());
+    /** Ključ današnjeg dana ("yyyyMMdd") po pouzdanom vremenu, pa pomeranje sata ne vraća dnevne limite. */
+    synchronized String day() {
+        Calendar c = calendarNow();
+        return String.format(Locale.US, "%04d%02d%02d",
+                c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH));
     }
 
     private JSONObject today() {

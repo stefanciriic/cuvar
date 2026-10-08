@@ -110,7 +110,7 @@ public class StatsActivity extends SubActivity {
         List<Row> perDay = new ArrayList<>();
         long grandTotal = 0;
 
-        List<String> dayKeys = days == 1 ? Collections.singletonList(Store.day()) : store.recentDays(days);
+        List<String> dayKeys = days == 1 ? Collections.singletonList(store.day()) : store.recentDays(days);
         for (String dk : dayKeys) {
             long dayTotal = 0;
             Map<String, Long> day = store.dayMap(dk);
