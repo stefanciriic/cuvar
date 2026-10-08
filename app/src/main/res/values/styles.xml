@@ -6,4 +6,9 @@
         <item name="android:colorPrimary">#D9480F</item>
         <item name="android:colorBackground">#F3EFE7</item>
     </style>
+    <style name="CuvarDialogDark" parent="@android:style/Theme.Material.Dialog">
+        <item name="android:colorAccent">#F26B2A</item>
+        <item name="android:colorPrimary">#F26B2A</item>
+        <item name="android:colorBackground">#1D222D</item>
+    </style>
 </resources>

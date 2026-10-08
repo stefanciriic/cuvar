@@ -10,9 +10,12 @@ import android.widget.TextView;
 abstract class SubActivity extends Activity {
 
     protected Store store;
+    private boolean dark;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        Ui.theme(this);
+        dark = Ui.dark;
         super.onCreate(savedInstanceState);
         store = Store.get(this);
         Ui.styleWindow(this);
@@ -21,6 +24,10 @@ abstract class SubActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        if (Ui.wantsDark(this) != dark) {
+            recreate();
+            return;
+        }
         if (store.hasPin() && !Session.valid()) {
             finish(); // početni ekran će tražiti PIN
             return;

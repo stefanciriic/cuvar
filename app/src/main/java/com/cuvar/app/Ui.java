@@ -2,6 +2,8 @@ package com.cuvar.app;
 
 import android.app.Activity;
 import android.content.Context;
+import android.content.SharedPreferences;
+import android.content.res.Configuration;
 import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
@@ -15,22 +17,95 @@ import android.widget.TextView;
 
 /** Boje i mali pomoćnici za pravljenje ekrana bez XML-a. */
 final class Ui {
-    static final int BG = 0xFFF3EFE7;
-    static final int CARD = 0xFFFFFFFF;
-    static final int INK = 0xFF1D2433;
-    static final int MUTED = 0xFF6B7280;
-    static final int ACCENT = 0xFFD9480F;
-    static final int ACCENT_DOWN = 0xFFB23A0A;
-    static final int SOFT = 0xFFE9E3D6;
-    static final int SOFT_DOWN = 0xFFD9D1C0;
-    static final int LINE = 0xFFE5E0D5;
+    // Boje ekrana aplikacije; theme() ih postavlja na svetle ili tamne pre crtanja svakog ekrana.
+    static int BG;
+    static int CARD;
+    static int INK;
+    static int MUTED;
+    static int ACCENT;
+    static int ACCENT_DOWN;
+    static int SOFT;
+    static int SOFT_DOWN;
+    static int LINE;
+    static boolean dark;
+
+    static {
+        palette(false);
+    }
+
+    // Ekran blokade je uvek taman, bez obzira na izabranu temu.
     static final int NIGHT = 0xFF12161F;
     static final int NIGHT_KEY = 0xFF232A38;
     static final int NIGHT_KEY_DOWN = 0xFF38425A;
     static final int NIGHT_MUTED = 0xFFB6BDCB;
     static final int NIGHT_ACCENT = 0xFFFF8A4C;
 
+    /** Izbor teme u podešavanjima. */
+    static final int THEME_SYSTEM = 0;
+    static final int THEME_LIGHT = 1;
+    static final int THEME_DARK = 2;
+    static final String[] THEME_NAMES = {"Kao telefon", "Svetla", "Tamna"};
+
     private Ui() {
+    }
+
+    private static void palette(boolean night) {
+        dark = night;
+        if (night) {
+            BG = 0xFF12151C;
+            CARD = 0xFF1D222D;
+            INK = 0xFFECEEF2;
+            MUTED = 0xFF9AA3B2;
+            ACCENT = 0xFFF26B2A;
+            ACCENT_DOWN = 0xFFC9551E;
+            SOFT = 0xFF2A303D;
+            SOFT_DOWN = 0xFF3A4252;
+            LINE = 0xFF2E3442;
+        } else {
+            BG = 0xFFF3EFE7;
+            CARD = 0xFFFFFFFF;
+            INK = 0xFF1D2433;
+            MUTED = 0xFF6B7280;
+            ACCENT = 0xFFD9480F;
+            ACCENT_DOWN = 0xFFB23A0A;
+            SOFT = 0xFFE9E3D6;
+            SOFT_DOWN = 0xFFD9D1C0;
+            LINE = 0xFFE5E0D5;
+        }
+    }
+
+    private static SharedPreferences prefs(Context c) {
+        return c.getApplicationContext().getSharedPreferences("ui", Context.MODE_PRIVATE);
+    }
+
+    static int themeChoice(Context c) {
+        return prefs(c).getInt("theme", THEME_SYSTEM);
+    }
+
+    static void setThemeChoice(Context c, int choice) {
+        prefs(c).edit().putInt("theme", choice).apply();
+    }
+
+    /** Da li ekran treba da bude taman: po izboru u podešavanjima ili po temi telefona. */
+    static boolean wantsDark(Context c) {
+        int choice = themeChoice(c);
+        if (choice == THEME_SYSTEM) {
+            int mode = c.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
+            return mode == Configuration.UI_MODE_NIGHT_YES;
+        }
+        return choice == THEME_DARK;
+    }
+
+    /** Poziva se na početku onCreate, pre super.onCreate: bira boje i sistemsku temu ekrana. */
+    static void theme(Activity a) {
+        palette(wantsDark(a));
+        a.setTheme(dark ? android.R.style.Theme_Material_NoActionBar
+                : android.R.style.Theme_Material_Light_NoActionBar);
+    }
+
+    /** Stil za sistemske dijaloge (npr. biranje vremena) u bojama trenutne teme. */
+    static int dialogStyle() {
+        return dark ? R.style.CuvarDialogDark : R.style.CuvarDialog;
     }
 
     static int dp(Context c, float v) {
@@ -106,8 +181,8 @@ final class Ui {
         Window w = a.getWindow();
         w.setStatusBarColor(BG);
         w.setNavigationBarColor(BG);
-        w.getDecorView().setSystemUiVisibility(
-                View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+        w.getDecorView().setSystemUiVisibility(dark ? 0
+                : View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
     }
 
     static String fmt(long ms) {

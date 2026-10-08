@@ -33,9 +33,12 @@ public class MainActivity extends Activity {
 
     private Store store;
     private boolean pinSetup;
+    private boolean dark;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        Ui.theme(this);
+        dark = Ui.dark;
         super.onCreate(savedInstanceState);
         store = Store.get(this);
         Ui.styleWindow(this);
@@ -44,6 +47,10 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        if (Ui.wantsDark(this) != dark) {
+            recreate();
+            return;
+        }
         if (store.hasPin() && !Session.valid()) {
             Session.authed = false;
             showGate();
@@ -202,6 +209,8 @@ public class MainActivity extends Activity {
                 scheduleSummary(),
                 v -> startActivity(new Intent(this, ScheduleActivity.class))), Ui.fill(this, 10));
 
+        col.addView(navTile("Tema", Ui.THEME_NAMES[Ui.themeChoice(this)], v -> chooseTheme()), Ui.fill(this, 10));
+
         if (hasPin) {
             TextView change = Ui.button(this, "Promeni PIN", false);
             change.setOnClickListener(v -> showPinSetup());
@@ -218,6 +227,25 @@ public class MainActivity extends Activity {
         col.addView(version, Ui.fill(this, 10));
 
         setScreen(col);
+    }
+
+    private void chooseTheme() {
+        LinearLayout box = Ui.column(this);
+        Sheet sheet = new Sheet(this, "Tema").view(box).secondary("Zatvori", null);
+        int current = Ui.themeChoice(this);
+        for (int i = 0; i < Ui.THEME_NAMES.length; i++) {
+            final int choice = i;
+            TextView b = Ui.button(this, Ui.THEME_NAMES[i], i == current);
+            b.setOnClickListener(v -> {
+                sheet.dismiss();
+                if (choice != Ui.themeChoice(this)) {
+                    Ui.setThemeChoice(this, choice);
+                    recreate();
+                }
+            });
+            box.addView(b, Ui.fill(this, i == 0 ? 0 : 10));
+        }
+        sheet.show();
     }
 
     private View setupCard(String title, String body, String action, View.OnClickListener onAction,

@@ -214,7 +214,7 @@ public class ScheduleActivity extends SubActivity {
             final int i = index;
             String prefix = i == 0 ? "Od " : "Do ";
             TextView button = Ui.button(this, prefix + DailySchedule.label(values[i]), false);
-            button.setOnClickListener(v -> new TimePickerDialog(this, R.style.CuvarDialog, (picker, hour, minute) -> {
+            button.setOnClickListener(v -> new TimePickerDialog(this, Ui.dialogStyle(), (picker, hour, minute) -> {
                 values[i] = hour * 60 + minute;
                 button.setText(prefix + DailySchedule.label(values[i]));
             }, values[i] / 60, values[i] % 60, true).show());

@@ -110,6 +110,8 @@ public class AppsActivity extends SubActivity {
         search.setSingleLine(true);
         search.setInputType(InputType.TYPE_CLASS_TEXT);
         search.setTextSize(16);
+        search.setTextColor(Ui.INK);
+        search.setHintTextColor(Ui.MUTED);
         search.setBackground(Ui.round(Ui.CARD, Ui.dp(this, 14)));
         int p = Ui.dp(this, 14);
         search.setPadding(p, p, p, p);
