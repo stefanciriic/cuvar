@@ -64,6 +64,6 @@ java -cp .review/daylimit com.cuvar.app.DayLimitTest
 Provera na telefonu:
 
 1. Na početnom ekranu otvori „Ukupni dnevni limit“ i izaberi vrednost manju od današnjeg vremena: zaključane i ograničene aplikacije i sajtovi odmah prikazuju „Dnevni limit je potrošen“, bez PIN-a, šifre i hitnog otključavanja. Aplikacije bez pravila, pozivi i poruke rade.
-2. Pokušaj veći limit ili isključivanje: piše da važi od sutra, a blokada ostaje do ponoći.
+2. Povećaj limit: dodaje se najviše 30 % (do 1 h), 20 % (2 h) ili 10 % (od 4 h), i drugi put istog dana dugme je sivo. Isključivanje piše da važi od sutra.
 3. Postavi limit 15 min iznad današnjeg vremena: stiže upozorenje (jednom dnevno).
 4. Posle ponoći (po pouzdanom vremenu) blokada nestaje, a zakazana vrednost važi.

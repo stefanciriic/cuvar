@@ -297,40 +297,83 @@ public class MainActivity extends Activity {
 
     private String dayLimitSummary() {
         int limit = store.dayLimit();
-        int next = store.dayLimitNext();
-        String s = limit > 0 ? DayLimit.label(limit) + " na telefonu, posle toga ništa ne otključava"
-                : "Zaključaj sve do ponoći kad pređeš ukupno vreme";
-        if (next >= 0) s += " · od sutra: " + DayLimit.label(next).toLowerCase(Locale.ROOT);
+        if (limit <= 0) return "Zaključaj sve do ponoći kad pređeš ukupno vreme";
+        String s = DayLimit.label(limit) + " na telefonu, posle toga ništa ne otključava";
+        if (store.dayLimitNext() == 0) s += " · isključuje se od sutra";
         return s;
     }
 
-    /** Izbor ukupnog limita: strožiji važi odmah, a blaži ili isključen tek od sutra. */
+    /** Izbor ukupnog limita: manji važi odmah, povećanje jednom dnevno za deo limita, isključivanje od sutra. */
     private void chooseDayLimit() {
-        int limit = store.dayLimit();
-        int next = store.dayLimitNext();
+        final int limit = store.dayLimit();
+        boolean offTomorrow = store.dayLimitNext() == 0;
         LinearLayout box = Ui.column(this);
-        Sheet sheet = new Sheet(this, "Ukupni dnevni limit")
-                .message("Računa se sve vreme na telefonu osim poziva, poruka, početnog ekrana i Čuvara. "
-                        + "Kad se limit potroši, sve zaključane i ograničene aplikacije i sajtovi ostaju zaključani "
-                        + "do ponoći: bez PIN-a, dnevne šifre i hitnog otključavanja. Upozorenje stiže "
-                        + DayLimit.WARN_MS / 60000L + " min ranije.\n\nManji limit važi odmah. "
-                        + "Veći ili isključen važi tek od sutra.")
-                .view(box).secondary("Zatvori", null);
-        for (int i = 0; i < DayLimit.CHOICES.length; i++) {
-            final int min = DayLimit.CHOICES[i];
-            String label = DayLimit.label(min) + (min == DayLimit.SUGGESTED ? " (predlog)" : "")
-                    + (min == next ? " · od sutra" : "");
-            TextView b = Ui.button(this, label, min == limit && next < 0);
-            b.setOnClickListener(v -> {
+        String intro = "Računa se sve vreme na telefonu osim poziva, poruka, početnog ekrana i Čuvara. "
+                + "Kad se limit potroši, sve zaključane i ograničene aplikacije i sajtovi ostaju zaključani "
+                + "do ponoći: bez PIN-a, dnevne šifre i hitnog otključavanja. Upozorenje stiže "
+                + DayLimit.WARN_MS / 60000L + " min ranije.\n\n";
+        intro += limit > 0
+                ? "Manji limit važi odmah. Povećati se može jednom dnevno, najviše za "
+                        + Math.round(DayLimit.raisePercent(limit)) + " % (što je limit veći, to manje). "
+                        + "Isključivanje važi tek od sutra."
+                : "Izaberi limit. Posle toga se može smanjiti u svako doba, a povećati jednom dnevno i samo malo.";
+        Sheet sheet = new Sheet(this, "Ukupni dnevni limit").message(intro).view(box).secondary("Zatvori", null);
+
+        if (limit > 0) {
+            String raise;
+            boolean can = store.canRaiseDayLimit();
+            if (can) {
+                int add = DayLimit.maxRaise(limit);
+                raise = "Povećaj za " + Ui.fmt(add * 60000L) + " (na " + DayLimit.label(limit + add) + ")";
+            } else {
+                raise = "Povećanje je danas već iskorišćeno";
+            }
+            TextView up = Ui.button(this, raise, false);
+            up.setEnabled(can);
+            up.setAlpha(can ? 1f : 0.5f);
+            up.setOnClickListener(v -> {
                 sheet.dismiss();
-                if (min == store.dayLimit() && store.dayLimitNext() < 0) return;
-                boolean now = store.setDayLimit(min);
-                Toast.makeText(this, now ? "Limit važi od sada: " + DayLimit.label(min).toLowerCase(Locale.ROOT)
-                        : "Važi tek od sutra. Danas ostaje " + DayLimit.label(store.dayLimit()).toLowerCase(Locale.ROOT) + ".",
+                int added = store.raiseDayLimit();
+                Toast.makeText(this, added > 0 ? "Limit je sada " + DayLimit.label(store.dayLimit()).toLowerCase(Locale.ROOT)
+                        + ". Danas više ne može da se poveća." : "Povećanje je danas već iskorišćeno.",
                         Toast.LENGTH_LONG).show();
                 showDashboard();
             });
-            box.addView(b, Ui.fill(this, i == 0 ? 0 : 10));
+            box.addView(up, Ui.fill(this, 0));
+        }
+
+        boolean first = limit > 0;
+        for (final int min : DayLimit.CHOICES) {
+            if (min <= 0 || (limit > 0 && min >= limit)) continue;
+            String label = DayLimit.label(min) + (min == DayLimit.SUGGESTED ? " (predlog)" : "");
+            TextView b = Ui.button(this, label, false);
+            b.setOnClickListener(v -> {
+                sheet.dismiss();
+                if (store.lowerDayLimit(min)) {
+                    Toast.makeText(this, "Limit važi od sada: " + DayLimit.label(min).toLowerCase(Locale.ROOT),
+                            Toast.LENGTH_LONG).show();
+                }
+                showDashboard();
+            });
+            box.addView(b, Ui.fill(this, first ? 10 : 0));
+            first = true;
+        }
+
+        if (limit > 0) {
+            TextView off = Ui.button(this, offTomorrow ? "Ipak ne isključuj sutra" : "Isključi od sutra", false);
+            off.setOnClickListener(v -> {
+                sheet.dismiss();
+                if (offTomorrow) {
+                    store.keepDayLimit();
+                    Toast.makeText(this, "Limit ostaje uključen.", Toast.LENGTH_LONG).show();
+                } else {
+                    store.turnOffDayLimitTomorrow();
+                    Toast.makeText(this, "Isključuje se od sutra. Danas ostaje "
+                            + DayLimit.label(limit).toLowerCase(Locale.ROOT) + ".", Toast.LENGTH_LONG).show();
+                }
+                showDashboard();
+            });
+            box.addView(off, Ui.fill(this, 10));
         }
         sheet.show();
     }

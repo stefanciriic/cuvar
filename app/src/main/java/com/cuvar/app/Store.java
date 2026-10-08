@@ -1015,6 +1015,11 @@ final class Store {
     synchronized int dayLimit() {
         int cur = sp.getInt("dayLimit", 0);
         String from = sp.getString("dayLimitFrom", null);
+        if (from != null && sp.getInt("dayLimitNext", -1) > 0) {
+            // Zakazano povećanje iz ranije verzije više ne važi: povećava se samo jednom dnevno i malo.
+            sp.edit().remove("dayLimitNext").remove("dayLimitFrom").apply();
+            from = null;
+        }
         String today = day();
         int eff = DayLimit.effective(cur, sp.getInt("dayLimitNext", -1), from, today);
         if (from != null && today.compareTo(from) >= 0) {
@@ -1029,23 +1034,41 @@ final class Store {
         return sp.contains("dayLimitFrom") ? sp.getInt("dayLimitNext", -1) : -1;
     }
 
-    /** Strožiji limit važi odmah, a povećanje ili isključivanje tek od sutra. Vraća true ako važi odmah. */
-    synchronized boolean setDayLimit(int min) {
+    /** Strožiji limit (ili uključivanje) važi odmah i poništava zakazano isključivanje. Vraća false ako bi bio blaži. */
+    synchronized boolean lowerDayLimit(int min) {
         int cur = dayLimit();
-        if (DayLimit.appliesNow(cur, min)) {
-            sp.edit().putInt("dayLimit", min).remove("dayLimitNext").remove("dayLimitFrom").apply();
-            return true;
-        }
-        if (min == cur) {
-            sp.edit().remove("dayLimitNext").remove("dayLimitFrom").apply();
-            return true;
-        }
+        if (!DayLimit.appliesNow(cur, min)) return false;
+        sp.edit().putInt("dayLimit", min).remove("dayLimitNext").remove("dayLimitFrom").apply();
+        return true;
+    }
+
+    /** Da li danas još može da se poveća limit (jednom dnevno, samo kad je uključen). */
+    synchronized boolean canRaiseDayLimit() {
+        return dayLimit() > 0 && !day().equals(sp.getString("dayLimitRaised", null));
+    }
+
+    /** Povećava limit za najviše dozvoljeno; vraća koliko je minuta dodato (0 ako danas više ne može). */
+    synchronized int raiseDayLimit() {
+        if (!canRaiseDayLimit()) return 0;
+        int cur = dayLimit();
+        int add = DayLimit.maxRaise(cur);
+        sp.edit().putInt("dayLimit", cur + add).putString("dayLimitRaised", day()).apply();
+        return add;
+    }
+
+    /** Isključivanje važi tek od sutra. */
+    synchronized void turnOffDayLimitTomorrow() {
+        if (dayLimit() <= 0) return;
         Calendar c = calendarNow();
         c.add(Calendar.DAY_OF_MONTH, 1);
         String tomorrow = String.format(Locale.US, "%04d%02d%02d",
                 c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH));
-        sp.edit().putInt("dayLimitNext", Math.max(0, min)).putString("dayLimitFrom", tomorrow).apply();
-        return false;
+        sp.edit().putInt("dayLimitNext", 0).putString("dayLimitFrom", tomorrow).apply();
+    }
+
+    /** Poništava zakazano isključivanje. */
+    synchronized void keepDayLimit() {
+        sp.edit().remove("dayLimitNext").remove("dayLimitFrom").apply();
     }
 
     /** Da li je danas već stiglo upozorenje pred kraj limita (pa se vraća true samo prvi put). */

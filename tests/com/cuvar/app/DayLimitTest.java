@@ -26,6 +26,18 @@ public final class DayLimitTest {
         check(DayLimit.warn(180, 165 * min), "Upozorenje 15 min ranije");
         check(!DayLimit.warn(180, 180 * min), "Posle limita nema upozorenja");
 
+        // Povećanje: što je limit veći, to manji procenat.
+        check(DayLimit.maxRaise(0) == 0, "Bez limita nema povećanja");
+        check(DayLimit.maxRaise(30) == 9, "30 min: +30 %");
+        check(DayLimit.maxRaise(60) == 18, "1 h: +30 %");
+        check(DayLimit.maxRaise(120) == 24, "2 h: +20 %");
+        check(DayLimit.maxRaise(180) == 27, "3 h: +15 %");
+        check(DayLimit.maxRaise(240) == 24, "4 h: +10 %");
+        check(DayLimit.maxRaise(600) == 60, "10 h: +10 %");
+        for (int m = 1; m < 600; m++) {
+            check(DayLimit.raisePercent(m + 1) <= DayLimit.raisePercent(m), "Procenat ne raste");
+        }
+
         check("3 h".equals(DayLimit.label(180)), "Natpis 3 h");
         check("1 h 30 min".equals(DayLimit.label(90)), "Natpis 1 h 30 min");
         check("Isključen".equals(DayLimit.label(0)), "Natpis isključen");

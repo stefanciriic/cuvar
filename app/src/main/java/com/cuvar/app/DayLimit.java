@@ -2,18 +2,36 @@ package com.cuvar.app;
 
 /**
  * Ukupni dnevni limit na telefonu. Kad se pređe, aplikacije i sajtovi sa pravilima su zaključani
- * do ponoći bez ikakvog otključavanja. Limit se danas može samo smanjiti (ili tek uključiti);
- * povećanje i isključivanje važe tek od sutra.
+ * do ponoći bez ikakvog otključavanja. Smanjenje važi odmah, povećanje je moguće jednom dnevno
+ * i samo za deo limita (što je limit veći, to manji deo), a isključivanje važi tek od sutra.
  */
 final class DayLimit {
-    /** Ponuđene vrednosti u minutima; 0 = isključen. */
-    static final int[] CHOICES = {0, 60, 90, 120, 180, 240, 300};
+    /** Ponuđene vrednosti u minutima. */
+    static final int[] CHOICES = {60, 90, 120, 180, 240, 300};
     /** Predložena vrednost. */
     static final int SUGGESTED = 180;
     /** Koliko pre isteka stiže upozorenje. */
     static final long WARN_MS = 15 * 60000L;
 
     private DayLimit() {
+    }
+
+    /**
+     * Koliko procenata limita sme da se doda jednom dnevno: do 1 h 30 %, na 2 h 20 %, od 4 h 10 %,
+     * a između toga ravnomerno.
+     */
+    static double raisePercent(int limitMin) {
+        double h = limitMin / 60.0;
+        if (h <= 1) return 30;
+        if (h <= 2) return 30 - 10 * (h - 1);
+        if (h <= 4) return 20 - 5 * (h - 2);
+        return 10;
+    }
+
+    /** Najviše minuta koje danas sme da se doda limitu (0 ako limit nije uključen). */
+    static int maxRaise(int limitMin) {
+        if (limitMin <= 0) return 0;
+        return Math.max(1, (int) Math.round(limitMin * raisePercent(limitMin) / 100.0));
     }
 
     /** Da li nova vrednost važi odmah: samo ako je strožija od trenutne. */
