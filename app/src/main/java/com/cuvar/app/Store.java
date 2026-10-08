@@ -68,6 +68,7 @@ final class Store {
         usage = parse(sp.getString("usage", "{}"));
         migrateSchedule();
         loadSchedules();
+        workEveryDay();
         prune();
     }
 
@@ -519,16 +520,29 @@ final class Store {
         return false;
     }
 
-    /** Gotovo radno vreme: radnim danima 09:00–17:00 bez otključavanja, posle toga dnevnom šifrom. */
+    /** Gotovo radno vreme: svakog dana 09:00–17:00 bez otključavanja, posle toga dnevnom šifrom. */
     static final String WORK_NAME = "Radno vreme";
 
     synchronized DailySchedule.Rule addWorkSchedule() {
         DailySchedule.Rule r = new DailySchedule.Rule(newScheduleId(), WORK_NAME, true, 9 * 60, 17 * 60);
-        r.days = DailySchedule.WORK_DAYS;
         r.code = true;
         schedules.add(r);
         saveSchedules();
         return copy(r);
+    }
+
+    /** Jednom: postojeće radno vreme sa samo radnim danima važi i vikendom (dodaje dane, ne slabi režim). */
+    private void workEveryDay() {
+        if (sp.getBoolean("workEveryDay", false)) return;
+        boolean changed = false;
+        for (DailySchedule.Rule r : schedules) {
+            if (r.name.equals(WORK_NAME) && r.days == DailySchedule.WORK_DAYS) {
+                r.days = DailySchedule.ALL_DAYS;
+                changed = true;
+            }
+        }
+        if (changed) saveSchedules();
+        sp.edit().putBoolean("workEveryDay", true).apply();
     }
 
     synchronized boolean hasWorkSchedule() {

@@ -46,8 +46,8 @@ Automatska provera (u istom testu kao vremenski režimi): dani u nedelji, period
 
 Provera na Android telefonu:
 
-1. U Vremenskim režimima dodaj „Radno vreme“ i izaberi aplikaciju. Radnim danima od 09:00 do 17:00 aplikacija je blokirana bez ikakvog otključavanja.
+1. U Vremenskim režimima dodaj „Radno vreme“ i izaberi aplikaciju. Svakog dana, i vikendom, od 09:00 do 17:00 aplikacija je blokirana bez ikakvog otključavanja.
 2. Dok režim traje, pokušaj da ga isključiš, skratiš, promeniš dane, ukloniš aplikaciju ili obrišeš režim: Čuvar to odbija. Dodavanje aplikacija radi.
 3. Dok režim traje, na početnom ekranu kartica „Dnevna šifra“ piše „Skrivena“. Posle 17:00 prikazuje šifru od 6 cifara.
-4. Posle 17:00 (i vikendom) aplikacija traži pitanje pa dnevnu šifru; stalni PIN je ne otključava. Posle otključavanja važe 5 minuta i pauza od sat vremena.
+4. Posle 17:00 i pre 09:00 aplikacija traži pitanje pa dnevnu šifru; stalni PIN je ne otključava. Posle otključavanja važe 5 minuta i pauza od sat vremena.
 5. Pomeri sat telefona napred na 17:01 tokom režima: blokada ostaje, a šifra se ne menja. Posle restarta telefona sat se ponovo čita, ali vraćanje sata unazad nema efekta.

@@ -63,7 +63,7 @@ public class ScheduleActivity extends SubActivity {
     private void renderList() {
         page("Vremenski režimi", "Svaki režim ima svoj period, dane i svoje aplikacije i sajtove koji će tada biti blokirani.");
         if (!store.hasWorkSchedule()) {
-            action("Dodaj radno vreme (radnim danima 09:00–17:00, posle toga dnevnom šifrom)",
+            action("Dodaj radno vreme (svakog dana 09:00–17:00, posle toga dnevnom šifrom)",
                     () -> open(store.addWorkSchedule().id));
         }
         if (!store.hasNightSchedule()) {
