@@ -456,6 +456,21 @@ final class Store {
         return r == null ? null : copy(r);
     }
 
+    /** Gotov noćni režim: uključen, bez otključavanja, aplikacije bira korisnik. */
+    static final String NIGHT_NAME = "Noćno zaključavanje";
+
+    synchronized DailySchedule.Rule addNightSchedule() {
+        DailySchedule.Rule r = new DailySchedule.Rule(newScheduleId(), NIGHT_NAME, true, 22 * 60 + 30, 6 * 60);
+        schedules.add(r);
+        saveSchedules();
+        return copy(r);
+    }
+
+    synchronized boolean hasNightSchedule() {
+        for (DailySchedule.Rule r : schedules) if (r.name.equals(NIGHT_NAME)) return true;
+        return false;
+    }
+
     synchronized DailySchedule.Rule addSchedule() {
         int n = schedules.size() + 1;
         while (true) {

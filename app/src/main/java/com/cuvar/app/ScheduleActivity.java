@@ -62,6 +62,9 @@ public class ScheduleActivity extends SubActivity {
 
     private void renderList() {
         page("Vremenski režimi", "Svaki režim ima svoj period i svoje aplikacije i sajtove koji će tada biti blokirani svakog dana.");
+        if (!store.hasNightSchedule()) {
+            action("Dodaj noćno zaključavanje (22:30–06:00)", () -> open(store.addNightSchedule().id));
+        }
         action("Dodaj režim", () -> open(store.addSchedule().id));
         List<DailySchedule.Rule> rules = store.schedules();
         if (rules.isEmpty()) empty("Još nema režima.");
