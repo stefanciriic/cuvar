@@ -699,7 +699,7 @@ public class GuardService extends AccessibilityService {
     private static TextView rulesNote(Context c) {
         TextView t = Ui.text(c, "Otključano je " + Store.UNLOCK_USE_MS / 60000L
                 + " min, a posle toga " + Store.UNLOCK_COOLDOWN_MS / 60000L
-                + " min nema otključavanja, ni PIN-om.", 13, Ui.NIGHT_MUTED, false);
+                + " min nema otključavanja ničega, ni PIN-om.", 13, Ui.NIGHT_MUTED, false);
         t.setGravity(Gravity.CENTER);
         return t;
     }

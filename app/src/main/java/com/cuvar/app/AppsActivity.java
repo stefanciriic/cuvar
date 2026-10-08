@@ -241,10 +241,10 @@ public class AppsActivity extends SubActivity {
     }
 
     private void showEdit(final Item it) {
-        long busy = store.unlockBusyLeft("app:" + it.pkg);
+        long busy = store.hasAppRule(it.pkg) ? store.unlockBusyLeft() : 0;
         if (busy > 0) {
             // Inače bi se pauza posle otključavanja zaobišla brisanjem ograničenja.
-            Toast.makeText(this, "Nedavno je otključana. Ograničenja se mogu menjati za "
+            Toast.makeText(this, "Nedavno je nešto otključano. Ograničenja se mogu menjati za "
                     + Ui.fmt(busy) + ".", Toast.LENGTH_LONG).show();
             return;
         }

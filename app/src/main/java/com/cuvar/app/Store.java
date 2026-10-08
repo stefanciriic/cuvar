@@ -155,16 +155,31 @@ final class Store {
         return since >= 0 && since < UNLOCK_USE_MS ? UNLOCK_USE_MS - since : 0;
     }
 
-    /** Koliko je još ostalo do kraja pauze u kojoj se ne može otključati (0 ako pauze nema). */
+    /**
+     * Koliko je još ostalo do kraja pauze u kojoj se ne može otključati (0 ako pauze nema).
+     * Pauza važi za sve: dok traje otključavanje ili pauza bilo čega, ništa drugo se ne otključava PIN-om.
+     */
     synchronized long cooldownLeft(String key) {
-        long since = sinceUnlock(key);
-        return since >= UNLOCK_USE_MS ? UNLOCK_USE_MS + UNLOCK_COOLDOWN_MS - since : 0;
+        long left = 0;
+        for (String k : keysOf(unlocks)) {
+            long since = sinceUnlock(k);
+            if (since >= 0 && (!k.equals(key) || since >= UNLOCK_USE_MS)) {
+                left = Math.max(left, UNLOCK_USE_MS + UNLOCK_COOLDOWN_MS - since);
+            }
+        }
+        return left;
     }
 
-    /** Koliko još traju otključavanje i pauza zajedno; dotle se pravila za stavku ne mogu menjati. */
-    synchronized long unlockBusyLeft(String key) {
-        long since = sinceUnlock(key);
-        return since < 0 ? 0 : UNLOCK_USE_MS + UNLOCK_COOLDOWN_MS - since;
+    /** Koliko još traju otključavanje i pauza bilo čega; dotle se postojeća pravila ne mogu menjati. */
+    synchronized long unlockBusyLeft() {
+        long left = 0;
+        for (String k : keysOf(unlocks)) {
+            long since = sinceUnlock(k);
+            if (since >= 0) {
+                left = Math.max(left, UNLOCK_USE_MS + UNLOCK_COOLDOWN_MS - since);
+            }
+        }
+        return left;
     }
 
     /**
