@@ -75,9 +75,11 @@ final class Quiz {
 
     private static Question any(Random r) {
         int roll = r.nextInt(100);
-        if (roll < 25) return math(r);
-        if (roll < 45) return geography(r);
-        if (roll < 85) return fromBank(r);
+        if (roll < 10) return math(r);
+        if (roll < 20) return geography(r);
+        if (roll < 45) return fromGroups(r, QuizBank.GENERAL, QuizBank.GENERAL + 1); // Java
+        if (roll < 70) return fromGroups(r, QuizBank.GENERAL + 1, QuizBank.GENERAL + 2); // Claude
+        if (roll < 93) return fromBank(r);
         switch (r.nextInt(5)) {
             case 0: return sequence(r);
             case 1: return roman(r);
@@ -89,11 +91,17 @@ final class Quiz {
 
     // ---------- Banka ----------
 
+    /** Opšte znanje, bez Java i Claude pitanja. */
     static Question fromBank(Random r) {
+        return fromGroups(r, 0, QuizBank.GENERAL);
+    }
+
+    /** Nasumično pitanje iz grupa from..to-1, svako pitanje podjednako verovatno. */
+    static Question fromGroups(Random r, int from, int to) {
         int total = 0;
-        for (String[] group : QuizBank.GROUPS) total += group.length;
+        for (int g = from; g < to; g++) total += QuizBank.GROUPS[g].length;
         int pick = r.nextInt(total);
-        for (int g = 0; g < QuizBank.GROUPS.length; g++) {
+        for (int g = from; g < to; g++) {
             String[] group = QuizBank.GROUPS[g];
             if (pick < group.length) return parse(QuizBank.NAMES[g], group[pick], r);
             pick -= group.length;

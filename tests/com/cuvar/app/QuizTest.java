@@ -21,6 +21,7 @@ public final class QuizTest {
     /** Svaki red banke je ispravno zapisan, bez duplikata. */
     private static void bank() {
         check(QuizBank.NAMES.length == QuizBank.GROUPS.length, "Broj naziva grupa", "");
+        check(QuizBank.GENERAL + 2 == QuizBank.GROUPS.length, "Java i Claude su poslednje dve grupe", "");
         Set<String> seen = new HashSet<>();
         Random r = new Random(1);
         int total = 0;
