@@ -11,6 +11,7 @@ import org.json.JSONObject;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -24,6 +25,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.TimeZone;
 
 /** Sva podešavanja i izmereno vreme. Čuva se samo na telefonu. */
 final class Store {
@@ -49,10 +51,16 @@ final class Store {
     private final JSONObject unlocks; // "app:paket" / "site:domen" -> kada je otključano PIN-om
     private final JSONObject emergency; // hitno otključavanje: koliko je danas iskorišćeno i šta je otključano
     private boolean stampMoved;        // elapsed() je posle restarta pomerio žig, treba ga sačuvati
+    private final android.content.ContentResolver resolver;
+    private long clockOff;             // pouzdano vreme = vreme od paljenja + clockOff
+    private long clockSaved;           // kada je pouzdano vreme poslednji put sačuvano (vreme od paljenja)
+    private TimeZone zone;             // vremenska zona zapamćena u ovom paljenju telefona
 
     private Store(Context c) {
         sp = c.getSharedPreferences("cuvar", Context.MODE_PRIVATE);
+        resolver = c.getContentResolver();
         boot = bootCount(c);
+        startClock();
         unlocks = parse(sp.getString("unlocks", "{}"));
         emergency = parse(sp.getString("emergency", "{}"));
         apps = parse(sp.getString("apps", "{}"));
@@ -110,6 +118,25 @@ final class Store {
             return "Previše pokušaja. Sačekaj 30 s";
         }
         return "Pogrešan PIN";
+    }
+
+    /** Kao tryPin, ali za dnevnu šifru; pogrešni pokušaji se broje zajedno sa PIN-om. */
+    synchronized String tryCode(String code) {
+        long now = SystemClock.elapsedRealtime();
+        if (now < blockedUntil) {
+            return "Previše pokušaja. Sačekaj " + ((blockedUntil - now) / 1000 + 1) + " s";
+        }
+        if (dailyCode().equals(code)) {
+            fails = 0;
+            return null;
+        }
+        fails++;
+        if (fails >= 5) {
+            fails = 0;
+            blockedUntil = now + 30000L;
+            return "Previše pokušaja. Sačekaj 30 s";
+        }
+        return "Pogrešna dnevna šifra";
     }
 
     private static String hash(String pin) {
@@ -412,6 +439,8 @@ final class Store {
             DailySchedule.Rule r = new DailySchedule.Rule(o.optString("id", newScheduleId()),
                     o.optString("name", "Režim " + (i + 1)), o.optBoolean("enabled", false),
                     o.optInt("start", 21 * 60), o.optInt("end", 9 * 60));
+            r.days = o.optInt("days", DailySchedule.ALL_DAYS);
+            r.code = o.optBoolean("code", false);
             JSONArray a = o.optJSONArray("apps");
             for (int k = 0; a != null && k < a.length(); k++) r.apps.add(a.optString(k));
             JSONArray s = o.optJSONArray("sites");
@@ -430,6 +459,8 @@ final class Store {
                 o.put("enabled", r.enabled);
                 o.put("start", r.start);
                 o.put("end", r.end);
+                o.put("days", r.days);
+                o.put("code", r.code);
                 o.put("apps", new JSONArray(r.apps));
                 o.put("sites", new JSONArray(r.sites));
                 arr.put(o);
@@ -454,6 +485,8 @@ final class Store {
 
     private static DailySchedule.Rule copy(DailySchedule.Rule r) {
         DailySchedule.Rule c = new DailySchedule.Rule(r.id, r.name, r.enabled, r.start, r.end);
+        c.days = r.days;
+        c.code = r.code;
         c.apps.addAll(r.apps);
         c.sites.addAll(r.sites);
         return c;
@@ -486,6 +519,23 @@ final class Store {
         return false;
     }
 
+    /** Gotovo radno vreme: radnim danima 09:00–17:00 bez otključavanja, posle toga dnevnom šifrom. */
+    static final String WORK_NAME = "Radno vreme";
+
+    synchronized DailySchedule.Rule addWorkSchedule() {
+        DailySchedule.Rule r = new DailySchedule.Rule(newScheduleId(), WORK_NAME, true, 9 * 60, 17 * 60);
+        r.days = DailySchedule.WORK_DAYS;
+        r.code = true;
+        schedules.add(r);
+        saveSchedules();
+        return copy(r);
+    }
+
+    synchronized boolean hasWorkSchedule() {
+        for (DailySchedule.Rule r : schedules) if (r.name.equals(WORK_NAME)) return true;
+        return false;
+    }
+
     synchronized DailySchedule.Rule addSchedule() {
         int n = schedules.size() + 1;
         while (true) {
@@ -500,50 +550,227 @@ final class Store {
         return copy(r);
     }
 
-    synchronized void removeSchedule(String id) {
+    /**
+     * Dok je režim aktivan ne može da se oslabi: isključi, obriše, promeni mu se period, dani ili šifra,
+     * niti da se iz njega uklone aplikacije i sajtovi. Dodavanje i promena naziva su dozvoljeni.
+     */
+    synchronized boolean scheduleActive(String id) {
         DailySchedule.Rule r = rule(id);
-        if (r != null && schedules.remove(r)) saveSchedules();
+        if (r == null) return false;
+        Calendar now = calendarNow();
+        return r.active(minuteOf(now), dayOf(now));
     }
 
-    synchronized void setSchedule(String id, String name, boolean enabled, int start, int end) {
+    /** Briše režim; vraća false ako je upravo aktivan. */
+    synchronized boolean removeSchedule(String id) {
         DailySchedule.Rule r = rule(id);
-        if (r == null) return;
+        if (r == null) return true;
+        if (scheduleActive(id)) return false;
+        if (schedules.remove(r)) saveSchedules();
+        return true;
+    }
+
+    /** Vraća false (i ništa ne menja) ako bi izmena oslabila aktivan režim. */
+    synchronized boolean setSchedule(String id, String name, boolean enabled, int start, int end) {
+        DailySchedule.Rule r = rule(id);
+        if (r == null) return true;
+        if (scheduleActive(id) && (!enabled || start != r.start || end != r.end)) return false;
         r.name = name;
         r.enabled = enabled;
         r.start = start;
         r.end = end;
         saveSchedules();
+        return true;
     }
 
-    synchronized void setScheduleApp(String id, String pkg, boolean selected) {
+    synchronized boolean setScheduleDays(String id, int days) {
         DailySchedule.Rule r = rule(id);
-        if (r == null) return;
+        if (r == null) return true;
+        if (scheduleActive(id) && days != r.days) return false;
+        r.days = days;
+        saveSchedules();
+        return true;
+    }
+
+    synchronized boolean setScheduleCode(String id, boolean code) {
+        DailySchedule.Rule r = rule(id);
+        if (r == null) return true;
+        if (scheduleActive(id) && !code && r.code) return false;
+        r.code = code;
+        saveSchedules();
+        return true;
+    }
+
+    synchronized boolean setScheduleApp(String id, String pkg, boolean selected) {
+        DailySchedule.Rule r = rule(id);
+        if (r == null) return true;
+        if (!selected && r.apps.contains(pkg) && scheduleActive(id)) return false;
         if (selected) r.apps.add(pkg); else r.apps.remove(pkg);
         saveSchedules();
+        return true;
     }
 
-    synchronized void setScheduleSite(String id, String domain, boolean selected) {
+    synchronized boolean setScheduleSite(String id, String domain, boolean selected) {
         DailySchedule.Rule r = rule(id);
-        if (r == null) return;
+        if (r == null) return true;
+        if (!selected && r.sites.contains(domain) && scheduleActive(id)) return false;
         if (selected) r.sites.add(domain); else r.sites.remove(domain);
         saveSchedules();
+        return true;
     }
 
-    private static int minuteNow() {
-        Calendar now = Calendar.getInstance();
-        return now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE);
+    private static int minuteOf(Calendar c) {
+        return c.get(Calendar.HOUR_OF_DAY) * 60 + c.get(Calendar.MINUTE);
+    }
+
+    /** 0 = ponedeljak … 6 = nedelja. */
+    private static int dayOf(Calendar c) {
+        return (c.get(Calendar.DAY_OF_WEEK) + 5) % 7;
     }
 
     /** Režim koji trenutno blokira aplikaciju, ili null. */
     synchronized DailySchedule.Rule scheduleBlockingApp(String pkg) {
-        DailySchedule.Rule r = DailySchedule.blockingApp(schedules, pkg, minuteNow());
+        Calendar now = calendarNow();
+        DailySchedule.Rule r = DailySchedule.blockingApp(schedules, pkg, minuteOf(now), dayOf(now));
         return r == null ? null : copy(r);
     }
 
     /** Režim koji trenutno blokira host (i poddomene), ili null. */
     synchronized DailySchedule.Rule scheduleBlockingSite(String host) {
-        DailySchedule.Rule r = DailySchedule.blockingSite(schedules, host, minuteNow());
+        Calendar now = calendarNow();
+        DailySchedule.Rule r = DailySchedule.blockingSite(schedules, host, minuteOf(now), dayOf(now));
         return r == null ? null : copy(r);
+    }
+
+    /** Režim sa dnevnom šifrom koji sadrži aplikaciju, ili null. */
+    synchronized DailySchedule.Rule codeRuleForApp(String pkg) {
+        DailySchedule.Rule r = DailySchedule.codeApp(schedules, pkg);
+        return r == null ? null : copy(r);
+    }
+
+    /** Režim sa dnevnom šifrom koji sadrži host (i poddomene), ili null. */
+    synchronized DailySchedule.Rule codeRuleForSite(String host) {
+        DailySchedule.Rule r = DailySchedule.codeSite(schedules, host);
+        return r == null ? null : copy(r);
+    }
+
+    /** Da li postoji uključen režim sa dnevnom šifrom. */
+    synchronized boolean usesDailyCode() {
+        for (DailySchedule.Rule r : schedules) if (r.enabled && r.code) return true;
+        return false;
+    }
+
+    /** Uključen režim sa dnevnom šifrom koji je upravo aktivan (tada se šifra ne prikazuje), ili null. */
+    synchronized DailySchedule.Rule activeCodeRule() {
+        Calendar now = calendarNow();
+        for (DailySchedule.Rule r : schedules) {
+            if (r.code && r.active(minuteOf(now), dayOf(now))) return copy(r);
+        }
+        return null;
+    }
+
+    // ---------- Dnevna šifra ----------
+
+    /** Šifra koja važi sada (od 17:00 do 17:00 sledećeg dana, po pouzdanom vremenu). */
+    synchronized String dailyCode() {
+        return DailyCode.code(codeKey(), DailyCode.dayKey(now(), zone()));
+    }
+
+    /** Tajni ključ za dnevnu šifru, nasumičan i samo na ovom telefonu (bez rezervne kopije). */
+    private byte[] codeKey() {
+        String hex = sp.getString("codeKey", null);
+        if (hex == null || hex.length() != 64) {
+            byte[] k = new byte[32];
+            new SecureRandom().nextBytes(k);
+            StringBuilder sb = new StringBuilder();
+            for (byte b : k) sb.append(String.format(Locale.US, "%02x", b & 0xff));
+            hex = sb.toString();
+            sp.edit().putString("codeKey", hex).apply();
+        }
+        byte[] out = new byte[32];
+        for (int i = 0; i < 32; i++) out[i] = (byte) Integer.parseInt(hex.substring(2 * i, 2 * i + 2), 16);
+        return out;
+    }
+
+    // ---------- Pouzdano vreme ----------
+
+    /** Sat telefona u nekom trenutku posle 1.1.2026; manje od toga znači da sat još nije podešen. */
+    private static final long SANE_WALL = 1767225600000L;
+
+    /**
+     * U jednom paljenju telefona vreme se meri od paljenja, pa pomeranje sata ne skraćuje režim
+     * i ne donosi novu šifru ranije. Posle restarta sat se ponovo čita, ali ne može unazad
+     * u odnosu na poslednje zapamćeno vreme.
+     */
+    private void startClock() {
+        JSONObject o = parse(sp.getString("clock", "{}"));
+        long el = SystemClock.elapsedRealtime();
+        long wall = System.currentTimeMillis();
+        boolean sameBoot = o.has("off") && (boot != -1 ? o.optInt("boot", -2) == boot : el >= o.optLong("el", Long.MAX_VALUE));
+        if (sameBoot) {
+            clockOff = o.optLong("off");
+            zone = TimeZone.getTimeZone(o.optString("zone", TimeZone.getDefault().getID()));
+        } else {
+            long last = o.optLong("last", 0L);
+            clockOff = Math.max(wall, last) - el;
+            zone = TimeZone.getDefault();
+        }
+        saveClock();
+    }
+
+    private void saveClock() {
+        long el = SystemClock.elapsedRealtime();
+        try {
+            JSONObject o = new JSONObject();
+            o.put("off", clockOff);
+            o.put("boot", boot);
+            o.put("el", el);
+            o.put("last", el + clockOff);
+            o.put("zone", zone.getID());
+            sp.edit().putString("clock", o.toString()).apply();
+        } catch (JSONException ignored) {
+        }
+        clockSaved = el;
+    }
+
+    /** Pouzdano trenutno vreme u milisekundama. */
+    synchronized long now() {
+        long el = SystemClock.elapsedRealtime();
+        long wall = System.currentTimeMillis();
+        if (el + clockOff < SANE_WALL && wall >= SANE_WALL) {
+            clockOff = wall - el; // telefon je upaljen pre nego što je dobio tačno vreme
+            saveClock();
+        } else if (el - clockSaved > 60000L) {
+            saveClock();
+        }
+        return el + clockOff;
+    }
+
+    /**
+     * Vremenska zona: ručna promena zone ne pomera režim do restarta telefona.
+     * Kad telefon sam bira zonu (putovanje), prati se sistemska.
+     */
+    private TimeZone zone() {
+        TimeZone sys = TimeZone.getDefault();
+        if (!sys.getID().equals(zone.getID()) && autoZone()) {
+            zone = sys;
+            saveClock();
+        }
+        return zone;
+    }
+
+    private boolean autoZone() {
+        try {
+            return Settings.Global.getInt(resolver, Settings.Global.AUTO_TIME_ZONE, 0) == 1;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    private Calendar calendarNow() {
+        Calendar c = Calendar.getInstance(zone());
+        c.setTimeInMillis(now());
+        return c;
     }
 
     // ---------- Sajtovi ----------

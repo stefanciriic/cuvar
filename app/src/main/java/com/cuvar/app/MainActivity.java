@@ -183,6 +183,9 @@ public class MainActivity extends Activity {
         }
 
         col.addView(todayCard(enabled), Ui.fill(this, 18));
+        if (store.usesDailyCode()) {
+            col.addView(codeCard(), Ui.fill(this, 14));
+        }
 
         int appRules = store.appRuleCount();
         int siteRules = store.siteList().size();
@@ -236,6 +239,27 @@ public class MainActivity extends Activity {
             hlp.setOnClickListener(onHelp);
             card.addView(hlp, Ui.fill(this, 6));
         }
+        return card;
+    }
+
+    /** Dnevna šifra za aplikacije režima sa šifrom; dok takav režim traje, ne prikazuje se. */
+    private View codeCard() {
+        LinearLayout card = Ui.card(this);
+        TextView eyebrow = Ui.text(this, "DNEVNA ŠIFRA", 12, Ui.MUTED, true);
+        eyebrow.setLetterSpacing(0.15f);
+        card.addView(eyebrow);
+        DailySchedule.Rule active = store.activeCodeRule();
+        if (active != null) {
+            card.addView(Ui.text(this, "Skrivena", 30, Ui.INK, true), Ui.fill(this, 4));
+            card.addView(Ui.text(this, "Režim „" + active.name + "“ traje do " + DailySchedule.label(active.end)
+                    + ". Šifra se vidi tek posle toga.", 14, Ui.MUTED, false), Ui.fill(this, 6));
+            return card;
+        }
+        TextView code = Ui.text(this, store.dailyCode(), 38, Ui.INK, true);
+        code.setLetterSpacing(0.2f);
+        card.addView(code, Ui.fill(this, 4));
+        card.addView(Ui.text(this, "Otključava aplikacije i sajtove iz režima sa šifrom. Važi do "
+                + DailyCode.CHANGE_HOUR + ":00, kada dobijaš novu.", 14, Ui.MUTED, false), Ui.fill(this, 6));
         return card;
     }
 

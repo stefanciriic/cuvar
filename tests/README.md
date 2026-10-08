@@ -3,7 +3,7 @@
 Automatska provera svih minuta u danu za noćni i dnevni period, prazni period i granice u ponoć, kao i za više režima (svaki sa svojim periodom, aplikacijama i sajtovima, uključujući period preko ponoći i isključen režim):
 
 ```powershell
-javac -encoding UTF-8 -d .review/schedule app/src/main/java/com/cuvar/app/DailySchedule.java tests/com/cuvar/app/DailyScheduleTest.java
+javac -encoding UTF-8 -d .review/schedule app/src/main/java/com/cuvar/app/DailySchedule.java app/src/main/java/com/cuvar/app/DailyCode.java tests/com/cuvar/app/DailyScheduleTest.java
 java -cp .review/schedule com.cuvar.app.DailyScheduleTest
 ```
 
@@ -39,3 +39,15 @@ Provera na Android telefonu:
 4. Pogrešan odgovor pokazuje tačan odgovor i novo pitanje; isto pitanje se ne vraća odmah.
 5. Pitanja sa brojem se kucaju na tastaturi (vide se cifre), ostala imaju četiri ponuđena odgovora.
 6. Vremenski režim i dalje nema otključavanja.
+
+# Radno vreme i dnevna šifra
+
+Automatska provera (u istom testu kao vremenski režimi): dani u nedelji, period preko ponoći koji pripada danu u kome počinje, i dnevna šifra (6 cifara, menja se u 17:00, drugačija za svaki dan i svaki ključ).
+
+Provera na Android telefonu:
+
+1. U Vremenskim režimima dodaj „Radno vreme“ i izaberi aplikaciju. Radnim danima od 09:00 do 17:00 aplikacija je blokirana bez ikakvog otključavanja.
+2. Dok režim traje, pokušaj da ga isključiš, skratiš, promeniš dane, ukloniš aplikaciju ili obrišeš režim: Čuvar to odbija. Dodavanje aplikacija radi.
+3. Dok režim traje, na početnom ekranu kartica „Dnevna šifra“ piše „Skrivena“. Posle 17:00 prikazuje šifru od 6 cifara.
+4. Posle 17:00 (i vikendom) aplikacija traži pitanje pa dnevnu šifru; stalni PIN je ne otključava. Posle otključavanja važe 5 minuta i pauza od sat vremena.
+5. Pomeri sat telefona napred na 17:01 tokom režima: blokada ostaje, a šifra se ne menja. Posle restarta telefona sat se ponovo čita, ali vraćanje sata unazad nema efekta.

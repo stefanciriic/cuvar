@@ -49,6 +49,7 @@ public class GuardService extends AccessibilityService {
     private static final int KIND_SITE = 3;       // sajt uvek blokiran
     private static final int KIND_SITE_TIME = 4;  // istekao dnevni limit sajta
     private static final int KIND_SCHEDULE = 5;
+    private static final int KIND_CODE = 6;       // van perioda režima, otključava se dnevnom šifrom
 
     /** Pregledači i ID polja sa adresom u svakom od njih. */
     private static final Map<String, String> BROWSERS = new HashMap<>();
@@ -85,6 +86,7 @@ public class GuardService extends AccessibilityService {
     private String overlayKey;
     private int overlayKind;
     private boolean overlayCooling;   // prikazana je pauza posle otključavanja
+    private boolean overlayCode;      // otključava se dnevnom šifrom umesto PIN-om
     private TextView cooldownLabel;  // odbrojavanje do sledećeg mogućeg otključavanja
 
     private final Runnable tick = new Runnable() {
@@ -328,9 +330,13 @@ public class GuardService extends AccessibilityService {
         int limit = store.appLimit(pkg);
         boolean timeUp = limit > 0 && store.usedToday(pkg) >= limit * 60000L;
         DailySchedule.Rule rule = store.scheduleBlockingApp(pkg);
-        if (rule != null || lock || timeUp) {
+        // Van perioda režim sa dnevnom šifrom drži svoje aplikacije zaključane, a umesto PIN-a traži šifru.
+        boolean code = false;
+        DailySchedule.Rule codeRule = rule == null ? store.codeRuleForApp(pkg) : null;
+        if (rule != null || lock || timeUp || codeRule != null) {
             blockKey = "app:" + pkg;
-            kind = rule != null ? KIND_SCHEDULE : timeUp ? KIND_TIME : KIND_LOCK;
+            kind = rule != null ? KIND_SCHEDULE : timeUp ? KIND_TIME : codeRule != null ? KIND_CODE : KIND_LOCK;
+            code = codeRule != null;
         }
 
         if (rule == null && urlBarId != null && currentHost != null) {
@@ -338,6 +344,14 @@ public class GuardService extends AccessibilityService {
             if (rule != null) {
                 blockKey = "site:" + DailySchedule.matchDomain(currentHost, rule.sites);
                 kind = KIND_SCHEDULE;
+                code = false;
+            } else if (blockKey == null) {
+                codeRule = store.codeRuleForSite(currentHost);
+                if (codeRule != null) {
+                    blockKey = "site:" + DailySchedule.matchDomain(currentHost, codeRule.sites);
+                    kind = KIND_CODE;
+                    code = true;
+                }
             }
         }
 
@@ -364,7 +378,7 @@ public class GuardService extends AccessibilityService {
         }
 
         if (blockKey != null) {
-            showOverlay(blockKey, kind, rule, coolLeft > 0);
+            showOverlay(blockKey, kind, rule, coolLeft > 0, code);
             if (cooldownLabel != null && coolLeft > 0) {
                 cooldownLabel.setText(cooldownText(coolLeft));
             }
@@ -406,14 +420,14 @@ public class GuardService extends AccessibilityService {
 
     // ---------- Ekran za blokadu ----------
 
-    private void showOverlay(String key, int kind, DailySchedule.Rule rule, boolean cooling) {
+    private void showOverlay(String key, int kind, DailySchedule.Rule rule, boolean cooling, boolean code) {
         if (overlay != null && key.equals(overlayKey) && kind == overlayKind && sameRule(rule, overlayRule)
-                && cooling == overlayCooling) {
+                && cooling == overlayCooling && code == overlayCode) {
             return;
         }
         hideOverlay();
         try {
-            View v = buildOverlay(key, kind, rule, cooling);
+            View v = buildOverlay(key, kind, rule, cooling, code);
             WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
                     WindowManager.LayoutParams.MATCH_PARENT,
                     WindowManager.LayoutParams.MATCH_PARENT,
@@ -427,6 +441,7 @@ public class GuardService extends AccessibilityService {
             overlayKind = kind;
             overlayRule = rule;
             overlayCooling = cooling;
+            overlayCode = code;
         } catch (Throwable t) {
             overlay = null;
             overlayKey = null;
@@ -445,6 +460,7 @@ public class GuardService extends AccessibilityService {
             overlayKind = 0;
             overlayRule = null;
             overlayCooling = false;
+            overlayCode = false;
         }
         cooldownLabel = null;
     }
@@ -452,10 +468,11 @@ public class GuardService extends AccessibilityService {
     /** Isti režim sa istim nazivom i periodom; inače ekran za blokadu treba osvežiti. */
     private static boolean sameRule(DailySchedule.Rule a, DailySchedule.Rule b) {
         if (a == null || b == null) return a == b;
-        return a.id.equals(b.id) && a.name.equals(b.name) && a.start == b.start && a.end == b.end;
+        return a.id.equals(b.id) && a.name.equals(b.name) && a.start == b.start && a.end == b.end
+                && a.days == b.days && a.code == b.code;
     }
 
-    private View buildOverlay(final String key, int kind, DailySchedule.Rule rule, boolean cooling) {
+    private View buildOverlay(final String key, int kind, DailySchedule.Rule rule, boolean cooling, final boolean code) {
         final Context c = this;
         final boolean isSite = key.startsWith("site:");
         String name = isSite ? key.substring(5) : appLabel(key.substring(4));
@@ -465,9 +482,15 @@ public class GuardService extends AccessibilityService {
         String joke;
         if (kind == KIND_SCHEDULE && rule != null) {
             title = "Režim „" + rule.name + "“ je aktivan";
-            sub = name + " je blokiran svakog dana od " + DailySchedule.label(rule.start)
-                    + " do " + DailySchedule.label(rule.end) + ".";
+            sub = name + " je blokiran " + rule.daysLabel() + " od " + DailySchedule.label(rule.start)
+                    + " do " + DailySchedule.label(rule.end) + "."
+                    + (rule.code ? " Posle toga se otključava dnevnom šifrom." : "");
             joke = Jokes.pick(Jokes.SCHEDULE);
+        } else if (kind == KIND_CODE) {
+            title = name + " je zaključan";
+            sub = "Unesi dnevnu šifru. Nova šifra se vidi u Čuvaru svakog dana od "
+                    + DailyCode.CHANGE_HOUR + ":00.";
+            joke = Jokes.pick(Jokes.LOCK);
         } else if (kind == KIND_LOCK) {
             title = name + " je zaključan";
             sub = "Unesi PIN da otvoriš aplikaciju.";
@@ -523,21 +546,21 @@ public class GuardService extends AccessibilityService {
                 TextView ask = overlayButton(c, "Hitno otključavanje (" + Store.EMERGENCY_MS / 60000L + " min)");
                 ask.setTextColor(Ui.NIGHT_MUTED);
                 ask.setBackground(null);
-                ask.setOnClickListener(v -> showQuiz(urgent, () -> showEmergencyPad(urgent, key), null));
+                ask.setOnClickListener(v -> showQuiz(urgent, () -> showEmergencyPad(urgent, key, code), null));
                 urgent.addView(ask);
             }
-        } else if (store.hasPin() && kind != KIND_SCHEDULE) {
+        } else if ((store.hasPin() || code) && kind != KIND_SCHEDULE) {
             final LinearLayout unlock = Ui.column(c);
             unlock.setGravity(Gravity.CENTER_HORIZONTAL);
             box.addView(unlock, Ui.fill(c, 22));
             // Zaključana aplikacija odmah traži odgovor pa PIN; kod isteklog vremena i blokiranog sajta prvo pitamo.
-            if (kind == KIND_LOCK) {
-                showQuiz(unlock, () -> showPinPad(unlock, key), null);
+            if (kind == KIND_LOCK || kind == KIND_CODE) {
+                showQuiz(unlock, () -> showPinPad(unlock, key, code), null);
             } else {
                 TextView ask = overlayButton(c, "Ipak želim da otključam");
                 ask.setTextColor(Ui.NIGHT_MUTED);
                 ask.setBackground(null);
-                ask.setOnClickListener(v -> showAreYouSure(unlock, key));
+                ask.setOnClickListener(v -> showAreYouSure(unlock, key, code));
                 unlock.addView(ask);
             }
         }
@@ -568,7 +591,7 @@ public class GuardService extends AccessibilityService {
     }
 
     /** Šaljivo „Jesi li siguran?“ pre unosa PIN-a. */
-    private void showAreYouSure(final LinearLayout area, final String key) {
+    private void showAreYouSure(final LinearLayout area, final String key, final boolean code) {
         final Context c = this;
         area.removeAllViews();
         TextView q = Ui.text(c, "Jesi li siguran?", 22, 0xFFFFFFFF, true);
@@ -589,7 +612,7 @@ public class GuardService extends AccessibilityService {
         area.addView(no, Ui.fill(c, 16));
 
         TextView yes = overlayButton(c, Jokes.pick(Jokes.YES));
-        yes.setOnClickListener(v -> showQuiz(area, () -> showPinPad(area, key), null));
+        yes.setOnClickListener(v -> showQuiz(area, () -> showPinPad(area, key, code), null));
         area.addView(yes, Ui.fill(c, 10));
     }
 
@@ -641,16 +664,18 @@ public class GuardService extends AccessibilityService {
         }
     }
 
-    private void showPinPad(final LinearLayout area, final String key) {
+    /** Tastatura za PIN, ili za dnevnu šifru kod režima sa šifrom. */
+    private void showPinPad(final LinearLayout area, final String key, final boolean code) {
         area.removeAllViews();
-        area.addView(rulesNote(this), Ui.fill(this, 0));
+        if (code) area.addView(codeNote(this), Ui.fill(this, 0));
+        area.addView(rulesNote(this), Ui.fill(this, code ? 6 : 0));
         final PinPad pad = new PinPad(this, true);
         pad.setListener(pin -> {
             if (store.cooldownLeft(key) > 0) {
                 safeCheck(); // pauza je počela dok je tastatura bila otvorena
                 return;
             }
-            String err = store.tryPin(pin);
+            String err = code ? store.tryCode(pin) : store.tryPin(pin);
             if (err == null) {
                 store.startUnlock(key);
                 hideOverlay();
@@ -663,7 +688,7 @@ public class GuardService extends AccessibilityService {
     }
 
     /** Hitno otključavanje mimo pauze: posle pitanja upozorenje pa PIN. */
-    private void showEmergencyPad(final LinearLayout area, final String key) {
+    private void showEmergencyPad(final LinearLayout area, final String key, final boolean code) {
         final Context c = this;
         area.removeAllViews();
         TextView t = Ui.text(c, "Hitno otključavanje", 20, 0xFFFFFFFF, true);
@@ -676,6 +701,7 @@ public class GuardService extends AccessibilityService {
                 13, Ui.NIGHT_MUTED, false);
         note.setGravity(Gravity.CENTER);
         area.addView(note, Ui.fill(c, 6));
+        if (code) area.addView(codeNote(c), Ui.fill(c, 8));
         final PinPad pad = new PinPad(c, true);
         pad.setListener(pin -> {
             if (!store.emergencyAvailable()) {
@@ -683,7 +709,7 @@ public class GuardService extends AccessibilityService {
                 pad.setMessage("Hitno otključavanje je danas već iskorišćeno");
                 return;
             }
-            String err = store.tryPin(pin);
+            String err = code ? store.tryCode(pin) : store.tryPin(pin);
             if (err == null) {
                 store.startEmergency(key);
                 hideOverlay();
@@ -693,6 +719,12 @@ public class GuardService extends AccessibilityService {
             }
         });
         area.addView(pad, Ui.fill(c, 12));
+    }
+
+    private static TextView codeNote(Context c) {
+        TextView t = Ui.text(c, "Unesi dnevnu šifru (6 cifara), ne stalni PIN.", 15, 0xFFFFFFFF, true);
+        t.setGravity(Gravity.CENTER);
+        return t;
     }
 
     /** Upozorenje pre otključavanja: koliko traje i šta sledi posle. */

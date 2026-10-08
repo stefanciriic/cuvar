@@ -6,8 +6,14 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
-/** Svakodnevni period po lokalnom vremenu telefona; kraj nije uključen. */
+/** Period u izabranim danima u nedelji po vremenu telefona; kraj nije uključen. */
 final class DailySchedule {
+    /** Dani kao bitovi: 0 = ponedeljak … 6 = nedelja. */
+    static final int ALL_DAYS = 0b1111111;
+    static final int WORK_DAYS = 0b0011111;
+    static final int WEEKEND = 0b1100000;
+    static final String[] DAY_NAMES = {"pon", "uto", "sre", "čet", "pet", "sub", "ned"};
+
     /** Jedan vremenski režim sa sopstvenim periodom, aplikacijama i domenima. */
     static final class Rule {
         final String id;
@@ -15,6 +21,9 @@ final class DailySchedule {
         boolean enabled;
         int start;
         int end;
+        int days = ALL_DAYS;
+        /** Van perioda aplikacije i sajtovi ovog režima otključavaju se samo dnevnom šifrom. */
+        boolean code;
         final Set<String> apps = new LinkedHashSet<>();
         final Set<String> sites = new LinkedHashSet<>();
 
@@ -26,12 +35,33 @@ final class DailySchedule {
             this.end = end;
         }
 
-        boolean active(int minute) {
-            return enabled && contains(start, end, minute);
+        /** Period koji prelazi ponoć pripada danu u kome je počeo. */
+        boolean active(int minute, int day) {
+            if (!enabled || !contains(start, end, minute)) return false;
+            boolean afterMidnight = start > end && minute < end;
+            return hasDay(afterMidnight ? (day + 6) % 7 : day);
+        }
+
+        boolean hasDay(int day) {
+            return (days & (1 << day)) != 0;
         }
 
         String label() {
             return DailySchedule.label(start) + "–" + DailySchedule.label(end);
+        }
+
+        /** "radnim danima", "svakog dana" ili "pon, sre, pet". */
+        String daysLabel() {
+            if (days == ALL_DAYS) return "svakog dana";
+            if (days == WORK_DAYS) return "radnim danima";
+            if (days == WEEKEND) return "vikendom";
+            StringBuilder sb = new StringBuilder();
+            for (int d = 0; d < 7; d++) {
+                if (!hasDay(d)) continue;
+                if (sb.length() > 0) sb.append(", ");
+                sb.append(DAY_NAMES[d]);
+            }
+            return sb.length() == 0 ? "nijednog dana" : sb.toString();
         }
     }
 
@@ -44,15 +74,27 @@ final class DailySchedule {
         return String.format(Locale.ROOT, "%02d:%02d", minute / 60, minute % 60);
     }
 
-    /** Prvi uključen režim koji u datom minutu blokira aplikaciju, ili null. */
-    static Rule blockingApp(List<Rule> rules, String pkg, int minute) {
-        for (Rule r : rules) if (r.active(minute) && r.apps.contains(pkg)) return r;
+    /** Prvi uključen režim koji u datom minutu i danu (0 = ponedeljak) blokira aplikaciju, ili null. */
+    static Rule blockingApp(List<Rule> rules, String pkg, int minute, int day) {
+        for (Rule r : rules) if (r.active(minute, day) && r.apps.contains(pkg)) return r;
         return null;
     }
 
-    /** Prvi uključen režim koji u datom minutu blokira host (i poddomene), ili null. */
-    static Rule blockingSite(List<Rule> rules, String host, int minute) {
-        for (Rule r : rules) if (r.active(minute) && matchDomain(host, r.sites) != null) return r;
+    /** Prvi uključen režim koji u datom minutu i danu blokira host (i poddomene), ili null. */
+    static Rule blockingSite(List<Rule> rules, String host, int minute, int day) {
+        for (Rule r : rules) if (r.active(minute, day) && matchDomain(host, r.sites) != null) return r;
+        return null;
+    }
+
+    /** Uključen režim sa dnevnom šifrom koji sadrži aplikaciju, ili null. */
+    static Rule codeApp(List<Rule> rules, String pkg) {
+        for (Rule r : rules) if (r.enabled && r.code && r.apps.contains(pkg)) return r;
+        return null;
+    }
+
+    /** Uključen režim sa dnevnom šifrom koji sadrži host (i poddomene), ili null. */
+    static Rule codeSite(List<Rule> rules, String host) {
+        for (Rule r : rules) if (r.enabled && r.code && matchDomain(host, r.sites) != null) return r;
         return null;
     }
 
