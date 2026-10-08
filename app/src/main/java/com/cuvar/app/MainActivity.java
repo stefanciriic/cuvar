@@ -184,7 +184,10 @@ public class MainActivity extends Activity {
         if (!enabled) {
             col.addView(setupCard("Uključi Čuvara",
                     "U Pristupačnosti pronađi „Čuvar“ (pod Preuzete ili Instalirane aplikacije) i uključi ga. "
-                            + "Bez toga merenje vremena i blokiranje ne rade.",
+                            + "Bez toga merenje vremena i blokiranje ne rade. "
+                            + "Čuvar tako vidi samo koja je aplikacija i koji sajt otvoren; ništa ne šalje sa telefona.\n\n"
+                            + "Ako je prekidač siv ili piše „Ograničeno podešavanje“: Podešavanja → Aplikacije → Čuvar → "
+                            + "meni ⋮ gore desno → „Dozvoli ograničena podešavanja“, pa ponovo ovde.",
                     "Otvori Pristupačnost", v -> openAccessibility(),
                     "Opcija je siva ili piše da je ograničena?", v -> showRestrictedHelp()), Ui.fill(this, 14));
         }

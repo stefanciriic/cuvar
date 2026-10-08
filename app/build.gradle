@@ -29,6 +29,12 @@ android {
         debug {
             signingConfig signingConfigs.fixed
         }
+        // Verzija koja se objavljuje: obično (ne razvojno) izdanje, potpisano istim ključem
+        // kao ranije, pa se instalira preko postojeće verzije.
+        release {
+            signingConfig signingConfigs.fixed
+            minifyEnabled false
+        }
     }
 
     compileOptions {
