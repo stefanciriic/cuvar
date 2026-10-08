@@ -211,6 +211,7 @@ public class MainActivity extends Activity {
         col.addView(navTile("Vremenski režim",
                 scheduleSummary(),
                 v -> startActivity(new Intent(this, ScheduleActivity.class))), Ui.fill(this, 10));
+        col.addView(navTile("Ukupni dnevni limit", dayLimitSummary(), v -> chooseDayLimit()), Ui.fill(this, 10));
 
         col.addView(navTile("Tema", Ui.THEME_NAMES[Ui.themeChoice(this)], v -> chooseTheme()), Ui.fill(this, 10));
 
@@ -294,6 +295,46 @@ public class MainActivity extends Activity {
         return card;
     }
 
+    private String dayLimitSummary() {
+        int limit = store.dayLimit();
+        int next = store.dayLimitNext();
+        String s = limit > 0 ? DayLimit.label(limit) + " na telefonu, posle toga ništa ne otključava"
+                : "Zaključaj sve do ponoći kad pređeš ukupno vreme";
+        if (next >= 0) s += " · od sutra: " + DayLimit.label(next).toLowerCase(Locale.ROOT);
+        return s;
+    }
+
+    /** Izbor ukupnog limita: strožiji važi odmah, a blaži ili isključen tek od sutra. */
+    private void chooseDayLimit() {
+        int limit = store.dayLimit();
+        int next = store.dayLimitNext();
+        LinearLayout box = Ui.column(this);
+        Sheet sheet = new Sheet(this, "Ukupni dnevni limit")
+                .message("Računa se sve vreme na telefonu osim poziva, poruka, početnog ekrana i Čuvara. "
+                        + "Kad se limit potroši, sve zaključane i ograničene aplikacije i sajtovi ostaju zaključani "
+                        + "do ponoći: bez PIN-a, dnevne šifre i hitnog otključavanja. Upozorenje stiže "
+                        + DayLimit.WARN_MS / 60000L + " min ranije.\n\nManji limit važi odmah. "
+                        + "Veći ili isključen važi tek od sutra.")
+                .view(box).secondary("Zatvori", null);
+        for (int i = 0; i < DayLimit.CHOICES.length; i++) {
+            final int min = DayLimit.CHOICES[i];
+            String label = DayLimit.label(min) + (min == DayLimit.SUGGESTED ? " (predlog)" : "")
+                    + (min == next ? " · od sutra" : "");
+            TextView b = Ui.button(this, label, min == limit && next < 0);
+            b.setOnClickListener(v -> {
+                sheet.dismiss();
+                if (min == store.dayLimit() && store.dayLimitNext() < 0) return;
+                boolean now = store.setDayLimit(min);
+                Toast.makeText(this, now ? "Limit važi od sada: " + DayLimit.label(min).toLowerCase(Locale.ROOT)
+                        : "Važi tek od sutra. Danas ostaje " + DayLimit.label(store.dayLimit()).toLowerCase(Locale.ROOT) + ".",
+                        Toast.LENGTH_LONG).show();
+                showDashboard();
+            });
+            box.addView(b, Ui.fill(this, i == 0 ? 0 : 10));
+        }
+        sheet.show();
+    }
+
     private String scheduleSummary() {
         List<DailySchedule.Rule> rules = store.schedules();
         if (rules.isEmpty()) return "Još nema režima";
@@ -346,6 +387,16 @@ public class MainActivity extends Activity {
         Collections.sort(rows, (a, b) -> Long.compare(b.ms, a.ms));
 
         card.addView(Ui.text(this, Ui.fmt(total), 38, Ui.INK, true), Ui.fill(this, 4));
+        int limit = store.dayLimit();
+        if (limit > 0) {
+            long counted = store.phoneToday(GuardService.exemptApps(this));
+            String line = DayLimit.reached(limit, counted)
+                    ? "Dnevni limit od " + DayLimit.label(limit).toLowerCase(Locale.ROOT) + " je potrošen. Zaključano je do ponoći."
+                    : "Do dnevnog limita od " + DayLimit.label(limit).toLowerCase(Locale.ROOT) + " ostalo je "
+                    + Ui.fmt(limit * 60000L - counted) + ".";
+            card.addView(Ui.text(this, line, 14, DayLimit.reached(limit, counted) ? Ui.ACCENT : Ui.MUTED, true),
+                    Ui.fill(this, 4));
+        }
 
         if (rows.isEmpty()) {
             card.addView(Ui.text(this,

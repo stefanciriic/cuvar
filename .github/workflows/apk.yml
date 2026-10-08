@@ -41,6 +41,11 @@ jobs:
           javac -encoding UTF-8 -d "$RUNNER_TEMP/schedule-tests" app/src/main/java/com/cuvar/app/DailySchedule.java app/src/main/java/com/cuvar/app/DailyCode.java tests/com/cuvar/app/DailyScheduleTest.java
           java -cp "$RUNNER_TEMP/schedule-tests" com.cuvar.app.DailyScheduleTest
 
+      - name: Proveri ukupni dnevni limit
+        run: |
+          javac -encoding UTF-8 -d "$RUNNER_TEMP/daylimit-tests" app/src/main/java/com/cuvar/app/DayLimit.java tests/com/cuvar/app/DayLimitTest.java
+          java -cp "$RUNNER_TEMP/daylimit-tests" com.cuvar.app.DayLimitTest
+
       - name: Proveri pitanja za otključavanje
         run: |
           javac -encoding UTF-8 -d "$RUNNER_TEMP/quiz-tests" app/src/main/java/com/cuvar/app/Quiz.java app/src/main/java/com/cuvar/app/QuizBank.java tests/com/cuvar/app/QuizTest.java

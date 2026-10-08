@@ -996,6 +996,84 @@ final class Store {
         }
     }
 
+    // ---------- Ukupni dnevni limit ----------
+
+    /** Danas ukupno na telefonu: sve aplikacije osim onih u skip (početni ekran, Čuvar, pozivi, poruke). */
+    synchronized long phoneToday(Set<String> skip) {
+        JSONObject d = usage.optJSONObject(day());
+        long total = 0;
+        if (d != null) {
+            for (String k : keysOf(d)) {
+                if (k.startsWith("site:") || k.startsWith("web:") || skip.contains(k)) continue;
+                total += d.optLong(k, 0L);
+            }
+        }
+        return total;
+    }
+
+    /** Ukupni dnevni limit u minutima koji danas važi (0 = isključen); zakazana promena stupa na snagu u ponoć. */
+    synchronized int dayLimit() {
+        int cur = sp.getInt("dayLimit", 0);
+        String from = sp.getString("dayLimitFrom", null);
+        String today = day();
+        int eff = DayLimit.effective(cur, sp.getInt("dayLimitNext", -1), from, today);
+        if (from != null && today.compareTo(from) >= 0) {
+            sp.edit().putInt("dayLimit", eff).remove("dayLimitNext").remove("dayLimitFrom").apply();
+        }
+        return eff;
+    }
+
+    /** Vrednost zakazana od sutra, ili -1 ako je nema. */
+    synchronized int dayLimitNext() {
+        dayLimit();
+        return sp.contains("dayLimitFrom") ? sp.getInt("dayLimitNext", -1) : -1;
+    }
+
+    /** Strožiji limit važi odmah, a povećanje ili isključivanje tek od sutra. Vraća true ako važi odmah. */
+    synchronized boolean setDayLimit(int min) {
+        int cur = dayLimit();
+        if (DayLimit.appliesNow(cur, min)) {
+            sp.edit().putInt("dayLimit", min).remove("dayLimitNext").remove("dayLimitFrom").apply();
+            return true;
+        }
+        if (min == cur) {
+            sp.edit().remove("dayLimitNext").remove("dayLimitFrom").apply();
+            return true;
+        }
+        Calendar c = calendarNow();
+        c.add(Calendar.DAY_OF_MONTH, 1);
+        String tomorrow = String.format(Locale.US, "%04d%02d%02d",
+                c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH));
+        sp.edit().putInt("dayLimitNext", Math.max(0, min)).putString("dayLimitFrom", tomorrow).apply();
+        return false;
+    }
+
+    /** Da li je danas već stiglo upozorenje pred kraj limita (pa se vraća true samo prvi put). */
+    synchronized boolean firstDayLimitWarning() {
+        String d = day();
+        if (d.equals(sp.getString("dayLimitWarned", null))) return false;
+        sp.edit().putString("dayLimitWarned", d).apply();
+        return true;
+    }
+
+    /** Da li je aplikacija u nekom pravilu: zaključana, sa limitom ili u uključenom režimu. */
+    synchronized boolean appGuarded(String pkg) {
+        if (apps.has(pkg)) return true;
+        for (DailySchedule.Rule r : schedules) if (r.enabled && r.apps.contains(pkg)) return true;
+        return false;
+    }
+
+    /** Domen sa liste ili iz uključenog režima koji pokriva host, ili null. */
+    synchronized String siteGuarded(String host) {
+        String best = matchSite(host);
+        for (DailySchedule.Rule r : schedules) {
+            if (!r.enabled) continue;
+            String d = DailySchedule.matchDomain(host, r.sites);
+            if (d != null && (best == null || d.length() > best.length())) best = d;
+        }
+        return best;
+    }
+
     synchronized void flush() {
         if (!dirty) {
             return;

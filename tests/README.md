@@ -51,3 +51,19 @@ Provera na Android telefonu:
 3. Dok režim traje, na početnom ekranu kartica „Dnevna šifra“ piše „Skrivena“. Posle 17:00 prikazuje šifru od 6 cifara.
 4. Posle 17:00 i pre 09:00 aplikacija traži pitanje pa dnevnu šifru; stalni PIN je ne otključava. Posle otključavanja važe 5 minuta i pauza od sat vremena.
 5. Pomeri sat telefona napred na 17:01 tokom režima: blokada ostaje, a šifra se ne menja. Posle restarta telefona sat se ponovo čita, ali vraćanje sata unazad nema efekta.
+
+# Ukupni dnevni limit
+
+Automatska provera pravila (strožiji limit odmah, blaži ili isključen tek od sutra, potrošen limit, upozorenje 15 min ranije):
+
+```powershell
+javac -encoding UTF-8 -d .review/daylimit app/src/main/java/com/cuvar/app/DayLimit.java tests/com/cuvar/app/DayLimitTest.java
+java -cp .review/daylimit com.cuvar.app.DayLimitTest
+```
+
+Provera na telefonu:
+
+1. Na početnom ekranu otvori „Ukupni dnevni limit“ i izaberi vrednost manju od današnjeg vremena: zaključane i ograničene aplikacije i sajtovi odmah prikazuju „Dnevni limit je potrošen“, bez PIN-a, šifre i hitnog otključavanja. Aplikacije bez pravila, pozivi i poruke rade.
+2. Pokušaj veći limit ili isključivanje: piše da važi od sutra, a blokada ostaje do ponoći.
+3. Postavi limit 15 min iznad današnjeg vremena: stiže upozorenje (jednom dnevno).
+4. Posle ponoći (po pouzdanom vremenu) blokada nestaje, a zakazana vrednost važi.

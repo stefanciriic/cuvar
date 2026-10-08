@@ -17,6 +17,8 @@ import android.os.Looper;
 import android.os.PowerManager;
 import android.os.SystemClock;
 import android.provider.Settings;
+import android.provider.Telephony;
+import android.telecom.TelecomManager;
 import android.view.Gravity;
 import android.view.View;
 import android.view.WindowManager;
@@ -26,6 +28,7 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -51,6 +54,7 @@ public class GuardService extends AccessibilityService {
     private static final int KIND_SITE_TIME = 4;  // istekao dnevni limit sajta
     private static final int KIND_SCHEDULE = 5;
     private static final int KIND_CODE = 6;       // van perioda režima, otključava se dnevnom šifrom
+    private static final int KIND_DAY = 7;        // potrošen ukupni dnevni limit, ništa se ne otključava do ponoći
 
     /** Pregledači i ID polja sa adresom u svakom od njih. */
     private static final Map<String, String> BROWSERS = new HashMap<>();
@@ -89,6 +93,8 @@ public class GuardService extends AccessibilityService {
     private boolean overlayCooling;   // prikazana je pauza posle otključavanja
     private boolean overlayCode;      // otključava se dnevnom šifrom umesto PIN-om
     private TextView cooldownLabel;  // odbrojavanje do sledećeg mogućeg otključavanja
+    private Set<String> exempt;      // aplikacije koje se ne računaju u ukupni limit i ne blokiraju se zbog njega
+    private long exemptAt;
 
     private final Runnable tick = new Runnable() {
         @Override
@@ -324,15 +330,33 @@ public class GuardService extends AccessibilityService {
             }
         }
 
-        // Sva pravila koja sada važe, od najstrožeg: vremenski režim, pa aplikacija, pa sajt.
+        // Sva pravila koja sada važe, od najstrožeg: ukupni dnevni limit, vremenski režim, pa aplikacija, pa sajt.
         // Otključavanje jedne stavke ne otvara ostale (otključan pregledač ne otvara blokiran sajt).
         List<Block> blocks = new ArrayList<>();
         String appKey = "app:" + pkg;
+        boolean web = urlBarId != null && currentHost != null;
+        int dayLimit = store.dayLimit();
+        if (dayLimit > 0) {
+            Set<String> skip = exempt();
+            long phone = store.phoneToday(skip);
+            if (DayLimit.warn(dayLimit, phone) && store.firstDayLimitWarning()) {
+                long left = dayLimit * 60000L - phone;
+                Toast.makeText(this, "Čuvar: do dnevnog limita ostalo je " + Ui.fmt(left) + ".",
+                        Toast.LENGTH_LONG).show();
+            }
+            if (DayLimit.reached(dayLimit, phone) && !skip.contains(pkg)) {
+                String site = web ? store.siteGuarded(currentHost) : null;
+                if (store.appGuarded(pkg)) {
+                    blocks.add(new Block(appKey, KIND_DAY, null, false));
+                } else if (site != null) {
+                    blocks.add(new Block("site:" + site, KIND_DAY, null, false));
+                }
+            }
+        }
         DailySchedule.Rule rule = store.scheduleBlockingApp(pkg);
         if (rule != null) {
             blocks.add(new Block(appKey, KIND_SCHEDULE, rule, false));
         }
-        boolean web = urlBarId != null && currentHost != null;
         DailySchedule.Rule siteRule = web ? store.scheduleBlockingSite(currentHost) : null;
         if (siteRule != null) {
             blocks.add(new Block("site:" + DailySchedule.matchDomain(currentHost, siteRule.sites),
@@ -369,12 +393,12 @@ public class GuardService extends AccessibilityService {
         // osim jednog hitnog otključavanja dnevno. Vremenski režim se nikad ne otključava.
         Block show = null;
         for (Block b : blocks) {
-            if (b.kind == KIND_SCHEDULE || (store.unlockLeft(b.key) <= 0 && store.emergencyLeft(b.key) <= 0)) {
+            if (b.kind == KIND_SCHEDULE || b.kind == KIND_DAY || (store.unlockLeft(b.key) <= 0 && store.emergencyLeft(b.key) <= 0)) {
                 show = b;
                 break;
             }
         }
-        long coolLeft = show == null || show.kind == KIND_SCHEDULE ? 0 : store.cooldownLeft(show.key);
+        long coolLeft = show == null || show.kind == KIND_SCHEDULE || show.kind == KIND_DAY ? 0 : store.cooldownLeft(show.key);
 
         if (show != null) {
             showOverlay(show.key, show.kind, show.rule, coolLeft > 0, show.code);
@@ -384,6 +408,39 @@ public class GuardService extends AccessibilityService {
         } else {
             hideOverlay();
         }
+    }
+
+    /** Početni ekran, Čuvar, pozivi i poruke: ne računaju se u ukupni limit i nikad se zbog njega ne blokiraju. */
+    private Set<String> exempt() {
+        long now = SystemClock.elapsedRealtime();
+        if (exempt == null || now - exemptAt > 60000L) {
+            exempt = exemptApps(this);
+            exemptAt = now;
+        }
+        return exempt;
+    }
+
+    static Set<String> exemptApps(Context c) {
+        Set<String> out = new HashSet<>();
+        out.add(c.getPackageName());
+        try {
+            Intent i = new Intent(Intent.ACTION_MAIN);
+            i.addCategory(Intent.CATEGORY_HOME);
+            android.content.pm.ResolveInfo r = c.getPackageManager().resolveActivity(i, PackageManager.MATCH_DEFAULT_ONLY);
+            if (r != null && r.activityInfo != null) out.add(r.activityInfo.packageName);
+        } catch (Throwable ignored) {
+        }
+        try {
+            TelecomManager tm = (TelecomManager) c.getSystemService(Context.TELECOM_SERVICE);
+            if (tm != null && tm.getDefaultDialerPackage() != null) out.add(tm.getDefaultDialerPackage());
+        } catch (Throwable ignored) {
+        }
+        try {
+            String sms = Telephony.Sms.getDefaultSmsPackage(c);
+            if (sms != null) out.add(sms);
+        } catch (Throwable ignored) {
+        }
+        return out;
     }
 
     /** Jedno pravilo koje sada blokira aplikaciju ili sajt. */
@@ -494,7 +551,13 @@ public class GuardService extends AccessibilityService {
         String title;
         String sub;
         String joke;
-        if (kind == KIND_SCHEDULE && rule != null) {
+        if (kind == KIND_DAY) {
+            title = "Dnevni limit je potrošen";
+            sub = "Danas si na telefonu proveo " + Ui.fmt(store.phoneToday(exempt())) + ", a limit je "
+                    + DayLimit.label(store.dayLimit()) + ". " + name
+                    + " je zaključan do ponoći i ne može da se otključa, ni PIN-om ni šifrom.";
+            joke = Jokes.pick(Jokes.TIME_UP);
+        } else if (kind == KIND_SCHEDULE && rule != null) {
             title = "Režim „" + rule.name + "“ je aktivan";
             sub = name + " je blokiran " + rule.daysLabel() + " od " + DailySchedule.label(rule.start)
                     + " do " + DailySchedule.label(rule.end) + "."
@@ -563,7 +626,7 @@ public class GuardService extends AccessibilityService {
                 ask.setOnClickListener(v -> showQuiz(urgent, () -> showEmergencyPad(urgent, key, code), null));
                 urgent.addView(ask);
             }
-        } else if ((store.hasPin() || code) && kind != KIND_SCHEDULE) {
+        } else if ((store.hasPin() || code) && kind != KIND_SCHEDULE && kind != KIND_DAY) {
             final LinearLayout unlock = Ui.column(c);
             unlock.setGravity(Gravity.CENTER_HORIZONTAL);
             box.addView(unlock, Ui.fill(c, 22));
