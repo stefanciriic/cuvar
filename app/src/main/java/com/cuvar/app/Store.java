@@ -210,6 +210,15 @@ final class Store {
         return left;
     }
 
+    /** Najduže preostalo vreme korišćenja posle otključavanja bilo čega (0 ako ništa nije otključano). */
+    synchronized long unlockUseLeft() {
+        long left = 0;
+        for (String k : keysOf(unlocks)) {
+            left = Math.max(left, unlockLeft(k));
+        }
+        return left;
+    }
+
     /**
      * Koliko je prošlo od otključavanja, ili -1 ako je i pauza završena.
      * U istom paljenju telefona meri se vremenom od paljenja, pa pomeranje sata ne pomaže.
@@ -376,6 +385,26 @@ final class Store {
     synchronized int appLimit(String pkg) {
         JSONObject o = apps.optJSONObject(pkg);
         return o == null ? 0 : o.optInt("limit", 0);
+    }
+
+    /** Aplikacije kojima je danas potrošen dnevni limit. */
+    synchronized List<String> appsOverLimit() {
+        List<String> out = new ArrayList<>();
+        for (String pkg : keysOf(apps)) {
+            int limit = appLimit(pkg);
+            if (limit > 0 && usedToday(pkg) >= limit * 60000L) out.add(pkg);
+        }
+        return out;
+    }
+
+    /** Sajtovi sa liste kojima je danas potrošen dnevni limit (bez onih koji su uvek blokirani). */
+    synchronized List<String> sitesOverLimit() {
+        List<String> out = new ArrayList<>();
+        for (String d : siteList()) {
+            int limit = siteLimit(d);
+            if (limit > 0 && usedToday("site:" + d) >= limit * 60000L) out.add(d);
+        }
+        return out;
     }
 
     synchronized boolean hasAppRule(String pkg) {
@@ -666,6 +695,16 @@ final class Store {
     synchronized DailySchedule.Rule codeRuleForSite(String host) {
         DailySchedule.Rule r = DailySchedule.codeSite(schedules, host);
         return r == null ? null : copy(r);
+    }
+
+    /** Režimi koji upravo traju (bez obzira da li imaju aplikacije ili sajtove). */
+    synchronized List<DailySchedule.Rule> activeSchedules() {
+        Calendar now = calendarNow();
+        List<DailySchedule.Rule> out = new ArrayList<>();
+        for (DailySchedule.Rule r : schedules) {
+            if (r.active(minuteOf(now), dayOf(now))) out.add(copy(r));
+        }
+        return out;
     }
 
     /** Da li postoji uključen režim sa dnevnom šifrom. */
@@ -972,6 +1011,24 @@ final class Store {
             days = days.subList(days.size() - n, days.size());
         }
         return days;
+    }
+
+    /** Ključevi poslednjih n kalendarskih dana zaključno sa danas (najstariji prvi), i dani bez korišćenja. */
+    synchronized List<String> lastDays(int n) {
+        Calendar c = calendarNow();
+        c.add(Calendar.DAY_OF_MONTH, -(n - 1));
+        List<String> out = new ArrayList<>();
+        for (int i = 0; i < n; i++) {
+            out.add(String.format(Locale.US, "%04d%02d%02d",
+                    c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH)));
+            c.add(Calendar.DAY_OF_MONTH, 1);
+        }
+        return out;
+    }
+
+    /** Da li za dan postoji ijedan zapis (pre instalacije Čuvara ih nema). */
+    synchronized boolean hasDay(String dayKey) {
+        return usage.has(dayKey);
     }
 
     synchronized Map<String, Long> dayMap(String dayKey) {

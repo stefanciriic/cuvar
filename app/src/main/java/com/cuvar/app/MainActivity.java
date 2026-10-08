@@ -6,6 +6,8 @@ import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.Settings;
 import android.view.Gravity;
 import android.view.View;
@@ -34,6 +36,15 @@ public class MainActivity extends Activity {
     private Store store;
     private boolean pinSetup;
     private boolean dark;
+    private LinearLayout nowBox; // sadržaj kartice „Sada“, osvežava se dok je ekran otvoren
+    private final Handler h = new Handler(Looper.getMainLooper());
+    private final Runnable refreshNow = new Runnable() {
+        @Override
+        public void run() {
+            fillNow();
+            h.postDelayed(this, 30000L);
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -65,6 +76,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onPause() {
         super.onPause();
+        h.removeCallbacks(refreshNow);
         Session.seen();
     }
 
@@ -192,7 +204,8 @@ public class MainActivity extends Activity {
                     "Opcija je siva ili piše da je ograničena?", v -> showRestrictedHelp()), Ui.fill(this, 14));
         }
 
-        col.addView(todayCard(enabled), Ui.fill(this, 18));
+        col.addView(nowCard(), Ui.fill(this, 18));
+        col.addView(todayCard(enabled), Ui.fill(this, 14));
         if (store.usesDailyCode()) {
             col.addView(codeCard(), Ui.fill(this, 14));
         }
@@ -206,7 +219,7 @@ public class MainActivity extends Activity {
                 siteRules == 0 ? "Blokiraj sajtove ili im postavi dnevni limit" : "Na listi: " + siteRules,
                 v -> startActivity(new Intent(this, SitesActivity.class))), Ui.fill(this, 10));
         col.addView(navTile("Statistika",
-                "Po danima, sajtovima, kategorijama i aplikacijama",
+                "Krug po aplikacijama, kolone po danima, poređenje sa prošlom nedeljom",
                 v -> startActivity(new Intent(this, StatsActivity.class))), Ui.fill(this, 10));
         col.addView(navTile("Vremenski režim",
                 scheduleSummary(),
@@ -231,6 +244,93 @@ public class MainActivity extends Activity {
         col.addView(version, Ui.fill(this, 10));
 
         setScreen(col);
+        h.removeCallbacks(refreshNow);
+        h.postDelayed(refreshNow, 30000L);
+    }
+
+    // ---------- Kartica „Sada“ ----------
+
+    private View nowCard() {
+        LinearLayout card = Ui.card(this);
+        TextView eyebrow = Ui.text(this, "SADA", 12, Ui.MUTED, true);
+        eyebrow.setLetterSpacing(0.15f);
+        card.addView(eyebrow);
+        nowBox = Ui.column(this);
+        card.addView(nowBox);
+        fillNow();
+        return card;
+    }
+
+    /** Šta upravo važi: da li Čuvar radi, režimi, otključavanje i pauza, potrošeni limiti, hitno otključavanje. */
+    private void fillNow() {
+        if (nowBox == null) return;
+        nowBox.removeAllViews();
+
+        boolean enabled = GuardService.isEnabled(this);
+        if (enabled && GuardService.running) {
+            nowLine("●  Čuvar radi", null, Charts.good());
+        } else if (enabled) {
+            View v = nowLine("●  Čuvar trenutno ne radi",
+                    "Uključen je u Pristupačnosti, ali ga je telefon zaustavio. Tapni ovde, isključi ga i ponovo uključi.",
+                    Ui.ACCENT);
+            v.setOnClickListener(x -> openAccessibility());
+        } else {
+            nowLine("●  Čuvar je isključen", "Ništa se ne meri ni blokira dok ga ne uključiš.", Ui.ACCENT);
+        }
+
+        boolean any = false;
+        for (DailySchedule.Rule r : store.activeSchedules()) {
+            if (r.apps.isEmpty() && r.sites.isEmpty()) continue;
+            nowLine("Režim „" + r.name + "“", "Traje do " + DailySchedule.label(r.end)
+                    + ". Do tada se " + (r.apps.size() + r.sites.size() == 1 ? "njegova stavka ne otključava." : "njegove stavke ne otključavaju."),
+                    Ui.INK);
+            any = true;
+        }
+
+        long use = store.unlockUseLeft();
+        long busy = store.unlockBusyLeft();
+        if (use > 0) {
+            nowLine("Otključano", "Još " + minutes(use) + ", pa pauza od "
+                    + Store.UNLOCK_COOLDOWN_MS / 60000L + " min bez otključavanja.", Ui.INK);
+            any = true;
+        } else if (busy > 0) {
+            nowLine("Pauza posle otključavanja", "Još " + minutes(busy) + " ništa ne može da se otključa.", Ui.INK);
+            any = true;
+        }
+
+        List<String> over = new ArrayList<>();
+        PackageManager pm = getPackageManager();
+        for (String pkg : store.appsOverLimit()) {
+            String label = labelOf(pm, pkg);
+            over.add(label == null ? pkg : label);
+        }
+        over.addAll(store.sitesOverLimit());
+        if (!over.isEmpty()) {
+            nowLine("Potrošen dnevni limit", android.text.TextUtils.join(", ", over)
+                    + ". Važi do ponoći.", Ui.INK);
+            any = true;
+        }
+
+        if (!any) {
+            nowLine("Nijedan režim ni limit trenutno ne traje", null, Ui.MUTED);
+        }
+        nowLine("Hitno otključavanje", store.emergencyAvailable()
+                ? "Dostupno još jednom danas."
+                : "Danas je iskorišćeno. Novo je posle ponoći.", Ui.MUTED);
+    }
+
+    private View nowLine(String title, String detail, int color) {
+        LinearLayout line = Ui.column(this);
+        line.addView(Ui.text(this, title, 15, color, true));
+        if (detail != null) {
+            line.addView(Ui.text(this, detail, 14, Ui.MUTED, false), Ui.fill(this, 2));
+        }
+        nowBox.addView(line, Ui.fill(this, nowBox.getChildCount() == 0 ? 8 : 12));
+        return line;
+    }
+
+    private static String minutes(long ms) {
+        return ((ms + 59999L) / 60000L) + " min";
     }
 
     private void chooseTheme() {

@@ -11,15 +11,19 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 
-/** Statistika za danas ili više dana: ukupno po danima, sajtovi u pregledaču, kategorije i najkorišćenije aplikacije. */
+/** Statistika za danas ili više dana: poređenje sa ranijim danima, krug po aplikacijama, kolone po danima, sajtovi i kategorije. */
 public class StatsActivity extends SubActivity {
 
     private static final class Row {
@@ -101,18 +105,22 @@ public class StatsActivity extends SubActivity {
         body.removeAllViews();
 
         PackageManager pm = getPackageManager();
-        String homePkg = homePackage();
-        String me = getPackageName();
+        skip.clear();
+        skip.add(homePackage());
+        skip.add(getPackageName());
 
         Map<String, Long> perApp = new HashMap<>();
         Map<String, Long> perSite = new HashMap<>();
         Map<Integer, Long> perCategory = new HashMap<>();
-        List<Row> perDay = new ArrayList<>();
+        List<Map<String, Long>> appsPerDay = new ArrayList<>();
         long grandTotal = 0;
+        int counted = 0; // dani od prvog dana sa podacima, za prosek
 
-        List<String> dayKeys = days == 1 ? Collections.singletonList(store.day()) : store.recentDays(days);
+        // Kalendarski dani zaključno sa danas; dani bez korišćenja se računaju kao nula.
+        List<String> dayKeys = store.lastDays(days);
         for (String dk : dayKeys) {
-            long dayTotal = 0;
+            if (counted > 0 || store.hasDay(dk)) counted++;
+            Map<String, Long> apps = new HashMap<>();
             Map<String, Long> day = store.dayMap(dk);
             // Dani pre merenja svih sajtova imaju samo sajtove sa liste; tada se prikazuju oni.
             boolean hasWeb = false;
@@ -132,44 +140,242 @@ public class StatsActivity extends SubActivity {
                     }
                     continue; // vreme sajta je već deo vremena pregledača, ne broji se duplo u ukupno
                 }
-                if (key.equals(homePkg) || key.equals(me)) {
+                if (skip.contains(key)) {
                     continue;
                 }
-                dayTotal += ms;
+                grandTotal += ms;
+                apps.put(key, ms);
                 perApp.put(key, perApp.getOrDefault(key, 0L) + ms);
                 int cat = categoryOf(pm, key);
                 perCategory.put(cat, perCategory.getOrDefault(cat, 0L) + ms);
             }
-            grandTotal += dayTotal;
-            Row r = new Row();
-            r.label = Store.dayLabel(dk);
-            r.ms = dayTotal;
-            perDay.add(r);
+            appsPerDay.add(apps);
         }
 
-        body.addView(summaryCard(grandTotal, dayKeys.size()), Ui.fill(this, 14));
+        // Aplikacije sa bojom: prvih 5 po vremenu u periodu, ostale idu u „Ostalo“ (isto u krugu i kolonama).
+        List<Row> top = topRows(perApp, k -> labelOf(pm, k), Integer.MAX_VALUE);
+        List<String> colored = new ArrayList<>();
+        for (Map.Entry<String, Long> e : sortedEntries(perApp)) {
+            if (colored.size() == TOP) break;
+            if (labelOf(pm, e.getKey()) != null) colored.add(e.getKey());
+        }
+
+        long avg = counted > 0 ? grandTotal / counted : 0;
+        body.addView(summaryCard(grandTotal, avg), Ui.fill(this, 14));
+        body.addView(donutCard(pm, perApp, colored, grandTotal), Ui.fill(this, 16));
         if (days > 1) {
-            body.addView(barsCard("Po danima", perDay), Ui.fill(this, 16));
+            body.addView(columnsCard(dayKeys, appsPerDay, colored, avg), Ui.fill(this, 16));
         }
         body.addView(barsCard("Top 3 sajta u pregledaču", topRows(perSite, k -> k, 3)), Ui.fill(this, 16));
         body.addView(barsCard("Po kategorijama", categoryRows(perCategory)), Ui.fill(this, 16));
-        body.addView(barsCard("Najkorišćenije aplikacije",
-                topRows(perApp, k -> labelOf(pm, k), 8)), Ui.fill(this, 16));
+        if (top.size() > TOP) {
+            // Prvih 5 je već u legendi kruga; ovde su sledeće po redu.
+            body.addView(barsCard("Ostale aplikacije", top.subList(TOP, Math.min(TOP + 8, top.size()))),
+                    Ui.fill(this, 16));
+        }
     }
 
-    private View summaryCard(long total, int dayCount) {
+    private static final int TOP = 5;
+    private final Set<String> skip = new HashSet<>();
+
+    /** Ukupno vreme aplikacija za dan (bez početnog ekrana i Čuvara), i da li dan uopšte ima podatke. */
+    private long totalOf(String dayKey) {
+        long t = 0;
+        for (Map.Entry<String, Long> e : store.dayMap(dayKey).entrySet()) {
+            String k = e.getKey();
+            if (k.startsWith("web:") || k.startsWith("site:") || skip.contains(k)) continue;
+            t += e.getValue();
+        }
+        return t;
+    }
+
+    /** Prosek po danu za date dane, samo dani sa podacima; -1 ako podataka nema. */
+    private long avgOf(List<String> keys) {
+        long t = 0;
+        int n = 0;
+        for (String k : keys) {
+            if (!store.hasDay(k)) continue;
+            t += totalOf(k);
+            n++;
+        }
+        return n == 0 ? -1 : t / n;
+    }
+
+    private View summaryCard(long total, long avg) {
         LinearLayout card = Ui.card(this);
-        TextView eyebrow = Ui.text(this, days == 1 ? "UKUPNO DANAS" : "UKUPNO ZA PERIOD", 12, Ui.MUTED, true);
+        TextView eyebrow = Ui.text(this, days == 1 ? "UKUPNO DANAS" : "UKUPNO ZA " + days + " DANA", 12, Ui.MUTED, true);
         eyebrow.setLetterSpacing(0.15f);
         card.addView(eyebrow);
         card.addView(Ui.text(this, Ui.fmt(total), 34, Ui.INK, true), Ui.fill(this, 4));
+
+        LinearLayout tiles = Ui.row(this);
+        tiles.setGravity(Gravity.TOP);
+        String change;
+        int changeColor;
         if (days == 1) {
+            List<String> week = store.lastDays(8);
+            long yesterday = store.hasDay(week.get(6)) ? totalOf(week.get(6)) : -1;
+            long weekAvg = avgOf(week.subList(0, 7));
+            tiles.addView(tile("Juče", yesterday < 0 ? "–" : Ui.fmt(yesterday)), tileParams(false));
+            tiles.addView(tile("Prosek 7 dana", weekAvg < 0 ? "–" : Ui.fmt(weekAvg)), tileParams(true));
+            if (weekAvg > 0) {
+                long pct = Math.round(100.0 * total / weekAvg);
+                change = "Danas do sada: " + pct + "% tvog dnevnog proseka";
+                changeColor = pct > 100 ? Ui.ACCENT : Ui.MUTED;
+            } else {
+                change = "Za poređenje treba još koji dan merenja.";
+                changeColor = Ui.MUTED;
+            }
+        } else {
+            List<String> two = store.lastDays(14);
+            long now = avgOf(two.subList(7, 14));
+            long before = avgOf(two.subList(0, 7));
+            tiles.addView(tile("Prosek po danu", Ui.fmt(avg)), tileParams(false));
+            tiles.addView(tile("Prethodnih 7 dana", before < 0 ? "–" : Ui.fmt(before) + " / dan"), tileParams(true));
+            if (before > 0 && now >= 0) {
+                long pct = Math.round(100.0 * (now - before) / before);
+                if (pct > 0) {
+                    change = "▲ " + pct + "% više nego prethodne nedelje";
+                    changeColor = Ui.ACCENT;
+                } else if (pct < 0) {
+                    change = "▼ " + (-pct) + "% manje nego prethodne nedelje";
+                    changeColor = Charts.good();
+                } else {
+                    change = "Isto kao prethodne nedelje";
+                    changeColor = Ui.MUTED;
+                }
+            } else {
+                change = "Za poređenje sa prethodnom nedeljom treba još podataka.";
+                changeColor = Ui.MUTED;
+            }
+        }
+        card.addView(tiles, Ui.fill(this, 14));
+        card.addView(Ui.text(this, change, 14, changeColor, true), Ui.fill(this, 12));
+        return card;
+    }
+
+    private View tile(String label, String value) {
+        LinearLayout t = Ui.column(this);
+        t.setBackground(Ui.round(Ui.SOFT, Ui.dp(this, 12)));
+        int p = Ui.dp(this, 12);
+        t.setPadding(p, p, p, p);
+        t.addView(Ui.text(this, label, 12, Ui.MUTED, false));
+        t.addView(Ui.text(this, value, 17, Ui.INK, true), Ui.fill(this, 2));
+        return t;
+    }
+
+    private LinearLayout.LayoutParams tileParams(boolean second) {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        if (second) lp.leftMargin = Ui.dp(this, 10);
+        return lp;
+    }
+
+    private TextView eyebrow(String title) {
+        TextView e = Ui.text(this, title.toUpperCase(Locale.ROOT), 12, Ui.MUTED, true);
+        e.setLetterSpacing(0.15f);
+        return e;
+    }
+
+    /** Krug: koliko je vremena otišlo na koju aplikaciju, sa legendom ispod. */
+    private View donutCard(PackageManager pm, Map<String, Long> perApp, List<String> colored, long total) {
+        LinearLayout card = Ui.card(this);
+        card.addView(eyebrow("Gde ode vreme"));
+        if (total <= 0) {
+            card.addView(Ui.text(this, "Nema podataka za ovaj period.", 14, Ui.MUTED, false), Ui.fill(this, 8));
             return card;
         }
-        long avg = dayCount > 0 ? total / dayCount : 0;
-        card.addView(Ui.text(this, "Prosečno " + Ui.fmt(avg) + " po danu", 14, Ui.MUTED, false),
-                Ui.fill(this, 4));
+        List<Charts.Part> parts = new ArrayList<>();
+        StringBuilder desc = new StringBuilder("Ukupno " + Ui.fmt(total));
+        long rest = total;
+        for (int i = 0; i < colored.size(); i++) {
+            long ms = perApp.get(colored.get(i));
+            parts.add(new Charts.Part(ms, Charts.color(i, false)));
+            rest -= ms;
+        }
+        if (rest > 0) parts.add(new Charts.Part(rest, Charts.color(0, true)));
+
+        Charts.Donut donut = new Charts.Donut(this, parts, Ui.fmt(total), days == 1 ? "danas" : "za " + days + " dana");
+        card.addView(donut, Ui.fill(this, 12));
+
+        for (int i = 0; i < colored.size(); i++) {
+            String name = labelOf(pm, colored.get(i));
+            long ms = perApp.get(colored.get(i));
+            card.addView(legendRow(Charts.color(i, false), name, ms, total), Ui.fill(this, i == 0 ? 16 : 10));
+            desc.append(", ").append(name).append(' ').append(Ui.fmt(ms));
+        }
+        if (rest > 0) {
+            card.addView(legendRow(Charts.color(0, true), "Ostalo", rest, total), Ui.fill(this, 10));
+        }
+        donut.setContentDescription(desc);
         return card;
+    }
+
+    private View legendRow(int color, String name, long ms, long total) {
+        LinearLayout row = Ui.row(this);
+        View dot = new View(this);
+        dot.setBackground(Ui.round(color, Ui.dp(this, 5)));
+        int d = Ui.dp(this, 10);
+        row.addView(dot, new LinearLayout.LayoutParams(d, d));
+        TextView n = Ui.text(this, name, 15, Ui.INK, false);
+        n.setSingleLine(true);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        lp.leftMargin = Ui.dp(this, 10);
+        row.addView(n, lp);
+        row.addView(Ui.text(this, Ui.fmt(ms), 15, Ui.MUTED, false));
+        TextView pct = Ui.text(this, Math.round(100.0 * ms / total) + "%", 13, Ui.MUTED, true);
+        pct.setGravity(Gravity.END);
+        row.addView(pct, new LinearLayout.LayoutParams(Ui.dp(this, 48), LinearLayout.LayoutParams.WRAP_CONTENT));
+        return row;
+    }
+
+    /** Kolone po danima, svaka podeljena po istim aplikacijama i bojama kao krug. */
+    private View columnsCard(List<String> dayKeys, List<Map<String, Long>> appsPerDay, List<String> colored, long avg) {
+        LinearLayout card = Ui.card(this);
+        card.addView(eyebrow("Po danima"));
+        List<List<Charts.Part>> cols = new ArrayList<>();
+        List<String> labels = new ArrayList<>();
+        StringBuilder desc = new StringBuilder();
+        for (int d = 0; d < dayKeys.size(); d++) {
+            Map<String, Long> apps = appsPerDay.get(d);
+            List<Charts.Part> parts = new ArrayList<>();
+            long dayTotal = 0;
+            for (long ms : apps.values()) dayTotal += ms;
+            long rest = dayTotal;
+            for (int i = 0; i < colored.size(); i++) {
+                long ms = apps.getOrDefault(colored.get(i), 0L);
+                if (ms > 0) parts.add(new Charts.Part(ms, Charts.color(i, false)));
+                rest -= ms;
+            }
+            if (rest > 0) parts.add(new Charts.Part(rest, Charts.color(0, true)));
+            cols.add(parts);
+            labels.add(columnLabel(dayKeys.get(d)));
+            if (desc.length() > 0) desc.append(", ");
+            desc.append(Store.dayLabel(dayKeys.get(d))).append(' ').append(Ui.fmt(dayTotal));
+        }
+        Charts.Columns chart = new Charts.Columns(this, cols, labels, dayKeys.size() - 1, avg);
+        chart.setContentDescription(desc);
+        card.addView(chart, Ui.fill(this, 14));
+        card.addView(Ui.text(this, "Boje su iste kao u krugu iznad. Isprekidana linija je prosek po danu.",
+                12, Ui.MUTED, false), Ui.fill(this, 10));
+        return card;
+    }
+
+    /** Ispod kolone: dan u nedelji za 7 dana, a datum za 14 dana. */
+    private String columnLabel(String dayKey) {
+        try {
+            Calendar c = Calendar.getInstance();
+            c.setTime(new SimpleDateFormat("yyyyMMdd", Locale.US).parse(dayKey));
+            if (days > 7) return String.valueOf(c.get(Calendar.DAY_OF_MONTH));
+            return DailySchedule.DAY_NAMES[(c.get(Calendar.DAY_OF_WEEK) + 5) % 7];
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    private static List<Map.Entry<String, Long>> sortedEntries(Map<String, Long> src) {
+        List<Map.Entry<String, Long>> out = new ArrayList<>(src.entrySet());
+        Collections.sort(out, (a, b) -> Long.compare(b.getValue(), a.getValue()));
+        return out;
     }
 
     private View barsCard(String title, List<Row> rows) {
