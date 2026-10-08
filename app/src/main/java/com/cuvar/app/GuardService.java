@@ -11,6 +11,9 @@ import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.graphics.PixelFormat;
 import android.graphics.Typeface;
+import android.media.AudioAttributes;
+import android.media.AudioFocusRequest;
+import android.media.AudioManager;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
@@ -20,6 +23,7 @@ import android.provider.Settings;
 import android.provider.Telephony;
 import android.telecom.TelecomManager;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
@@ -78,6 +82,8 @@ public class GuardService extends AccessibilityService {
     private WindowManager wm;
     private PowerManager power;
     private KeyguardManager keyguard;
+    private AudioManager audio;
+    private AudioFocusRequest silence; // drži zvuk utišanim dok je ekran za blokadu prikazan
     private boolean receiverOn;
 
     private String currentPkg;    // aplikacija koja je trenutno na ekranu
@@ -188,6 +194,7 @@ public class GuardService extends AccessibilityService {
         wm = (WindowManager) getSystemService(Context.WINDOW_SERVICE);
         power = (PowerManager) getSystemService(Context.POWER_SERVICE);
         keyguard = (KeyguardManager) getSystemService(Context.KEYGUARD_SERVICE);
+        audio = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
 
         try {
             AccessibilityServiceInfo info = getServiceInfo();
@@ -507,6 +514,7 @@ public class GuardService extends AccessibilityService {
                     PixelFormat.TRANSLUCENT);
             lp.gravity = Gravity.TOP | Gravity.START;
             wm.addView(v, lp);
+            silenceMedia();
             overlay = v;
             overlayKey = key;
             overlayKind = kind;
@@ -520,6 +528,42 @@ public class GuardService extends AccessibilityService {
         }
     }
 
+    /**
+     * Blokirana aplikacija ostaje ispod ekrana za blokadu, pa bi video ili muzika nastavili da idu.
+     * Zato se pošalje „pauza“ i uzme zvuk za sebe dok je ekran prikazan (YouTube, Spotify i slični tada stanu).
+     */
+    private void silenceMedia() {
+        if (audio == null) return;
+        try {
+            audio.dispatchMediaKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PAUSE));
+            audio.dispatchMediaKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_PAUSE));
+        } catch (Throwable ignored) {
+        }
+        try {
+            if (silence == null) {
+                silence = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                        .setAudioAttributes(new AudioAttributes.Builder()
+                                .setUsage(AudioAttributes.USAGE_MEDIA)
+                                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                                .build())
+                        .setOnAudioFocusChangeListener(change -> { })
+                        .build();
+                audio.requestAudioFocus(silence);
+            }
+        } catch (Throwable ignored) {
+            silence = null;
+        }
+    }
+
+    private void releaseMedia() {
+        if (audio == null || silence == null) return;
+        try {
+            audio.abandonAudioFocusRequest(silence);
+        } catch (Throwable ignored) {
+        }
+        silence = null;
+    }
+
     private void hideOverlay() {
         if (overlay != null) {
             try {
@@ -529,6 +573,7 @@ public class GuardService extends AccessibilityService {
             overlay = null;
             overlayKey = null;
             overlayKind = 0;
+            releaseMedia();
             overlayRule = null;
             overlayCooling = false;
             overlayCode = false;
