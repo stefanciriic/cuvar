@@ -151,7 +151,7 @@ public class StatsActivity extends SubActivity {
         if (days > 1) {
             body.addView(barsCard("Po danima", perDay), Ui.fill(this, 16));
         }
-        body.addView(barsCard("Sajtovi u pregledaču", topRows(perSite, k -> k, 10)), Ui.fill(this, 16));
+        body.addView(barsCard("Top 3 sajta u pregledaču", topRows(perSite, k -> k, 3)), Ui.fill(this, 16));
         body.addView(barsCard("Po kategorijama", categoryRows(perCategory)), Ui.fill(this, 16));
         body.addView(barsCard("Najkorišćenije aplikacije",
                 topRows(perApp, k -> labelOf(pm, k), 8)), Ui.fill(this, 16));
