@@ -339,43 +339,62 @@ public class MainActivity extends Activity {
         Sheet sheet = new Sheet(this, "Ukupni dnevni limit").message(intro).view(box).secondary("Zatvori", null);
 
         if (limit > 0) {
-            String raise;
+            box.addView(Sheet.label(this, "TRENUTNI LIMIT"), Ui.fill(this, 0));
+            box.addView(Ui.text(this, DayLimit.label(limit), 28, Ui.INK, true), Ui.fill(this, 2));
+
             boolean can = store.canRaiseDayLimit();
-            if (can) {
-                int add = DayLimit.maxRaise(limit);
-                raise = "Povećaj za " + Ui.fmt(add * 60000L) + " (na " + DayLimit.label(limit + add) + ")";
-            } else {
-                raise = "Povećanje je danas već iskorišćeno";
-            }
-            TextView up = Ui.button(this, raise, false);
+            final int add = DayLimit.maxRaise(limit);
+            String raise = can ? "Povećaj za " + Ui.fmt(add * 60000L) + " → " + DayLimit.label(limit + add)
+                    : "Povećanje je danas već iskorišćeno";
+            TextView up = Ui.button(this, raise, can);
             up.setEnabled(can);
             up.setAlpha(can ? 1f : 0.5f);
             up.setOnClickListener(v -> {
                 sheet.dismiss();
-                int added = store.raiseDayLimit();
-                Toast.makeText(this, added > 0 ? "Limit je sada " + DayLimit.label(store.dayLimit()).toLowerCase(Locale.ROOT)
-                        + ". Danas više ne može da se poveća." : "Povećanje je danas već iskorišćeno.",
-                        Toast.LENGTH_LONG).show();
-                showDashboard();
+                confirm("Povećati limit?", "Limit ide sa " + DayLimit.label(limit) + " na " + DayLimit.label(limit + add)
+                        + ". Ovo je jedino povećanje danas i ne može se ponoviti do sutra.",
+                        "Povećaj", () -> {
+                            int added = store.raiseDayLimit();
+                            Toast.makeText(this, added > 0 ? "Limit je sada " + DayLimit.label(store.dayLimit())
+                                    : "Povećanje je danas već iskorišćeno.", Toast.LENGTH_LONG).show();
+                        });
             });
-            box.addView(up, Ui.fill(this, 0));
+            box.addView(up, Ui.fill(this, 14));
         }
 
-        boolean first = limit > 0;
+        boolean header = false;
         for (final int min : DayLimit.CHOICES) {
             if (min <= 0 || (limit > 0 && min >= limit)) continue;
-            String label = DayLimit.label(min) + (min == DayLimit.SUGGESTED ? " (predlog)" : "");
+            if (!header && limit > 0) {
+                box.addView(Sheet.label(this, "SMANJI LIMIT (VAŽI ODMAH)"), Ui.fill(this, 18));
+                header = true;
+            }
+            String label = (limit > 0 ? "Smanji na " : "Postavi na ") + DayLimit.label(min)
+                    + (min == DayLimit.SUGGESTED ? " (predlog)" : "");
             TextView b = Ui.button(this, label, false);
+            final boolean wasFirst = box.getChildCount() == 0;
             b.setOnClickListener(v -> {
                 sheet.dismiss();
-                if (store.lowerDayLimit(min)) {
-                    Toast.makeText(this, "Limit važi od sada: " + DayLimit.label(min).toLowerCase(Locale.ROOT),
-                            Toast.LENGTH_LONG).show();
+                Runnable apply = () -> {
+                    if (store.lowerDayLimit(min)) {
+                        Toast.makeText(this, "Limit je sada " + DayLimit.label(min), Toast.LENGTH_LONG).show();
+                    }
+                };
+                if (limit <= 0) {
+                    confirm("Uključiti limit od " + DayLimit.label(min) + "?",
+                            "Važi odmah. Posle se može smanjiti u svako doba, a povećati samo jednom dnevno i malo "
+                                    + "(sa " + DayLimit.label(min) + " najviše za " + Ui.fmt(DayLimit.maxRaise(min) * 60000L) + ").",
+                            "Uključi", apply);
+                } else {
+                    confirm("Smanjiti limit na " + DayLimit.label(min) + "?",
+                            "Limit postaje ukupno " + DayLimit.label(min) + " umesto " + DayLimit.label(limit)
+                                    + ". Važi odmah i ne može se vratiti: posle toga se danas "
+                                    + "može povećati najviše za " + Ui.fmt(DayLimit.maxRaise(min) * 60000L)
+                                    + (store.canRaiseDayLimit() ? "." : ", a povećanje je danas već iskorišćeno."),
+                            "Smanji", apply);
                 }
-                showDashboard();
             });
-            box.addView(b, Ui.fill(this, first ? 10 : 0));
-            first = true;
+            box.addView(b, Ui.fill(this, wasFirst ? 0 : 10));
         }
 
         if (limit > 0) {
@@ -392,9 +411,21 @@ public class MainActivity extends Activity {
                 }
                 showDashboard();
             });
-            box.addView(off, Ui.fill(this, 10));
+            box.addView(off, Ui.fill(this, 18));
         }
         sheet.show();
+    }
+
+    /** Pitanje pre promene limita koja se ne može vratiti; posle potvrde osvežava početni ekran. */
+    private void confirm(String title, String message, String yes, Runnable onYes) {
+        new Sheet(this, title).message(message)
+                .secondary("Otkaži", null)
+                .primary(yes, () -> {
+                    onYes.run();
+                    showDashboard();
+                    return true;
+                })
+                .show();
     }
 
     /** Uključivanje važi odmah, isključivanje tek sutra od 06:00. */
