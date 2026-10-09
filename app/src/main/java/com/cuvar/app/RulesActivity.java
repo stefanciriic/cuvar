@@ -131,6 +131,8 @@ public class RulesActivity extends SubActivity {
         int opens = store.appOpens(pkg);
         if (opens > 0) parts.add("najviše " + Ui.count(opens, "otvaranje", "otvaranja", "otvaranja")
                 + " (danas " + store.opensToday("app:" + pkg) + ")");
+        int session = store.appSession(pkg);
+        if (session > 0) parts.add("najviše " + session + " min u komadu");
         out.add(new Line(rest + (parts.isEmpty() ? "slobodno" : android.text.TextUtils.join(", ", parts)), false));
         return out;
     }
@@ -253,6 +255,11 @@ public class RulesActivity extends SubActivity {
         EditText opens = Sheet.input(this, "0", true);
         opens.setText(String.valueOf(store.appOpens(pkg)));
         box.addView(opens, Ui.fill(this, 6));
+        box.addView(Sheet.label(this, "Najduže u komadu, u minutima, pa pauza od "
+                + Store.SESSION_BREAK_MS / 60000L + " min (0 = bez)"), Ui.fill(this, 14));
+        EditText session = Sheet.input(this, "0", true);
+        session.setText(String.valueOf(store.appSession(pkg)));
+        box.addView(session, Ui.fill(this, 6));
         box.addView(Ui.text(this, "Danas korišćeno: " + Ui.fmt(store.usedToday(pkg)) + ", otvoreno "
                 + Ui.count(store.opensToday("app:" + pkg), "put", "puta", "puta"), 13, Ui.MUTED, false),
                 Ui.fill(this, 8));
@@ -264,8 +271,10 @@ public class RulesActivity extends SubActivity {
                     boolean wantLock = lock.isChecked();
                     int wantLimit = Ui.parseInt(limit.getText().toString());
                     int wantOpens = Ui.parseInt(opens.getText().toString());
-                    if (wantLock != store.appLock(pkg) || wantLimit != store.appLimit(pkg) || wantOpens != store.appOpens(pkg)) {
-                        store.setApp(pkg, wantLock, wantLimit, wantOpens);
+                    int wantSession = Ui.parseInt(session.getText().toString());
+                    if (wantLock != store.appLock(pkg) || wantLimit != store.appLimit(pkg) || wantOpens != store.appOpens(pkg)
+                            || wantSession != store.appSession(pkg)) {
+                        store.setApp(pkg, wantLock, wantLimit, wantOpens, wantSession);
                     }
                     pendingToast();
                     render();

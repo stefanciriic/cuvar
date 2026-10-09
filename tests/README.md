@@ -96,3 +96,11 @@ Provera na telefonu:
 3. „Zatvori“ vraća na početni ekran i ne broji otvaranje.
 4. Kratak izlazak (deljenje, izbor fajla) i povratak u roku od 15 s ne traži novu pauzu.
 5. Aplikacija bez pravila, telefon i poruke otvaraju se bez pauze. Posle otključavanja šifrom nema pauze.
+
+## Najduže u komadu
+
+1. U aplikaciji (Aplikacije ili Sva pravila) upiši „Najduže u komadu“ 2 min.
+2. Koristi je bez prekida: posle 1 min stiže poruka „još minut u komadu“, a posle 2 min ekran „Vreme je za pauzu“ koji se ne otključava ni šifrom.
+3. Izlazak na početni ekran i povratak pre isteka pauze ne prekida komad ni pauzu.
+4. Posle 15 min pauze aplikacija se opet otvara i komad kreće od nule. Kartica Sada pokazuje koliko je pauze ostalo.
+5. Smanjenje ili brisanje ovog ograničenja važi tek sutra od 06:00 (kartica „Od sutra“).

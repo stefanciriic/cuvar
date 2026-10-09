@@ -66,6 +66,7 @@ public class GuardService extends AccessibilityService {
     private static final int KIND_OPENS = 9;      // potrošena otvaranja aplikacije za danas
     private static final int KIND_PAUSE = 11;     // kratka pauza pre otvaranja aplikacije sa pravilom, posle nje se nastavlja
     static final int PAUSE_SECONDS = 6;
+    private static final int KIND_BREAK = 12;     // obavezna pauza posle najdužeg korišćenja u komadu
     private static final int KIND_BROWSER = 10;   // pregledač u kome Čuvar ne vidi adresu, dok postoje pravila za sajtove
 
     /** Pregledači i ID polja sa adresom u svakom od njih. */
@@ -135,6 +136,11 @@ public class GuardService extends AccessibilityService {
                 if (active && overlay == null && currentPkg != null && dt > 0 && dt <= 3 * TICK_MS) {
                     if (tracked(GuardService.this, currentPkg)) {
                         store.addUsage(currentPkg, dt);
+                        long left = store.addSession(currentPkg, dt);
+                        if (left > 0 && left <= 60000L && left + dt > 60000L) {
+                            Toast.makeText(GuardService.this, "Čuvar: još minut u komadu, pa pauza od "
+                                    + Store.SESSION_BREAK_MS / 60000L + " min.", Toast.LENGTH_LONG).show();
+                        }
                     }
                     if (BROWSERS.containsKey(currentPkg)) {
                         if (currentSite != null) {
@@ -438,6 +444,9 @@ public class GuardService extends AccessibilityService {
         if (pkg.equals(opensBlocked)) {
             blocks.add(new Block(appKey, KIND_OPENS, null, false));
         }
+        if (store.sessionBreakLeft(pkg) > 0) {
+            blocks.add(new Block(appKey, KIND_BREAK, null, false));
+        }
         DailySchedule.Rule rule = store.scheduleBlockingApp(pkg);
         if (rule != null) {
             blocks.add(new Block(appKey, KIND_SCHEDULE, rule, false));
@@ -576,6 +585,8 @@ public class GuardService extends AccessibilityService {
             b = new Block(k, KIND_DAY, null, false);
         } else if (guarded(p) && store.nightActive()) {
             b = new Block(k, KIND_NIGHT, null, false);
+        } else if (store.sessionBreakLeft(p) > 0) {
+            b = new Block(k, KIND_BREAK, null, false);
         } else {
             DailySchedule.Rule rule = store.scheduleBlockingApp(p);
             if (rule != null) {
@@ -598,7 +609,7 @@ public class GuardService extends AccessibilityService {
     /** Blokade koje se ne otključavaju: vremenski režim, potrošen limit aplikacije, sajta ili ukupni. */
     private static boolean hard(int kind) {
         return kind == KIND_SCHEDULE || kind == KIND_DAY || kind == KIND_NIGHT || kind == KIND_TIME || kind == KIND_SITE_TIME
-                || kind == KIND_OPENS;
+                || kind == KIND_OPENS || kind == KIND_BREAK;
     }
 
     /** Aplikacija sa pravilom, ili pregledač koji Čuvar ne prati dok postoje pravila za sajtove. */
@@ -984,6 +995,13 @@ public class GuardService extends AccessibilityService {
             title = "Otvaranja za danas su potrošena";
             sub = name + " si danas otvorio " + Ui.count(store.opensToday(key), "put", "puta", "puta") + ", a dozvoljeno je "
                     + store.appOpensNow(pkg) + ". Do ponoći se ne otvara, ni šifrom.";
+            joke = Jokes.pick(Jokes.TIME_UP);
+        } else if (kind == KIND_BREAK) {
+            String pkg = key.substring(4);
+            long left = store.sessionBreakLeft(pkg);
+            title = "Vreme je za pauzu";
+            sub = "Bio si u " + name + " " + store.appSessionNow(pkg) + " min u komadu. "
+                    + name + " se ponovo otvara posle pauze, za " + Ui.fmt(left) + ", ni šifrom ranije.";
             joke = Jokes.pick(Jokes.TIME_UP);
         } else if (kind == KIND_SCHEDULE && rule != null) {
             title = "Režim „" + rule.name + "“ je aktivan";

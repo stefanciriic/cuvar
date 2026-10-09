@@ -103,7 +103,7 @@ public class AppsActivity extends SubActivity {
 
         LinearLayout root = Ui.column(this);
         root.setBackgroundColor(Ui.BG);
-        root.addView(header("Aplikacije", "Tapni aplikaciju da je zaključaš, postaviš dnevni limit ili broj otvaranja. Popuštanje važi tek sutra od 06:00."));
+        root.addView(header("Aplikacije", "Tapni aplikaciju da je zaključaš, postaviš dnevni limit, broj otvaranja ili najduže u komadu. Popuštanje važi tek sutra od 06:00."));
 
         EditText search = new EditText(this);
         search.setHint("Pretraži");
@@ -227,7 +227,8 @@ public class AppsActivity extends SubActivity {
         boolean lock = store.appLock(pkg);
         int limit = store.appLimit(pkg);
         int opens = store.appOpens(pkg);
-        if (!lock && limit <= 0 && opens <= 0) {
+        int session = store.appSession(pkg);
+        if (!lock && limit <= 0 && opens <= 0 && session <= 0) {
             return null;
         }
         StringBuilder sb = new StringBuilder();
@@ -245,6 +246,12 @@ public class AppsActivity extends SubActivity {
                 sb.append(" · ");
             }
             sb.append("Otvaranja ").append(store.opensToday("app:" + pkg)).append(" od ").append(opens);
+        }
+        if (session > 0) {
+            if (sb.length() > 0) {
+                sb.append(" · ");
+            }
+            sb.append("Najviše ").append(session).append(" min u komadu");
         }
         return sb.toString();
     }
@@ -279,6 +286,12 @@ public class AppsActivity extends SubActivity {
         opens.setText(String.valueOf(store.appOpens(it.pkg)));
         box.addView(opens, Ui.fill(this, 6));
 
+        box.addView(Sheet.label(this, "Najduže u komadu, u minutima, pa pauza od "
+                + Store.SESSION_BREAK_MS / 60000L + " min (0 = bez)"), Ui.fill(this, 16));
+        final EditText session = Sheet.input(this, "0", true);
+        session.setText(String.valueOf(store.appSession(it.pkg)));
+        box.addView(session, Ui.fill(this, 6));
+
         box.addView(Ui.text(this, "Danas korišćeno: " + Ui.fmt(store.usedToday(it.pkg)) + ", otvoreno "
                 + Ui.count(store.opensToday("app:" + it.pkg), "put", "puta", "puta"), 13, Ui.MUTED, false),
                 Ui.fill(this, 8));
@@ -288,14 +301,14 @@ public class AppsActivity extends SubActivity {
                 .secondary("Otkaži", null)
                 .primary("Sačuvaj", () -> {
                     store.setApp(it.pkg, lock.isChecked(), Ui.parseInt(limit.getText().toString()),
-                            Ui.parseInt(opens.getText().toString()));
+                            Ui.parseInt(opens.getText().toString()), Ui.parseInt(session.getText().toString()));
                     pendingToast();
                     applyFilter();
                     return true;
                 });
         if (store.hasAppRule(it.pkg)) {
             sheet.danger("Ukloni sva ograničenja", () -> {
-                store.setApp(it.pkg, false, 0, 0);
+                store.setApp(it.pkg, false, 0, 0, 0);
                 pendingToast();
                 applyFilter();
                 return true;

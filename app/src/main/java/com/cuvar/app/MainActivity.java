@@ -262,6 +262,15 @@ public class MainActivity extends Activity {
             over.add(label == null ? pkg : label);
         }
         over.addAll(store.sitesOverLimit());
+        List<String> rest = new ArrayList<>();
+        for (String pkg : store.appsOnBreak()) {
+            String label = labelOf(pm, pkg);
+            rest.add((label == null ? pkg : label) + " još " + minutes(store.sessionBreakLeft(pkg)));
+        }
+        if (!rest.isEmpty()) {
+            nowLine("Pauza posle korišćenja u komadu", android.text.TextUtils.join(", ", rest) + ".", Ui.INK);
+            any = true;
+        }
         if (!over.isEmpty()) {
             nowLine("Potrošen dnevni limit", android.text.TextUtils.join(", ", over)
                     + ". Važi do ponoći.", Ui.INK);

@@ -43,6 +43,7 @@ final class Store {
     private final JSONObject sites;  // domen -> {limit}
     private final JSONObject usage;  // dan -> {ključ: ms}
     private final JSONObject opens;  // dan -> {"app:paket" ili "try:ključ": koliko puta}
+    private final JSONObject sessions; // paket -> {u: ms u komadu, l: poslednji put viđena, b: pauza do}
     private final List<DailySchedule.Rule> schedules = new ArrayList<>();
     // Pravila koja servis zaista primenjuje. Pooštravanje važi odmah, a popuštanje tek od sledećeg dana:
     // ovde ostaje strožija verzija dok se dan ne promeni (vidi enforce()).
@@ -77,6 +78,7 @@ final class Store {
         sites = parse(sp.getString("sites", "{}"));
         usage = parse(sp.getString("usage", "{}"));
         opens = parse(sp.getString("opens", "{}"));
+        sessions = parse(sp.getString("sessions", "{}"));
         migrateSchedule();
         loadSchedules();
         workEveryDay();
@@ -365,6 +367,12 @@ final class Store {
         return o == null ? 0 : o.optInt("opens", 0);
     }
 
+    /** Najduže korišćenje u komadu, u minutima (0 = bez ograničenja). */
+    synchronized int appSession(String pkg) {
+        JSONObject o = apps.optJSONObject(pkg);
+        return o == null ? 0 : o.optInt("session", 0);
+    }
+
     /** Aplikacije kojima je danas potrošen dnevni limit. */
     synchronized List<String> appsOverLimit() {
         List<String> out = new ArrayList<>();
@@ -404,7 +412,11 @@ final class Store {
     }
 
     synchronized void setApp(String pkg, boolean lock, int limitMin, int maxOpens) {
-        if (!lock && limitMin <= 0 && maxOpens <= 0) {
+        setApp(pkg, lock, limitMin, maxOpens, appSession(pkg));
+    }
+
+    synchronized void setApp(String pkg, boolean lock, int limitMin, int maxOpens, int sessionMin) {
+        if (!lock && limitMin <= 0 && maxOpens <= 0 && sessionMin <= 0) {
             apps.remove(pkg);
         } else {
             try {
@@ -412,6 +424,7 @@ final class Store {
                 o.put("lock", lock);
                 o.put("limit", Math.max(0, limitMin));
                 o.put("opens", Math.max(0, maxOpens));
+                o.put("session", Math.max(0, sessionMin));
                 apps.put(pkg, o);
             } catch (JSONException ignored) {
             }
@@ -1310,9 +1323,10 @@ final class Store {
             boolean lock = (e != null && e.optBoolean("lock", false)) || (d != null && d.optBoolean("lock", false));
             int limit = minLimit(e == null ? 0 : e.optInt("limit", 0), d == null ? 0 : d.optInt("limit", 0));
             int max = minLimit(e == null ? 0 : e.optInt("opens", 0), d == null ? 0 : d.optInt("opens", 0));
-            if (!lock && limit <= 0 && max <= 0) continue;
+            int ses = minLimit(e == null ? 0 : e.optInt("session", 0), d == null ? 0 : d.optInt("session", 0));
+            if (!lock && limit <= 0 && max <= 0 && ses <= 0) continue;
             try {
-                na.put(pkg, new JSONObject().put("lock", lock).put("limit", limit).put("opens", max));
+                na.put(pkg, new JSONObject().put("lock", lock).put("limit", limit).put("opens", max).put("session", ses));
             } catch (JSONException ignored) {
             }
         }
@@ -1407,6 +1421,11 @@ final class Store {
         return o == null ? 0 : o.optInt("opens", 0);
     }
 
+    synchronized int appSessionNow(String pkg) {
+        JSONObject o = enforcedApps().optJSONObject(pkg);
+        return o == null ? 0 : o.optInt("session", 0);
+    }
+
     synchronized int siteLimitNow(String domain) {
         JSONObject o = enforcedSites().optJSONObject(domain);
         return o == null ? -1 : o.optInt("limit", 0);
@@ -1436,6 +1455,8 @@ final class Store {
             if (ei != di) out.add(name + ": " + (di <= 0 ? "bez dnevnog limita" : "limit " + di + " min umesto " + ei));
             int eo = appOpensNow(pkg), dop = appOpens(pkg);
             if (eo != dop) out.add(name + ": " + (dop <= 0 ? "bez ograničenja otvaranja" : "najviše " + dop + " otvaranja umesto " + eo));
+            int es = appSessionNow(pkg), ds = appSession(pkg);
+            if (es != ds) out.add(name + ": " + (ds <= 0 ? "bez ograničenja u komadu" : "najviše " + ds + " min u komadu umesto " + es));
         }
         for (String dom : keysOf(eSites)) {
             int ei = siteLimitNow(dom), di = siteLimit(dom);
@@ -1606,11 +1627,64 @@ final class Store {
         return d.optInt(key, 0);
     }
 
+    // ---------- Korišćenje u komadu ----------
+
+    /** Koliko traje obavezna pauza posle najdužeg dozvoljenog korišćenja u komadu. */
+    static final long SESSION_BREAK_MS = 15 * 60000L;
+
+    /**
+     * Dodaje vreme u komadu za aplikaciju sa tim pravilom. Izlazak kraći od pauze ne prekida komad,
+     * inače bi se ograničenje zaobišlo kratkim izlaskom na početni ekran. Vraća koliko je ostalo do pauze
+     * (0 kad pauza upravo počinje), ili -1 ako aplikacija nema ovo pravilo.
+     */
+    synchronized long addSession(String pkg, long ms) {
+        int cap = appSessionNow(pkg);
+        if (cap <= 0) return -1;
+        long now = now();
+        JSONObject o = sessions.optJSONObject(pkg);
+        try {
+            if (o == null) {
+                o = new JSONObject();
+                sessions.put(pkg, o);
+            }
+            if (o.optLong("b", 0) > now) return 0;
+            if (now - o.optLong("l", 0) > SESSION_BREAK_MS) o.put("u", 0L);
+            long u = o.optLong("u", 0) + ms;
+            o.put("l", now);
+            if (u >= cap * 60000L) {
+                o.put("u", 0L);
+                o.put("b", now + SESSION_BREAK_MS);
+                sp.edit().putString("sessions", sessions.toString()).apply();
+                return 0;
+            }
+            o.put("u", u);
+            dirty = true;
+            return cap * 60000L - u;
+        } catch (JSONException e) {
+            return -1;
+        }
+    }
+
+    /** Koliko je ostalo obavezne pauze posle korišćenja u komadu (0 ako je nema). */
+    synchronized long sessionBreakLeft(String pkg) {
+        JSONObject o = sessions.optJSONObject(pkg);
+        if (o == null) return 0;
+        long left = o.optLong("b", 0) - now();
+        return left > 0 && left <= SESSION_BREAK_MS ? left : 0;
+    }
+
+    /** Aplikacije koje su sada na obaveznoj pauzi. */
+    synchronized List<String> appsOnBreak() {
+        List<String> out = new ArrayList<>();
+        for (String pkg : keysOf(sessions)) if (sessionBreakLeft(pkg) > 0) out.add(pkg);
+        return out;
+    }
+
     synchronized void flush() {
         if (!dirty) {
             return;
         }
-        sp.edit().putString("usage", usage.toString()).apply();
+        sp.edit().putString("usage", usage.toString()).putString("sessions", sessions.toString()).apply();
         dirty = false;
         lastSave = SystemClock.elapsedRealtime();
     }
