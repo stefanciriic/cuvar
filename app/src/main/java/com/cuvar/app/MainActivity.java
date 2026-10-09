@@ -374,7 +374,7 @@ public class MainActivity extends Activity {
         return card;
     }
 
-    /** Dnevna šifra za aplikacije režima sa šifrom; dok takav režim traje, ne prikazuje se. */
+    /** Dnevna šifra za aplikacije režima sa šifrom; vidi se samo od 17:00 do ponoći i dok takav režim ne traje. */
     private View codeCard() {
         LinearLayout card = Ui.card(this);
         TextView eyebrow = Ui.text(this, "DNEVNA ŠIFRA", 12, Ui.MUTED, true);
@@ -387,11 +387,18 @@ public class MainActivity extends Activity {
                     + ". Šifra se vidi tek posle toga.", 14, Ui.MUTED, false), Ui.fill(this, 6));
             return card;
         }
+        if (!store.dailyCodeVisible()) {
+            card.addView(Ui.text(this, "Stiže u " + DailyCode.CHANGE_HOUR + ":00", 30, Ui.INK, true), Ui.fill(this, 4));
+            card.addView(Ui.text(this, "Svaki dan dobijaš jednu novu šifru u " + DailyCode.CHANGE_HOUR
+                    + ":00 i vidi se ovde do ponoći.", 14, Ui.MUTED, false), Ui.fill(this, 6));
+            return card;
+        }
         TextView code = Ui.text(this, store.dailyCode(), 38, Ui.INK, true);
         code.setLetterSpacing(0.2f);
         card.addView(code, Ui.fill(this, 4));
-        card.addView(Ui.text(this, "Otključava aplikacije i sajtove iz režima sa šifrom. Važi do "
-                + DailyCode.CHANGE_HOUR + ":00, kada dobijaš novu.", 14, Ui.MUTED, false), Ui.fill(this, 6));
+        card.addView(Ui.text(this, "Današnja šifra. Otključava aplikacije i sajtove iz režima sa šifrom, umesto PIN-a."
+                + " Vidi se do ponoći, a sutra u " + DailyCode.CHANGE_HOUR + ":00 dobijaš novu.",
+                14, Ui.MUTED, false), Ui.fill(this, 6));
         return card;
     }
 

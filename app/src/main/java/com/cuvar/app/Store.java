@@ -724,6 +724,11 @@ final class Store {
 
     // ---------- Dnevna šifra ----------
 
+    /** Šifra se prikazuje samo od 17:00 do ponoći, pa je ujutru i tokom dana nema na ekranu. */
+    synchronized boolean dailyCodeVisible() {
+        return calendarNow().get(Calendar.HOUR_OF_DAY) >= DailyCode.CHANGE_HOUR;
+    }
+
     /** Šifra koja važi sada (od 17:00 do 17:00 sledećeg dana, po pouzdanom vremenu). */
     synchronized String dailyCode() {
         return DailyCode.code(codeKey(), DailyCode.dayKey(now(), zone()));
