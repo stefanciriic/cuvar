@@ -75,11 +75,12 @@ final class Quiz {
 
     private static Question any(Random r) {
         int roll = r.nextInt(100);
-        if (roll < 10) return math(r);
-        if (roll < 20) return geography(r);
-        if (roll < 45) return fromGroups(r, QuizBank.GENERAL, QuizBank.GENERAL + 1); // Java
-        if (roll < 70) return fromGroups(r, QuizBank.GENERAL + 1, QuizBank.GENERAL + 2); // Claude
-        if (roll < 93) return fromBank(r);
+        // Pitanje treba da bude kratka mentalna pauza, a ne test programiranja.
+        // Java/Claude grupe ostaju u banci za budući namenski izbor, ali nisu
+        // deo podrazumevanog toka otključavanja.
+        if (roll < 20) return math(r);
+        if (roll < 35) return geography(r);
+        if (roll < 78) return fromBank(r);
         switch (r.nextInt(5)) {
             case 0: return sequence(r);
             case 1: return roman(r);

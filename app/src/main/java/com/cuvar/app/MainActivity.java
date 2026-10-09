@@ -180,6 +180,8 @@ public class MainActivity extends Activity {
         col.addView(Ui.section(this, "Za ceo telefon"), Ui.fill(this, 24));
         LinearLayout whole = group();
         groupRow(whole, "Ukupni dnevni limit", dayLimitSummary(), v -> chooseDayLimit());
+        groupRow(whole, "Fokus · dozvoli samo izabrano", focusSummary(),
+                v -> startActivity(new Intent(this, FocusActivity.class)));
         groupRow(whole, "Noćna blokada", store.nightBlockNow()
                 ? "Uključena · od " + DailyCode.LOCK_HOUR + ":00 do 0" + DailyCode.NIGHT_END_HOUR + ":00 sve iz pravila je zaključano"
                     + (store.nightBlock() ? "" : " · isključuje se od sledećih 06:00")
@@ -212,6 +214,11 @@ public class MainActivity extends Activity {
                 13, Ui.MUTED, false);
         col.addView(note, Ui.fill(this, 18));
         setScreen(col);
+    }
+
+    private String focusSummary() {
+        if (!store.focusActive()) return "Isključen · pokreće se ručno kad ti treba";
+        return "Uključen · još " + Ui.fmt(store.focusLeft()) + " · samo izabrano je dostupno";
     }
 
     // ---------- Kartica „Sada“ ----------

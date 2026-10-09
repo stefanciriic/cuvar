@@ -50,6 +50,8 @@
 
         <activity android:name=".RulesActivity" android:exported="false" />
 
+        <activity android:name=".FocusActivity" android:exported="false" />
+
         <service
             android:name=".GuardService"
             android:exported="true"

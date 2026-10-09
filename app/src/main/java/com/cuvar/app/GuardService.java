@@ -72,6 +72,7 @@ public class GuardService extends AccessibilityService {
     private static final int KIND_CLONER = 13;    // aplikacija za kloniranje (Parallel Space i sl.), dok postoje pravila za aplikacije
     private static final int KIND_INAPP = 14;     // pregledač unutar aplikacije (Instagram, Facebook) u kome se ne vidi adresa
     private static final int KIND_ADDRESS = 15;   // podržan pregledač, ali adresa još nije potvrđena
+    private static final int KIND_FOCUS = 16;     // ručni režim: dozvoljene su samo izabrane aplikacije/sajtovi
 
     /** Aplikacije koje pokreću kopije drugih aplikacija pod svojim imenom, pa ih Čuvar ne bi prepoznao. */
     private static final String[] CLONERS = {"com.lbe.parallel", "com.parallel.space", "com.excelliance.multiaccount",
@@ -516,7 +517,8 @@ public class GuardService extends AccessibilityService {
         boolean browsing = urlBarId != null || inApp;
         if (browsing && currentHost != null) visibleHosts.add(currentHost);
 
-        // Sva pravila koja sada važe, od najstrožeg: ukupni dnevni limit, vremenski režim, pa aplikacija, pa sajt.
+        // Sva pravila koja sada važe, od najstrožeg: ukupni dnevni limit, noć, ručni fokus,
+        // vremenski režim, pa aplikacija i sajt.
         // Otključavanje jedne stavke ne otvara ostale (otključan pregledač ne otvara blokiran sajt).
         List<Block> blocks = new ArrayList<>();
         String appKey = "app:" + pkg;
@@ -547,6 +549,11 @@ public class GuardService extends AccessibilityService {
             } else if (site != null) {
                 blocks.add(new Block("site:" + site, KIND_NIGHT, null, false));
             }
+        }
+        if (store.focusActive() && !exempt().contains(pkg)
+                && !store.focusAllowsApp(pkg)
+                && !(web && store.focusAllowsSite(currentHost))) {
+            blocks.add(new Block(appKey, KIND_FOCUS, null, false));
         }
         if (pkg.equals(opensBlocked)) {
             blocks.add(new Block(appKey, KIND_OPENS, null, false));
@@ -626,7 +633,14 @@ public class GuardService extends AccessibilityService {
             }
             if (host != null) {
                 visibleHosts.add(host);
+                if (store.focusActive() && !exempt().contains(other.pkg)
+                        && !store.focusAllowsApp(other.pkg) && !store.focusAllowsSite(host)) {
+                    secondary.add(new Block("app:" + other.pkg, KIND_FOCUS, null, false));
+                }
                 addSecondarySiteBlocks(secondary, other.pkg, host);
+            } else if (store.focusActive() && !exempt().contains(other.pkg)
+                    && !store.focusAllowsApp(other.pkg)) {
+                secondary.add(new Block("app:" + other.pkg, KIND_FOCUS, null, false));
             }
         }
         blocks.addAll(secondary);
@@ -789,7 +803,7 @@ public class GuardService extends AccessibilityService {
     /** Blokade koje se ne otključavaju: vremenski režim, potrošen limit aplikacije, sajta ili ukupni. */
     private static boolean hard(int kind) {
         return kind == KIND_SCHEDULE || kind == KIND_DAY || kind == KIND_NIGHT || kind == KIND_TIME || kind == KIND_SITE_TIME
-                || kind == KIND_OPENS || kind == KIND_BREAK;
+                || kind == KIND_OPENS || kind == KIND_BREAK || kind == KIND_FOCUS;
     }
 
     /** Aplikacija sa pravilom, ili pregledač koji Čuvar ne prati dok postoje pravila za sajtove. */
@@ -913,7 +927,8 @@ public class GuardService extends AccessibilityService {
 
     /** Promene sadržaja trebaju za adresu u pregledaču i, dok je zaštita uključena, za ekrane podešavanja. */
     private boolean wantsContent(String p) {
-        return BROWSERS.containsKey(p) || (settingsLike(p) && store != null && store.protectNow());
+        return (BROWSERS.containsKey(p) && (store == null || store.hasSiteRules() || store.focusHasSites()))
+                || (settingsLike(p) && store != null && store.protectNow());
     }
 
     /** Podešavanja telefona, instalacija i brisanje aplikacija, Play prodavnica i slični sistemski ekrani. */
@@ -1293,6 +1308,12 @@ public class GuardService extends AccessibilityService {
             sub = "Bio si u " + name + " " + store.appSessionNow(pkg) + " min u komadu. "
                     + name + " se ponovo otvara posle pauze, za " + Ui.fmt(left) + ", ni šifrom ranije.";
             joke = Jokes.pick(Jokes.TIME_UP);
+        } else if (kind == KIND_FOCUS) {
+            title = "Fokus režim je aktivan";
+            long left = store.focusLeft();
+            sub = "Dozvoljene su samo aplikacije i sajtovi koje si izabrao. Fokus traje još "
+                    + Ui.fmt(left) + " i ne može se zaobići dnevnom šifrom.";
+            joke = Jokes.pick(Jokes.SCHEDULE);
         } else if (kind == KIND_SCHEDULE && rule != null) {
             title = "Režim „" + rule.name + "“ je aktivan";
             sub = name + " je blokiran " + rule.daysLabel() + " od " + DailySchedule.label(rule.start)
@@ -1494,7 +1515,7 @@ public class GuardService extends AccessibilityService {
                 if (q.isCorrect(given)) {
                     onPass.run();
                 } else {
-                    showQuiz(area, onPass, "Netačno, tačan odgovor je " + q.answer + ". Evo novog pitanja.");
+                    showQuiz(area, onPass, "Netačno. Evo novog pitanja.");
                 }
             });
             area.addView(pad, Ui.fill(c, 12));
@@ -1505,7 +1526,7 @@ public class GuardService extends AccessibilityService {
                     if (q.isCorrect(choice)) {
                         onPass.run();
                     } else {
-                        showQuiz(area, onPass, "Netačno, tačan odgovor je „" + q.answer + "“. Evo novog pitanja.");
+                        showQuiz(area, onPass, "Netačno. Evo novog pitanja.");
                     }
                 });
                 area.addView(b, Ui.fill(c, 10));

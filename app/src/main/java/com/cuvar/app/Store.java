@@ -18,6 +18,7 @@ import java.util.Collections;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -60,6 +61,9 @@ final class Store {
     private final int boot;          // redni broj paljenja telefona, -1 ako nije poznat
     private final JSONObject unlocks; // "app:paket" / "site:domen" -> kada je otključano PIN-om
     private final JSONObject emergency; // hitno otključavanje: koliko je danas iskorišćeno i šta je otključano
+    private final Set<String> focusApps = new HashSet<>();
+    private final Set<String> focusSites = new HashSet<>();
+    private long focusUntil;
     private boolean stampMoved;        // elapsed() je posle restarta pomerio žig, treba ga sačuvati
     private final android.content.ContentResolver resolver;
     private long clockOff;             // pouzdano vreme = vreme od paljenja + clockOff
@@ -74,6 +78,7 @@ final class Store {
         startClock();
         unlocks = parse(sp.getString("unlocks", "{}"));
         emergency = parse(sp.getString("emergency", "{}"));
+        loadFocus();
         loadCodeLockout();
         apps = parse(sp.getString("apps", "{}"));
         sites = parse(sp.getString("sites", "{}"));
@@ -103,6 +108,90 @@ final class Store {
             out.add(it.next());
         }
         return out;
+    }
+
+    // ---------- Ručni Fokus režim ----------
+
+    private void loadFocus() {
+        JSONObject o = parse(sp.getString("focus", "{}"));
+        focusUntil = Math.max(0L, o.optLong("until", 0L));
+        JSONArray a = o.optJSONArray("apps");
+        for (int i = 0; a != null && i < a.length(); i++) {
+            String p = a.optString(i, "");
+            if (!p.isEmpty()) focusApps.add(p);
+        }
+        JSONArray s = o.optJSONArray("sites");
+        for (int i = 0; s != null && i < s.length(); i++) {
+            String d = s.optString(i, "");
+            if (!d.isEmpty()) focusSites.add(d);
+        }
+    }
+
+    private void saveFocus() {
+        try {
+            JSONObject o = new JSONObject();
+            o.put("until", focusUntil);
+            o.put("apps", new JSONArray(focusApps));
+            o.put("sites", new JSONArray(focusSites));
+            sp.edit().putString("focus", o.toString()).apply();
+        } catch (JSONException ignored) {
+        }
+    }
+
+    synchronized boolean focusActive() {
+        if (focusUntil <= now()) {
+            if (focusUntil != 0L || !focusApps.isEmpty() || !focusSites.isEmpty()) {
+                focusUntil = 0L;
+                focusApps.clear();
+                focusSites.clear();
+                saveFocus();
+            }
+            return false;
+        }
+        return true;
+    }
+
+    synchronized long focusLeft() {
+        return focusActive() ? Math.max(0L, focusUntil - now()) : 0L;
+    }
+
+    synchronized Set<String> focusApps() {
+        return new HashSet<>(focusApps);
+    }
+
+    synchronized Set<String> focusSites() {
+        return new HashSet<>(focusSites);
+    }
+
+    synchronized boolean focusHasSites() {
+        return focusActive() && !focusSites.isEmpty();
+    }
+
+    synchronized boolean focusAllowsApp(String pkg) {
+        return focusActive() && focusApps.contains(pkg);
+    }
+
+    synchronized boolean focusAllowsSite(String host) {
+        return focusActive() && host != null && DailySchedule.matchDomain(host, focusSites) != null;
+    }
+
+    synchronized void startFocus(long durationMs, Collection<String> apps, Collection<String> sites) {
+        focusApps.clear();
+        focusApps.addAll(apps);
+        focusSites.clear();
+        for (String site : sites) {
+            String host = hostOf(site);
+            if (host != null && host.contains(".")) focusSites.add(host);
+        }
+        focusUntil = now() + Math.max(1L, durationMs);
+        saveFocus();
+    }
+
+    synchronized void stopFocus() {
+        focusUntil = 0L;
+        focusApps.clear();
+        focusSites.clear();
+        saveFocus();
     }
 
     // ---------- Dnevna šifra: provera ----------

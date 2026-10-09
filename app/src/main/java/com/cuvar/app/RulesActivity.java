@@ -52,7 +52,8 @@ public class RulesActivity extends SubActivity {
 
         LinearLayout how = Ui.card(this);
         how.addView(Ui.text(this, "Kako se slažu", 15, Ui.INK, true));
-        how.addView(Ui.text(this, "1. Režim je najjači: u svom periodu blokira i ne može da se otključa.\n"
+        how.addView(Ui.text(this, "0. Ručni Fokus režim je zaseban: dok traje, dozvoljene su samo izabrane aplikacije i sajtovi.\n"
+                + "1. Režim je najjači: u svom periodu blokira i ne može da se otključa.\n"
                 + "2. Ostatak dana: zaključano se otvara samo dnevnom šifrom (17:00 do 22:00), a potrošen limit se ne otvara do ponoći.\n"
                 + "3. Ukupni dnevni limit, kad se potroši, zaključava sve ovo do ponoći.\n"
                 + "4. Strože pravilo važi odmah, a blaže tek sutra od 06:00.\n5. Od 22:00 do 06:00 sve ovo je zaključano (noćna blokada).",
