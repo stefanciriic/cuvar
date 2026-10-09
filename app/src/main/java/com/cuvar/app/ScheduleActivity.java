@@ -62,22 +62,71 @@ public class ScheduleActivity extends SubActivity {
 
     private void renderList() {
         page("Vremenski režimi", "Svaki režim ima svoj period, dane i svoje aplikacije i sajtove koji će tada biti blokirani.");
-        if (!store.hasWorkSchedule()) {
-            action("Dodaj radno vreme (svakog dana 09:00–17:00, posle toga dnevnom šifrom)",
-                    () -> open(store.addWorkSchedule().id));
-        }
-        if (!store.hasNightSchedule()) {
-            action("Dodaj noćno zaključavanje (22:30–06:00)", () -> open(store.addNightSchedule().id));
-        }
-        action("Dodaj režim", () -> open(store.addSchedule().id));
+        TextView add = Ui.button(this, "+  Dodaj režim", true);
+        add.setOnClickListener(v -> open(store.addSchedule().id));
+        content.addView(add, Ui.fill(this, 10));
+
         List<DailySchedule.Rule> rules = store.schedules();
+        content.addView(Ui.section(this, "Tvoji režimi"), Ui.fill(this, 26));
         if (rules.isEmpty()) empty("Još nema režima.");
-        for (DailySchedule.Rule r : rules) {
-            String state = r.enabled ? "uključen" : "isključen";
-            action(r.name + " · " + r.label() + " · " + r.daysLabel() + " · " + state + "\n"
-                    + "Aplikacije: " + r.apps.size() + " · Sajtovi: " + r.sites.size(), () -> open(r.id));
+        for (DailySchedule.Rule r : rules) content.addView(ruleCard(r), Ui.fill(this, 10));
+
+        boolean work = !store.hasWorkSchedule(), night = !store.hasNightSchedule();
+        if (work || night) {
+            content.addView(Ui.section(this, "Gotovi režimi"), Ui.fill(this, 26));
+            if (work) {
+                content.addView(presetCard("Radno vreme", "09:00–17:00 · svakog dana · posle toga dnevnom šifrom",
+                        () -> open(store.addWorkSchedule().id)), Ui.fill(this, 10));
+            }
+            if (night) {
+                content.addView(presetCard("Noćno zaključavanje", "22:30–06:00 · svakog dana",
+                        () -> open(store.addNightSchedule().id)), Ui.fill(this, 10));
+            }
         }
-        empty("Po vremenu telefona; pomeranje sata ne skraćuje režim. Period može da prelazi ponoć. Ako je aplikacija ili sajt u više uključenih režima, blokada važi kad god je bilo koji od njih aktivan.");
+        content.addView(Ui.text(this, "Po vremenu telefona; pomeranje sata ne skraćuje režim. Period može da prelazi ponoć. Ako je aplikacija ili sajt u više uključenih režima, blokada važi kad god je bilo koji od njih aktivan.",
+                13, Ui.MUTED, false), Ui.fill(this, 24));
+    }
+
+    /** Kartica režima: naziv i stanje u prvom redu, period i dani ispod, pa broj aplikacija i sajtova. */
+    private View ruleCard(DailySchedule.Rule r) {
+        LinearLayout card = Ui.column(this);
+        card.setBackground(Ui.pressable(Ui.CARD, Ui.SOFT, Ui.dp(this, 18)));
+        int p = Ui.dp(this, 16);
+        card.setPadding(Ui.dp(this, 18), p, p, p);
+
+        LinearLayout top = Ui.row(this);
+        TextView name = Ui.text(this, r.name, 18, r.enabled ? Ui.INK : Ui.MUTED, true);
+        name.setSingleLine(true);
+        name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        top.addView(name, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        if (store.scheduleActive(r.id)) top.addView(Ui.badge(this, "Traje sada", Ui.ACCENT), Ui.wrap(this, 8));
+        top.addView(r.enabled ? Ui.badge(this, "Uključen", Charts.good()) : Ui.badge(this, "Isključen", Ui.MUTED),
+                Ui.wrap(this, 8));
+        card.addView(top);
+
+        card.addView(Ui.text(this, r.label() + "  ·  " + r.daysLabel(), 15, r.enabled ? Ui.INK : Ui.MUTED, false),
+                Ui.fill(this, 6));
+        String items = (r.apps.isEmpty() && r.sites.isEmpty()) ? "Još ništa nije izabrano"
+                : Ui.count(r.apps.size(), "aplikacija", "aplikacije", "aplikacija") + "  ·  "
+                + Ui.count(r.sites.size(), "sajt", "sajta", "sajtova");
+        if (r.code) items += "  ·  dnevna šifra";
+        card.addView(Ui.text(this, items, 13, Ui.MUTED, false), Ui.fill(this, 4));
+        card.setOnClickListener(v -> open(r.id));
+        return card;
+    }
+
+    private View presetCard(String title, String sub, Runnable run) {
+        LinearLayout tile = Ui.row(this);
+        tile.setBackground(Ui.pressable(Ui.CARD, Ui.SOFT, Ui.dp(this, 18)));
+        int p = Ui.dp(this, 16);
+        tile.setPadding(Ui.dp(this, 18), p, p, p);
+        LinearLayout texts = Ui.column(this);
+        texts.addView(Ui.text(this, title, 16, Ui.INK, true));
+        texts.addView(Ui.text(this, sub, 13, Ui.MUTED, false), Ui.fill(this, 2));
+        tile.addView(texts, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        tile.addView(Ui.text(this, "Dodaj", 14, Ui.ACCENT, true), Ui.wrap(this, 12));
+        tile.setOnClickListener(v -> run.run());
+        return tile;
     }
 
     private void open(String ruleId) {

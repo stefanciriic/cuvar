@@ -204,35 +204,37 @@ public class MainActivity extends Activity {
                     "Opcija je siva ili piše da je ograničena?", v -> showRestrictedHelp()), Ui.fill(this, 14));
         }
 
-        col.addView(nowCard(), Ui.fill(this, 18));
-        col.addView(todayCard(enabled), Ui.fill(this, 14));
+        col.addView(Ui.section(this, "Sada"), Ui.fill(this, 24));
+        col.addView(nowCard(), Ui.fill(this, 8));
+
+        col.addView(Ui.section(this, "Danas"), Ui.fill(this, 24));
+        col.addView(todayCard(enabled), Ui.fill(this, 8));
         if (store.usesDailyCode()) {
-            col.addView(codeCard(), Ui.fill(this, 14));
+            col.addView(codeCard(), Ui.fill(this, 10));
         }
 
         int appRules = store.appRuleCount();
         int siteRules = store.siteList().size();
-        col.addView(navTile("Aplikacije",
+        col.addView(Ui.section(this, "Pravila"), Ui.fill(this, 24));
+        LinearLayout rules = group();
+        groupRow(rules, "Aplikacije",
                 appRules == 0 ? "Zaključaj PIN-om ili postavi dnevni limit" : "Pravila: " + appRules,
-                v -> startActivity(new Intent(this, AppsActivity.class))), Ui.fill(this, 14));
-        col.addView(navTile("Sajtovi",
+                v -> startActivity(new Intent(this, AppsActivity.class)));
+        groupRow(rules, "Sajtovi",
                 siteRules == 0 ? "Blokiraj sajtove ili im postavi dnevni limit" : "Na listi: " + siteRules,
-                v -> startActivity(new Intent(this, SitesActivity.class))), Ui.fill(this, 10));
-        col.addView(navTile("Statistika",
-                "Krug po aplikacijama, kolone po danima, poređenje sa prošlom nedeljom",
-                v -> startActivity(new Intent(this, StatsActivity.class))), Ui.fill(this, 10));
-        col.addView(navTile("Vremenski režim",
-                scheduleSummary(),
-                v -> startActivity(new Intent(this, ScheduleActivity.class))), Ui.fill(this, 10));
-        col.addView(navTile("Ukupni dnevni limit", dayLimitSummary(), v -> chooseDayLimit()), Ui.fill(this, 10));
+                v -> startActivity(new Intent(this, SitesActivity.class)));
+        groupRow(rules, "Vremenski režimi", scheduleSummary(),
+                v -> startActivity(new Intent(this, ScheduleActivity.class)));
+        groupRow(rules, "Ukupni dnevni limit", dayLimitSummary(), v -> chooseDayLimit());
+        col.addView(rules, Ui.fill(this, 8));
 
-        col.addView(navTile("Tema", Ui.THEME_NAMES[Ui.themeChoice(this)], v -> chooseTheme()), Ui.fill(this, 10));
-
+        col.addView(Ui.section(this, "Podešavanja"), Ui.fill(this, 24));
+        LinearLayout settings = group();
+        groupRow(settings, "Tema", Ui.THEME_NAMES[Ui.themeChoice(this)], v -> chooseTheme());
         if (hasPin) {
-            TextView change = Ui.button(this, "Promeni PIN", false);
-            change.setOnClickListener(v -> showPinSetup());
-            col.addView(change, Ui.fill(this, 18));
+            groupRow(settings, "Promeni PIN", "PIN štiti podešavanja i zaključane aplikacije", v -> showPinSetup());
         }
+        col.addView(settings, Ui.fill(this, 8));
 
         TextView note = Ui.text(this,
                 "Savet: zaključaj PIN-om i Podešavanja telefona, da Čuvar ne može lako da se isključi ili obriše.",
@@ -252,9 +254,6 @@ public class MainActivity extends Activity {
 
     private View nowCard() {
         LinearLayout card = Ui.card(this);
-        TextView eyebrow = Ui.text(this, "SADA", 12, Ui.MUTED, true);
-        eyebrow.setLetterSpacing(0.15f);
-        card.addView(eyebrow);
         nowBox = Ui.column(this);
         card.addView(nowBox);
         fillNow();
@@ -325,7 +324,7 @@ public class MainActivity extends Activity {
         if (detail != null) {
             line.addView(Ui.text(this, detail, 14, Ui.MUTED, false), Ui.fill(this, 2));
         }
-        nowBox.addView(line, Ui.fill(this, nowBox.getChildCount() == 0 ? 8 : 12));
+        nowBox.addView(line, Ui.fill(this, nowBox.getChildCount() == 0 ? 0 : 12));
         return line;
     }
 
@@ -494,25 +493,38 @@ public class MainActivity extends Activity {
         return rules.size() + " režima · uključeno " + on;
     }
 
-    private View navTile(String title, String sub, View.OnClickListener onClick) {
-        LinearLayout tile = Ui.row(this);
-        tile.setBackground(Ui.pressable(Ui.CARD, Ui.SOFT, Ui.dp(this, 18)));
-        int p = Ui.dp(this, 18);
-        tile.setPadding(p, p, p, p);
+    /** Kartica sa više redova odvojenih tankom linijom. */
+    private LinearLayout group() {
+        LinearLayout box = Ui.column(this);
+        box.setBackground(Ui.round(Ui.CARD, Ui.dp(this, 18)));
+        box.setClipToOutline(true);
+        return box;
+    }
+
+    private void groupRow(LinearLayout group, String title, String sub, View.OnClickListener onClick) {
+        if (group.getChildCount() > 0) {
+            View line = new View(this);
+            line.setBackgroundColor(Ui.LINE);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1);
+            lp.leftMargin = Ui.dp(this, 18);
+            group.addView(line, lp);
+        }
+        LinearLayout row = Ui.row(this);
+        row.setBackground(Ui.pressable(Ui.CARD, Ui.SOFT, 0));
+        int p = Ui.dp(this, 16);
+        row.setPadding(Ui.dp(this, 18), p, p, p);
         LinearLayout texts = Ui.column(this);
-        texts.addView(Ui.text(this, title, 18, Ui.INK, true));
-        texts.addView(Ui.text(this, sub, 14, Ui.MUTED, false), Ui.fill(this, 2));
-        tile.addView(texts, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        tile.addView(Ui.text(this, "›", 26, Ui.ACCENT, false));
-        tile.setOnClickListener(onClick);
-        return tile;
+        texts.addView(Ui.text(this, title, 16, Ui.INK, true));
+        texts.addView(Ui.text(this, sub, 13, Ui.MUTED, false), Ui.fill(this, 2));
+        row.addView(texts, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        row.addView(Ui.text(this, "›", 24, Ui.ACCENT, false), Ui.wrap(this, 12));
+        row.setOnClickListener(onClick);
+        group.addView(row, Ui.fill(this, 0));
     }
 
     private View todayCard(boolean enabled) {
         LinearLayout card = Ui.card(this);
-        TextView eyebrow = Ui.text(this, "DANAS NA TELEFONU", 12, Ui.MUTED, true);
-        eyebrow.setLetterSpacing(0.15f);
-        card.addView(eyebrow);
+        card.addView(Ui.text(this, "Vreme na telefonu", 14, Ui.MUTED, false));
 
         PackageManager pm = getPackageManager();
         String home = homePackage();
@@ -536,7 +548,7 @@ public class MainActivity extends Activity {
         }
         Collections.sort(rows, (a, b) -> Long.compare(b.ms, a.ms));
 
-        card.addView(Ui.text(this, Ui.fmt(total), 38, Ui.INK, true), Ui.fill(this, 4));
+        card.addView(Ui.text(this, Ui.fmt(total), 38, Ui.INK, true), Ui.fill(this, 2));
         int limit = store.dayLimit();
         if (limit > 0) {
             long counted = store.phoneToday(GuardService.exemptApps(this));
@@ -553,15 +565,24 @@ public class MainActivity extends Activity {
                     enabled ? "Još nema podataka za danas. Otvori neku aplikaciju pa se vrati."
                             : "Merenje počinje kad uključiš Čuvara.",
                     14, Ui.MUTED, false), Ui.fill(this, 6));
+            card.addView(statsLink("Statistika  ›"), Ui.fill(this, 8));
             return card;
         }
 
         long max = Math.max(1L, rows.get(0).ms);
-        int n = Math.min(rows.size(), 8);
+        int n = Math.min(rows.size(), 5);
         for (int i = 0; i < n; i++) {
             card.addView(usageRow(rows.get(i), max), Ui.fill(this, 14));
         }
+        card.addView(statsLink(rows.size() > n ? "Sve aplikacije i statistika  ›" : "Statistika  ›"), Ui.fill(this, 8));
         return card;
+    }
+
+    private View statsLink(String label) {
+        TextView more = Ui.text(this, label, 14, Ui.ACCENT, true);
+        more.setPadding(0, Ui.dp(this, 10), 0, Ui.dp(this, 2));
+        more.setOnClickListener(v -> startActivity(new Intent(this, StatsActivity.class)));
+        return more;
     }
 
     private View usageRow(Row r, long max) {

@@ -148,6 +148,37 @@ final class Ui {
         return t;
     }
 
+    /** Mala oznaka stanja: obojen tekst na blagoj podlozi iste boje. */
+    static TextView badge(Context c, String label, int color) {
+        TextView t = text(c, label, 12, color, true);
+        t.setBackground(round((color & 0x00FFFFFF) | 0x2E000000, dp(c, 10)));
+        t.setPadding(dp(c, 10), dp(c, 4), dp(c, 10), dp(c, 4));
+        return t;
+    }
+
+    /** Naslov odeljka: mala slova razmaknuta, prigušena boja. */
+    static TextView section(Context c, String label) {
+        TextView t = text(c, label.toUpperCase(java.util.Locale.ROOT), 12, MUTED, true);
+        t.setLetterSpacing(0.15f);
+        t.setPadding(dp(c, 4), 0, 0, 0);
+        return t;
+    }
+
+    static LinearLayout.LayoutParams wrap(Context c, int leftDp) {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.leftMargin = dp(c, leftDp);
+        return lp;
+    }
+
+    /** "1 aplikacija", "3 aplikacije", "5 aplikacija" (srpska množina). */
+    static String count(int n, String one, String few, String many) {
+        int d = n % 10, dd = n % 100;
+        if (d == 1 && dd != 11) return n + " " + one;
+        if (d >= 2 && d <= 4 && (dd < 12 || dd > 14)) return n + " " + few;
+        return n + " " + many;
+    }
+
     static LinearLayout column(Context c) {
         LinearLayout l = new LinearLayout(c);
         l.setOrientation(LinearLayout.VERTICAL);
