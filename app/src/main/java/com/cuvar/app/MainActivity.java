@@ -110,6 +110,10 @@ public class MainActivity extends Activity {
 
         col.addView(Ui.section(this, "Danas"), Ui.fill(this, 24));
         col.addView(todayCard(enabled), Ui.fill(this, 8));
+        LinearLayout stats = group();
+        groupRow(stats, "Statistika", "Krug po aplikacijama, kolone po danima, poređenje sa prošlom nedeljom",
+                v -> startActivity(new Intent(this, StatsActivity.class)));
+        col.addView(stats, Ui.fill(this, 10));
         col.addView(codeCard(), Ui.fill(this, 10));
 
         int appRules = store.appRuleCount();
@@ -509,7 +513,6 @@ public class MainActivity extends Activity {
                     enabled ? "Još nema podataka za danas. Otvori neku aplikaciju pa se vrati."
                             : "Merenje počinje kad uključiš Čuvara.",
                     14, Ui.MUTED, false), Ui.fill(this, 6));
-            card.addView(statsLink("Statistika  ›"), Ui.fill(this, 8));
             return card;
         }
 
@@ -518,15 +521,7 @@ public class MainActivity extends Activity {
         for (int i = 0; i < n; i++) {
             card.addView(usageRow(rows.get(i), max), Ui.fill(this, 14));
         }
-        card.addView(statsLink(rows.size() > n ? "Sve aplikacije i statistika  ›" : "Statistika  ›"), Ui.fill(this, 8));
         return card;
-    }
-
-    private View statsLink(String label) {
-        TextView more = Ui.text(this, label, 14, Ui.ACCENT, true);
-        more.setPadding(0, Ui.dp(this, 10), 0, Ui.dp(this, 2));
-        more.setOnClickListener(v -> startActivity(new Intent(this, StatsActivity.class)));
-        return more;
     }
 
     private View usageRow(Row r, long max) {
