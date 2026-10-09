@@ -142,7 +142,11 @@ public class GuardService extends AccessibilityService {
     private Set<String> exempt;      // aplikacije koje se ne računaju u ukupni limit i ne blokiraju se zbog njega
     private String pendingOpen;      // aplikacija upravo otvorena; broji se kad se zaista prikaže, bez blokade
     private String opensBlocked;     // aplikacija otvorena posle potrošenih otvaranja; blokirana dok se ne izađe
-    private final Map<String, String> activityOf = new HashMap<>(); // paket -> poslednji prikazan ekran (aktivnost)
+    private final Map<String, String> activityOf = new LinkedHashMap<String, String>() {
+        @Override protected boolean removeEldestEntry(Map.Entry<String, String> entry) {
+            return size() > 128;
+        }
+    }; // paket -> poslednji prikazan ekran (aktivnost)
     private boolean currentInApp;    // napred je pregledač unutar aplikacije
     private String rawPkg;           // stvarni paket na ekranu (pre prepoznavanja kopije)
     private Map<String, String> clones;
@@ -156,6 +160,8 @@ public class GuardService extends AccessibilityService {
     private Set<String> webApps;     // sve aplikacije koje otvaraju veb adrese (pregledači)
     private long webAppsAt;
     private long protectToastAt;
+    private int overlayFailures;
+    private long overlayRetryAt;
 
     private final Runnable tick = new Runnable() {
         @Override
@@ -659,6 +665,8 @@ public class GuardService extends AccessibilityService {
             }
         } else {
             hideOverlay();
+            overlayFailures = 0;
+            overlayRetryAt = 0L;
         }
     }
 
@@ -1033,12 +1041,16 @@ public class GuardService extends AccessibilityService {
         }
         List<AccessibilityNodeInfo> nodes = root.findAccessibilityNodeInfosByViewId(id);
         if (nodes == null || nodes.isEmpty()) {
-            state.missing(SystemClock.elapsedRealtime());
+            long now = SystemClock.elapsedRealtime();
+            state.missing(now);
+            state.clearIfUnresolved(now);
             return state;
         }
         AccessibilityNodeInfo n = nodes.get(0);
         if (n == null) {
-            state.missing(SystemClock.elapsedRealtime());
+            long now = SystemClock.elapsedRealtime();
+            state.missing(now);
+            state.clearIfUnresolved(now);
         } else if (n.isFocused()) {
             state.editing();
         } else {
@@ -1064,6 +1076,7 @@ public class GuardService extends AccessibilityService {
                 && cooling == overlayCooling && code == overlayCode) {
             return;
         }
+        if (overlay == null && overlayRetryAt > SystemClock.elapsedRealtime()) return;
         hideOverlay();
         try {
             View v = buildOverlay(key, kind, rule, cooling, code);
@@ -1082,11 +1095,18 @@ public class GuardService extends AccessibilityService {
             overlayRule = rule;
             overlayCooling = cooling;
             overlayCode = code;
+            overlayFailures = 0;
+            overlayRetryAt = 0L;
         } catch (Throwable t) {
             GuardDiagnostics.report("showOverlay", t);
             overlay = null;
             overlayKey = null;
             cooldownLabel = null;
+            overlayFailures = Math.min(5, overlayFailures + 1);
+            long delay = Math.min(30000L, 1000L << Math.min(overlayFailures - 1, 4));
+            overlayRetryAt = SystemClock.elapsedRealtime() + delay;
+            h.removeCallbacks(recheckSoon);
+            h.postDelayed(recheckSoon, delay);
         }
     }
 

@@ -74,6 +74,7 @@ final class Store {
         startClock();
         unlocks = parse(sp.getString("unlocks", "{}"));
         emergency = parse(sp.getString("emergency", "{}"));
+        loadCodeLockout();
         apps = parse(sp.getString("apps", "{}"));
         sites = parse(sp.getString("sites", "{}"));
         usage = parse(sp.getString("usage", "{}"));
@@ -106,9 +107,44 @@ final class Store {
 
     // ---------- Dnevna šifra: provera ----------
 
+    /** Vraća pokušaje i kratku blokadu i posle restartovanja procesa. */
+    private void loadCodeLockout() {
+        JSONObject o = parse(sp.getString("codeLockout", "{}"));
+        fails = Math.max(0, o.optInt("fails", 0));
+        long now = now();
+        long wall = o.optLong("wall", 0L);
+        if (wall <= now) {
+            blockedUntil = 0L;
+            return;
+        }
+        if (boot != -1 && o.optInt("boot", -2) == boot) {
+            blockedUntil = Math.max(0L, o.optLong("el", 0L));
+        } else {
+            blockedUntil = SystemClock.elapsedRealtime() + (wall - now);
+        }
+    }
+
+    private void saveCodeLockout() {
+        long now = now();
+        long left = Math.max(0L, blockedUntil - SystemClock.elapsedRealtime());
+        try {
+            JSONObject o = new JSONObject();
+            o.put("fails", fails);
+            o.put("wall", now + left);
+            o.put("el", SystemClock.elapsedRealtime() + left);
+            o.put("boot", boot);
+            sp.edit().putString("codeLockout", o.toString()).apply();
+        } catch (JSONException ignored) {
+        }
+    }
+
     /** Vraća null ako je dnevna šifra tačna, inače poruku. Važi samo od 17:00 do 22:00; 5 grešaka donosi 30 s čekanja. */
     synchronized String tryCode(String code) {
         long now = SystemClock.elapsedRealtime();
+        if (blockedUntil > 0L && now >= blockedUntil) {
+            blockedUntil = 0L;
+            saveCodeLockout();
+        }
         if (now < blockedUntil) {
             return "Previše pokušaja. Sačekaj " + ((blockedUntil - now) / 1000 + 1) + " s";
         }
@@ -117,14 +153,17 @@ final class Store {
         }
         if (dailyCode().equals(code)) {
             fails = 0;
+            saveCodeLockout();
             return null;
         }
         fails++;
         if (fails >= 5) {
             fails = 0;
             blockedUntil = now + 30000L;
+            saveCodeLockout();
             return "Previše pokušaja. Sačekaj 30 s";
         }
+        saveCodeLockout();
         return "Pogrešna dnevna šifra";
     }
 
@@ -1689,6 +1728,22 @@ final class Store {
         return left > 0 && left <= SESSION_BREAK_MS ? left : 0;
     }
 
+    /** Ne zadržava sesije za aplikacije koje više nemaju pravilo. */
+    private void pruneSessions() {
+        long now = now();
+        for (String pkg : keysOf(sessions)) {
+            JSONObject o = sessions.optJSONObject(pkg);
+            if (o == null) {
+                sessions.remove(pkg);
+                continue;
+            }
+            boolean hasRule = appSession(pkg) > 0 || appSessionNow(pkg) > 0;
+            boolean onBreak = o.optLong("b", 0L) > now;
+            long last = o.optLong("l", 0L);
+            if (!hasRule && !onBreak && (last <= 0L || now - last > SESSION_BREAK_MS)) sessions.remove(pkg);
+        }
+    }
+
     /** Aplikacije koje su sada na obaveznoj pauzi. */
     synchronized List<String> appsOnBreak() {
         List<String> out = new ArrayList<>();
@@ -1700,6 +1755,7 @@ final class Store {
         if (!dirty) {
             return;
         }
+        pruneSessions();
         sp.edit().putString("usage", usage.toString()).putString("sessions", sessions.toString()).apply();
         dirty = false;
         lastSave = SystemClock.elapsedRealtime();

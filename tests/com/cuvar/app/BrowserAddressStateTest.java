@@ -12,9 +12,11 @@ public final class BrowserAddressStateTest {
         check(!s.unresolved(10000), "typing an address is not a missing toolbar");
         s.readable("example.com");
         s.missing(11000);
-        check(!s.unresolved(30000) && "example.com".equals(s.host()), "fullscreen preserves verified host");
+        check(!s.unresolved(13000) && "example.com".equals(s.host()), "briefly missing toolbar keeps verified host");
+        s.clearIfUnresolved(14000);
+        check(s.unresolved(14000) && s.host() == null, "stale fullscreen host is cleared after the grace period");
         s.readable(null);
-        check(s.host() == null && !s.unresolved(31000), "empty new tab clears old host");
+        check(s.host() == null && !s.unresolved(15000), "empty new tab clears old host");
         s.missing(32000);
         check(s.unresolved(35000), "unverified next document does not inherit old host");
         System.out.println("Prošlo: " + checks + " provera BrowserAddressState.");

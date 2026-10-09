@@ -758,11 +758,12 @@ public class MainActivity extends Activity {
             return;
         }
         new Sheet(this, "Čuvar koristi Pristupačnost")
-                .message("Da bi merio vreme i blokirao ono što izabereš, Čuvar koristi Androidovu uslugu Pristupačnosti (AccessibilityService). Preko nje vidi:\n\n"
+                .message("Da bi merio vreme i blokirao ono što izabereš, Čuvar koristi Androidovu uslugu Pristupačnosti (AccessibilityService). Iz aktivnog prozora koristi:\n\n"
                         + "•  koja je aplikacija trenutno otvorena,\n"
                         + "•  adresu sajta u pregledaču (samo naziv sajta),\n"
+                        + "•  ograničen broj tekstualnih čvorova pri vrhu ugrađenog pregledača,\n"
                         + "•  da bi preko blokirane aplikacije prikazao ekran za blokadu.\n\n"
-                        + "Čuvar ne čita poruke, lozinke ni drugi tekst sa ekrana, ne snima ekran i nema dozvolu za internet. "
+                        + "Čuvar ne čuva niti šalje poruke, lozinke ili tekst stranica, ne snima ekran i nema dozvolu za internet. "
                         + "Ako uključiš Zaštitu od isključivanja, na ekranima podešavanja proverava samo da li se pominje Čuvar. "
                         + "Sve što izmeri ostaje samo na ovom telefonu i briše se kad obrišeš aplikaciju.\n\n"
                         + "Ako se slažeš, u sledećem koraku uključi „Čuvar“ u Pristupačnosti.")
@@ -786,7 +787,7 @@ public class MainActivity extends Activity {
     private void showPrivacy() {
         new Sheet(this, "Privatnost")
                 .message("Čuvar nema dozvolu za internet i ne šalje nikakve podatke sa telefona. Nema naloga, reklama ni analitike.\n\n"
-                        + "Preko Pristupačnosti vidi koja je aplikacija otvorena i naziv sajta u pregledaču. Iz toga pamti samo "
+                        + "Preko Pristupačnosti dobija naziv otvorene aplikacije i sajta u pregledaču, a kod ugrađenih pregledača proverava ograničen deo ekrana. Iz toga pamti samo "
                         + "koliko si vremena proveo u kojoj aplikaciji i na kom sajtu, za poslednjih 14 dana, i tvoja pravila.\n\n"
                         + "Sve je sačuvano samo u memoriji Čuvara na ovom telefonu, ne ulazi u rezervnu kopiju i briše se kad obrišeš aplikaciju.")
                 .secondary("Zatvori", null)
