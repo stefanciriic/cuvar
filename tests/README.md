@@ -88,3 +88,11 @@ Provera na telefonu:
 3. Pravila: „Za ceo telefon“ (ukupni limit, noćna blokada) i „Po aplikaciji i sajtu“.
 4. Statistika kao kartica nema strelicu nazad; tap na Danas ili Pravila vraća na glavni ekran.
 5. Otvori ekran biometrije ili drugu sistemsku aplikaciju bez ikonice: ne sme da se pojavi u vremenu danas ni u statistici, i ne ulazi u ukupni dnevni limit.
+
+## Pauza od 6 sekundi
+
+1. Otvori aplikaciju koja ima pravilo (limit, broj otvaranja ili režim van perioda): pojavi se „Zastani na trenutak“ sa vremenom i otvaranjima za danas.
+2. „Nastavi“ se može tapnuti tek posle 6 s; tada se aplikacija vidi i tek tada se broji otvaranje.
+3. „Zatvori“ vraća na početni ekran i ne broji otvaranje.
+4. Kratak izlazak (deljenje, izbor fajla) i povratak u roku od 15 s ne traži novu pauzu.
+5. Aplikacija bez pravila, telefon i poruke otvaraju se bez pauze. Posle otključavanja šifrom nema pauze.

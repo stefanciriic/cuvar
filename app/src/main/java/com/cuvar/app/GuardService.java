@@ -64,6 +64,8 @@ public class GuardService extends AccessibilityService {
     private static final int KIND_NIGHT = 8;      // noćna blokada od 22:00, ništa se ne otključava do 06:00
     private static final int KIND_DAY = 7;        // potrošen ukupni dnevni limit, ništa se ne otključava do ponoći
     private static final int KIND_OPENS = 9;      // potrošena otvaranja aplikacije za danas
+    private static final int KIND_PAUSE = 11;     // kratka pauza pre otvaranja aplikacije sa pravilom, posle nje se nastavlja
+    static final int PAUSE_SECONDS = 6;
     private static final int KIND_BROWSER = 10;   // pregledač u kome Čuvar ne vidi adresu, dok postoje pravila za sajtove
 
     /** Pregledači i ID polja sa adresom u svakom od njih. */
@@ -113,6 +115,8 @@ public class GuardService extends AccessibilityService {
     private Set<String> exempt;      // aplikacije koje se ne računaju u ukupni limit i ne blokiraju se zbog njega
     private String pendingOpen;      // aplikacija upravo otvorena; broji se kad se zaista prikaže, bez blokade
     private String opensBlocked;     // aplikacija otvorena posle potrošenih otvaranja; blokirana dok se ne izađe
+    private String pausePkg;         // aplikacija upravo otvorena koja pre prikaza čeka pauzu
+    private long pauseShownAt;
     private String lastLeftPkg;      // aplikacija iz koje se upravo izašlo
     private long lastLeftAt;
     private long exemptAt;
@@ -371,6 +375,7 @@ public class GuardService extends AccessibilityService {
                 int max = store.appOpensNow(pkg);
                 opensBlocked = max > 0 && store.opensToday("app:" + pkg) >= max ? pkg : null;
                 pendingOpen = opensBlocked == null && max > 0 ? pkg : null;
+                pausePkg = store.appGuarded(pkg) && !exempt().contains(pkg) ? pkg : null;
             }
         }
 
@@ -491,9 +496,16 @@ public class GuardService extends AccessibilityService {
                 }
             }
         }
-        long coolLeft = show == null || hard(show.kind) ? 0 : store.cooldownLeft(show.key);
+        if (show == null && pkg.equals(pausePkg)) {
+            if (store.unlockLeft(appKey) > 0 || store.emergencyLeft(appKey) > 0) {
+                pausePkg = null; // upravo otključano šifrom: bez još jedne pauze
+            } else {
+                show = new Block(appKey, KIND_PAUSE, null, false);
+            }
+        }
+        long coolLeft = show == null || hard(show.kind) || show.kind == KIND_PAUSE ? 0 : store.cooldownLeft(show.key);
 
-        if (show != null && (overlay == null || !show.key.equals(overlayKey))) {
+        if (show != null && show.kind != KIND_PAUSE && (overlay == null || !show.key.equals(overlayKey) || overlayKind == KIND_PAUSE)) {
             store.countOpen("try:" + show.key); // novi pokušaj da se otvori nešto blokirano
         }
         if (show == null && pkg.equals(pendingOpen)) {
@@ -861,7 +873,94 @@ public class GuardService extends AccessibilityService {
                 && a.days == b.days && a.code == b.code;
     }
 
+    /**
+     * Pauza od nekoliko sekundi pre otvaranja aplikacije sa pravilom. Istraživanja pokazuju da ovakav kratak zastoj
+     * sa lakim izlazom smanjuje otvaranja više od samih zabrana. Otvaranje se broji tek kad se pređe pauza.
+     */
+    private View buildPause(final String key) {
+        final Context c = this;
+        String pkg = key.substring(4);
+        String name = appLabel(pkg);
+        pauseShownAt = SystemClock.elapsedRealtime();
+
+        ScrollView scroll = new ScrollView(c);
+        scroll.setBackgroundColor(Ui.NIGHT);
+        scroll.setFillViewport(true);
+        scroll.setClickable(true);
+        LinearLayout box = Ui.column(c);
+        box.setGravity(Gravity.CENTER);
+        int p = Ui.dp(c, 24);
+        box.setPadding(p, p, p, p);
+
+        TextView eyebrow = Ui.text(c, "ČUVAR", 12, Ui.NIGHT_ACCENT, true);
+        eyebrow.setLetterSpacing(0.25f);
+        eyebrow.setGravity(Gravity.CENTER);
+        box.addView(eyebrow, Ui.fill(c, 0));
+
+        TextView t = Ui.text(c, "Zastani na trenutak", 25, 0xFFFFFFFF, true);
+        t.setGravity(Gravity.CENTER);
+        box.addView(t, Ui.fill(c, 10));
+
+        StringBuilder sb = new StringBuilder("Otvaraš ").append(name).append(". Danas si ga koristio ")
+                .append(Ui.fmt(store.usedToday(pkg)));
+        int limit = store.appLimitNow(pkg);
+        if (limit > 0) sb.append(" od ").append(limit).append(" min");
+        int opens = store.appOpensNow(pkg);
+        if (opens > 0) {
+            sb.append(", a otvorio ").append(Ui.count(store.opensToday(key), "put", "puta", "puta"))
+                    .append(" od ").append(opens);
+        }
+        sb.append(". Da li ti zaista treba sada?");
+        TextView s = Ui.text(c, sb.toString(), 15, Ui.NIGHT_MUTED, false);
+        s.setGravity(Gravity.CENTER);
+        box.addView(s, Ui.fill(c, 8));
+
+        TextView close = overlayButton(c, "Zatvori");
+        close.setTextSize(17);
+        close.setBackground(Ui.pressable(Ui.ACCENT, Ui.ACCENT_DOWN, Ui.dp(c, 14)));
+        close.setOnClickListener(v -> {
+            pausePkg = null;
+            performGlobalAction(GLOBAL_ACTION_HOME);
+            h.removeCallbacks(recheckSoon);
+            h.postDelayed(recheckSoon, 600);
+        });
+        box.addView(close, Ui.fill(c, 24));
+
+        final TextView go = overlayButton(c, "");
+        go.setTextColor(Ui.NIGHT_MUTED);
+        go.setBackground(null);
+        go.setEnabled(false);
+        box.addView(go, Ui.fill(c, 16));
+        final View self = scroll;
+        Runnable count = new Runnable() {
+            @Override
+            public void run() {
+                if (overlay != self) return;
+                long left = PAUSE_SECONDS * 1000L - (SystemClock.elapsedRealtime() - pauseShownAt);
+                if (left > 0) {
+                    go.setText("Nastavi za " + ((left + 999L) / 1000L) + " s");
+                    h.postDelayed(this, 250L);
+                } else {
+                    go.setText("Nastavi u " + name);
+                    go.setEnabled(true);
+                }
+            }
+        };
+        go.setText("Nastavi za " + PAUSE_SECONDS + " s");
+        h.postDelayed(count, 250L);
+        go.setOnClickListener(v -> {
+            if (SystemClock.elapsedRealtime() - pauseShownAt < PAUSE_SECONDS * 1000L) return;
+            pausePkg = null;
+            safeCheck();
+        });
+
+        scroll.addView(box, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT));
+        return scroll;
+    }
+
     private View buildOverlay(final String key, int kind, DailySchedule.Rule rule, boolean cooling, final boolean code) {
+        if (kind == KIND_PAUSE) return buildPause(key);
         final Context c = this;
         final boolean isSite = key.startsWith("site:");
         String name = isSite ? key.substring(5) : appLabel(key.substring(4));
