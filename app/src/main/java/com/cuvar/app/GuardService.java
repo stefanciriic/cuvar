@@ -64,6 +64,7 @@ public class GuardService extends AccessibilityService {
     private static final int KIND_NIGHT = 8;      // noćna blokada od 22:00, ništa se ne otključava do 06:00
     private static final int KIND_DAY = 7;        // potrošen ukupni dnevni limit, ništa se ne otključava do ponoći
     private static final int KIND_OPENS = 9;      // potrošena otvaranja aplikacije za danas
+    private static final int KIND_BROWSER = 10;   // pregledač u kome Čuvar ne vidi adresu, dok postoje pravila za sajtove
 
     /** Pregledači i ID polja sa adresom u svakom od njih. */
     private static final Map<String, String> BROWSERS = new HashMap<>();
@@ -78,6 +79,9 @@ public class GuardService extends AccessibilityService {
         BROWSERS.put("com.vivaldi.browser", "com.vivaldi.browser:id/url_bar");
         BROWSERS.put("com.sec.android.app.sbrowser", "com.sec.android.app.sbrowser:id/location_bar_edit_text");
         BROWSERS.put("org.mozilla.firefox", "org.mozilla.firefox:id/mozac_browser_toolbar_url_view");
+        BROWSERS.put("com.chrome.dev", "com.chrome.dev:id/url_bar");
+        BROWSERS.put("com.chrome.canary", "com.chrome.canary:id/url_bar");
+        BROWSERS.put("com.kiwibrowser.browser", "com.kiwibrowser.browser:id/url_bar");
         TRANSPARENT.add("com.android.systemui");
         TRANSPARENT.add("android");
     }
@@ -112,6 +116,9 @@ public class GuardService extends AccessibilityService {
     private String lastLeftPkg;      // aplikacija iz koje se upravo izašlo
     private long lastLeftAt;
     private long exemptAt;
+    private Set<String> webApps;     // sve aplikacije koje otvaraju veb adrese (pregledači)
+    private long webAppsAt;
+    private long protectToastAt;
 
     private final Runnable tick = new Runnable() {
         @Override
@@ -272,7 +279,7 @@ public class GuardService extends AccessibilityService {
         } else if (type == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
             // Sadržaj se menja vrlo često; zanima nas samo u pregledaču (promena adrese).
             CharSequence p = event.getPackageName();
-            if (p != null && BROWSERS.containsKey(p.toString()) && !checkPending) {
+            if (p != null && wantsContent(p.toString()) && !checkPending) {
                 checkPending = true;
                 h.postDelayed(throttled, 200);
             }
@@ -357,7 +364,7 @@ public class GuardService extends AccessibilityService {
                 lastLeftAt = nowEl;
             }
             currentPkg = pkg;
-            setContentEvents(BROWSERS.containsKey(pkg));
+            setContentEvents(wantsContent(pkg));
             currentSite = null;
             currentHost = null;
             if (!back) {
@@ -365,6 +372,20 @@ public class GuardService extends AccessibilityService {
                 opensBlocked = max > 0 && store.opensToday("app:" + pkg) >= max ? pkg : null;
                 pendingOpen = opensBlocked == null && max > 0 ? pkg : null;
             }
+        }
+
+        if (store.protectNow() && guardsSelf(root, pkg)) {
+            // Ekran na kome bi Čuvar mogao da se isključi, zaustavi ili obriše: zatvori ga.
+            hideOverlay();
+            performGlobalAction(GLOBAL_ACTION_BACK);
+            performGlobalAction(GLOBAL_ACTION_HOME);
+            long nowEl = SystemClock.elapsedRealtime();
+            if (nowEl - protectToastAt > 5000L) {
+                protectToastAt = nowEl;
+                Toast.makeText(this, "Čuvar je zaštićen od isključivanja. Zaštita se gasi u Čuvaru i važi tek od sledećeg jutra.",
+                        Toast.LENGTH_LONG).show();
+            }
+            return;
         }
 
         String urlBarId = BROWSERS.get(pkg);
@@ -391,9 +412,10 @@ public class GuardService extends AccessibilityService {
                 Toast.makeText(this, "Čuvar: do dnevnog limita ostalo je " + Ui.fmt(left) + ".",
                         Toast.LENGTH_LONG).show();
             }
+            if (DayLimit.reached(dayLimit, phone)) store.markDayLimitHit();
             if (DayLimit.reached(dayLimit, phone) && !skip.contains(pkg)) {
                 String site = web ? store.siteGuarded(currentHost) : null;
-                if (store.appGuarded(pkg)) {
+                if (guarded(pkg)) {
                     blocks.add(new Block(appKey, KIND_DAY, null, false));
                 } else if (site != null) {
                     blocks.add(new Block("site:" + site, KIND_DAY, null, false));
@@ -402,7 +424,7 @@ public class GuardService extends AccessibilityService {
         }
         if (store.nightActive() && !exempt().contains(pkg)) {
             String site = web ? store.siteGuarded(currentHost) : null;
-            if (store.appGuarded(pkg)) {
+            if (guarded(pkg)) {
                 blocks.add(new Block(appKey, KIND_NIGHT, null, false));
             } else if (site != null) {
                 blocks.add(new Block("site:" + site, KIND_NIGHT, null, false));
@@ -430,6 +452,9 @@ public class GuardService extends AccessibilityService {
                 int k = timeUp ? KIND_TIME : codeRule != null ? KIND_CODE : KIND_LOCK;
                 blocks.add(new Block(appKey, k, null, true));
             }
+        }
+        if (unknownBrowser(pkg)) {
+            blocks.add(new Block(appKey, KIND_BROWSER, null, true));
         }
         if (web && siteRule == null) {
             DailySchedule.Rule codeRule = store.codeRuleForSite(currentHost);
@@ -535,9 +560,9 @@ public class GuardService extends AccessibilityService {
         String k = "app:" + p;
         Block b = null;
         int dayLimit = store.dayLimit();
-        if (store.appGuarded(p) && DayLimit.reached(dayLimit, store.phoneToday(exempt()))) {
+        if (guarded(p) && DayLimit.reached(dayLimit, store.phoneToday(exempt()))) {
             b = new Block(k, KIND_DAY, null, false);
-        } else if (store.appGuarded(p) && store.nightActive()) {
+        } else if (guarded(p) && store.nightActive()) {
             b = new Block(k, KIND_NIGHT, null, false);
         } else {
             DailySchedule.Rule rule = store.scheduleBlockingApp(p);
@@ -549,6 +574,8 @@ public class GuardService extends AccessibilityService {
                 DailySchedule.Rule codeRule = store.codeRuleForApp(p);
                 if (store.appLockNow(p) || timeUp || codeRule != null) {
                     b = new Block(k, timeUp ? KIND_TIME : codeRule != null ? KIND_CODE : KIND_LOCK, null, true);
+                } else if (unknownBrowser(p)) {
+                    b = new Block(k, KIND_BROWSER, null, true);
                 }
             }
         }
@@ -560,6 +587,88 @@ public class GuardService extends AccessibilityService {
     private static boolean hard(int kind) {
         return kind == KIND_SCHEDULE || kind == KIND_DAY || kind == KIND_NIGHT || kind == KIND_TIME || kind == KIND_SITE_TIME
                 || kind == KIND_OPENS;
+    }
+
+    /** Aplikacija sa pravilom, ili pregledač koji Čuvar ne prati dok postoje pravila za sajtove. */
+    private boolean guarded(String p) {
+        return store.appGuarded(p) || unknownBrowser(p);
+    }
+
+    /**
+     * Pregledač u kome Čuvar ne može da pročita adresu (npr. Opera, DuckDuckGo). Dok postoje pravila za sajtove,
+     * on je zaključan kao aplikacija, inače bi se blokirani sajtovi samo otvorili u njemu.
+     */
+    private boolean unknownBrowser(String p) {
+        if (BROWSERS.containsKey(p) || p.equals(getPackageName()) || !webApps().contains(p)) return false;
+        return store.hasSiteRules();
+    }
+
+    /** Aplikacije koje mogu da otvore bilo koju veb adresu; osvežava se na svakih 5 minuta. */
+    private Set<String> webApps() {
+        long now = SystemClock.elapsedRealtime();
+        if (webApps == null || now - webAppsAt > 5 * 60000L) {
+            Set<String> out = new HashSet<>();
+            try {
+                Intent i = new Intent(Intent.ACTION_VIEW, android.net.Uri.parse("http://example.com/"));
+                i.addCategory(Intent.CATEGORY_BROWSABLE);
+                for (android.content.pm.ResolveInfo r : getPackageManager().queryIntentActivities(i, PackageManager.MATCH_ALL)) {
+                    if (r.activityInfo != null) out.add(r.activityInfo.packageName);
+                }
+            } catch (Throwable ignored) {
+            }
+            out.remove("android"); // izbor aplikacije, nije pregledač
+            webApps = out;
+            webAppsAt = now;
+        }
+        return webApps;
+    }
+
+    /** Promene sadržaja trebaju za adresu u pregledaču i, dok je zaštita uključena, za ekrane podešavanja. */
+    private boolean wantsContent(String p) {
+        return BROWSERS.containsKey(p) || (settingsLike(p) && store != null && store.protectNow());
+    }
+
+    /** Podešavanja telefona, instalacija i brisanje aplikacija, Play prodavnica i slični sistemski ekrani. */
+    private static boolean settingsLike(String p) {
+        return p.contains("settings") || p.contains("packageinstaller") || p.contains("permissioncontroller")
+                || p.contains("securitycenter") || p.contains("safecenter") || p.contains("accessibility")
+                || p.equals("com.android.vending") || p.equals("com.samsung.android.lool");
+    }
+
+    /** Reči sa ekrana za brisanje aplikacije (u instalaciji i Play prodavnici se Čuvar sme samo ažurirati). */
+    private static final String[] UNINSTALL = {"uninstall", "deinstal", "деинстал", "ukloni", "уклони", "obriši", "обриши",
+            "izbriši", "избриши", "delete", "remove"};
+
+    /** Da li sistemski ekran prikazuje Čuvara (podaci o aplikaciji, Pristupačnost, brisanje). */
+    private boolean guardsSelf(AccessibilityNodeInfo root, String p) {
+        if (p.equals(getPackageName()) || !settingsLike(p) || exempt().contains(p)) return false;
+        boolean installer = p.contains("packageinstaller") || p.equals("com.android.vending");
+        try {
+            String label = getString(R.string.app_name);
+            if (!mentions(root, label) && !mentions(root, "Чувар")) return false;
+            if (!installer) return true;
+            for (String w : UNINSTALL) {
+                List<AccessibilityNodeInfo> n = root.findAccessibilityNodeInfosByText(w);
+                if (n != null && !n.isEmpty()) return true;
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
+    /** Da li se na ekranu pominje naziv (ali ne „čuvar ekrana“, koji je podešavanje ekrana). */
+    private static boolean mentions(AccessibilityNodeInfo root, String name) {
+        List<AccessibilityNodeInfo> nodes = root.findAccessibilityNodeInfosByText(name);
+        if (nodes == null) return false;
+        for (AccessibilityNodeInfo n : nodes) {
+            CharSequence t = n == null ? null : n.getText();
+            if (t == null) t = n == null ? null : n.getContentDescription();
+            if (t == null) continue;
+            String s = t.toString().toLowerCase(Locale.ROOT)
+                    .replaceAll("(čuvar|чувар)[a-zа-я]* (ekrana|екрана)", "");
+            if (s.contains("čuvar") || s.contains("чувар")) return true;
+        }
+        return false;
     }
 
     private static final Map<String, Boolean> TRACKED = new HashMap<>();
@@ -787,6 +896,12 @@ public class GuardService extends AccessibilityService {
             title = name + " je zaključan";
             sub = "Unesi dnevnu šifru. Važi od " + DailyCode.CHANGE_HOUR + ":00 do " + DailyCode.LOCK_HOUR + ":00 i vidi se u Čuvaru.";
             joke = Jokes.pick(Jokes.LOCK);
+        } else if (kind == KIND_BROWSER) {
+            title = name + " je zaključan";
+            sub = "U ovom pregledaču Čuvar ne vidi koji je sajt otvoren, pa je zaključan dok imaš pravila za sajtove. "
+                    + "Koristi Chrome, Samsung Internet, Firefox, Edge, Brave ili Vivaldi. Otvara se dnevnom šifrom, od "
+                    + DailyCode.CHANGE_HOUR + ":00 do " + DailyCode.LOCK_HOUR + ":00.";
+            joke = Jokes.pick(Jokes.LOCK);
         } else if (kind == KIND_LOCK) {
             title = name + " je zaključan";
             sub = "Otvara se dnevnom šifrom, od " + DailyCode.CHANGE_HOUR + ":00 do " + DailyCode.LOCK_HOUR + ":00. Šifra se vidi u Čuvaru.";
@@ -870,7 +985,7 @@ public class GuardService extends AccessibilityService {
             unlock.setGravity(Gravity.CENTER_HORIZONTAL);
             box.addView(unlock, Ui.fill(c, 22));
             // Zaključana aplikacija odmah traži odgovor pa PIN; kod isteklog vremena i blokiranog sajta prvo pitamo.
-            if (kind == KIND_LOCK || kind == KIND_CODE) {
+            if (kind == KIND_LOCK || kind == KIND_CODE || kind == KIND_BROWSER) {
                 showQuiz(unlock, () -> showPinPad(unlock, key, code), null);
             } else {
                 TextView ask = overlayButton(c, "Ipak želim da otključam");

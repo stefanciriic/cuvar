@@ -11,7 +11,7 @@ Poslednja izmena: 9. oktobar 2026.
 - koja je aplikacija trenutno otvorena,
 - naziv sajta iz adresne trake podržanih pregledača.
 
-Ovo služi samo da bi Čuvar merio vreme po aplikacijama i sajtovima i prikazao ekran za blokadu preko onoga što si sam izabrao da blokiraš. Čuvar ne čita poruke, lozinke ni drugi sadržaj ekrana, ne snima ekran i ne izvršava radnje umesto tebe, osim povratka na početni ekran ili korak nazad sa blokiranog sadržaja i pauziranja zvuka dok je ekran za blokadu prikazan.
+Ovo služi samo da bi Čuvar merio vreme po aplikacijama i sajtovima i prikazao ekran za blokadu preko onoga što si sam izabrao da blokiraš. Čuvar ne čita poruke, lozinke ni drugi sadržaj ekrana (osim što, kad sam uključiš Zaštitu od isključivanja, na ekranima podešavanja telefona proverava da li se tu pominje Čuvar), ne snima ekran i ne izvršava radnje umesto tebe, osim povratka na početni ekran ili korak nazad sa blokiranog sadržaja i pauziranja zvuka dok je ekran za blokadu prikazan.
 
 ## Šta Čuvar čuva
 

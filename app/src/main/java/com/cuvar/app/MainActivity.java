@@ -170,6 +170,9 @@ public class MainActivity extends Activity {
         groupRow(whole, "Noćna blokada", store.nightBlock()
                 ? "Uključena · od " + DailyCode.LOCK_HOUR + ":00 do 0" + DailyCode.NIGHT_END_HOUR + ":00 sve iz pravila je zaključano"
                 : "Isključena", v -> chooseNight());
+        groupRow(whole, "Zaštita od isključivanja", store.protectSelf()
+                ? "Uključena · Čuvar ne može da se isključi ni obriše"
+                : "Isključena", v -> chooseProtect());
         col.addView(whole, Ui.fill(this, 8));
 
         int appRules = store.appRuleCount();
@@ -190,7 +193,7 @@ public class MainActivity extends Activity {
         col.addView(rules, Ui.fill(this, 8));
 
         TextView note = Ui.text(this,
-                "Savet: zaključaj i Podešavanja telefona (u Aplikacijama), da Čuvar ne može lako da se isključi ili obriše. Otvaraće se samo dnevnom šifrom.",
+                "Savet: uključi Zaštitu od isključivanja, ili zaključaj Podešavanja telefona (u Aplikacijama), da Čuvar ne može lako da se isključi ili obriše.",
                 13, Ui.MUTED, false);
         col.addView(note, Ui.fill(this, 18));
         setScreen(col);
@@ -395,7 +398,8 @@ public class MainActivity extends Activity {
                 + DayLimit.WARN_MS / 60000L + " min ranije.\n\n";
         intro += limit > 0
                 ? "Manji limit važi odmah. Povećati se može jednom dnevno, najviše za "
-                        + Math.round(DayLimit.raisePercent(limit)) + " % (što je limit veći, to manje). "
+                        + Math.round(DayLimit.raisePercent(limit)) + " % (što je limit veći, to manje), "
+                        + "i samo dok limit još nije potrošen. "
                         + "Isključivanje važi tek od sutra."
                 : "Izaberi limit. Posle toga se može smanjiti u svako doba, a povećati jednom dnevno i samo malo.";
         Sheet sheet = new Sheet(this, "Ukupni dnevni limit").message(intro).view(box).secondary("Zatvori", null);
@@ -407,6 +411,7 @@ public class MainActivity extends Activity {
             boolean can = store.canRaiseDayLimit();
             final int add = DayLimit.maxRaise(limit);
             String raise = can ? "Povećaj za " + Ui.fmt(add * 60000L) + " → " + DayLimit.label(limit + add)
+                    : store.dayLimitHitToday() ? "Limit je potrošen, danas se više ne povećava"
                     : "Povećanje je danas već iskorišćeno";
             TextView up = Ui.button(this, raise, can);
             up.setEnabled(can);
@@ -500,6 +505,23 @@ public class MainActivity extends Activity {
                 .secondary("Zatvori", null);
         sheet.primary(on ? "Isključi od sutra" : "Uključi", () -> {
             store.setNightBlock(!on);
+            showDashboard();
+            return true;
+        });
+        sheet.show();
+    }
+
+    /** Zaštita od isključivanja: uključivanje važi odmah, isključivanje tek sutra od 06:00. */
+    private void chooseProtect() {
+        boolean on = store.protectSelf();
+        Sheet sheet = new Sheet(this, "Zaštita od isključivanja").message("Dok je uključena, Čuvar zatvara ekrane telefona "
+                + "na kojima bi mogao da se isključi u Pristupačnosti, zaustavi, obriše mu se podaci ili da se deinstalira. "
+                + "Ažuriranje Čuvara i dalje radi.\n\n"
+                + (on ? "Isključivanje važi tek sutra od 0" + DailyCode.NIGHT_END_HOUR + ":00, pa tek tada Čuvar može da se ukloni."
+                      : "Uključivanje važi odmah, a isključivanje tek sledećeg jutra od 0" + DailyCode.NIGHT_END_HOUR + ":00."))
+                .secondary("Zatvori", null);
+        sheet.primary(on ? "Isključi od sutra" : "Uključi", () -> {
+            store.setProtectSelf(!on);
             showDashboard();
             return true;
         });
@@ -678,6 +700,7 @@ public class MainActivity extends Activity {
                         + "•  adresu sajta u pregledaču (samo naziv sajta),\n"
                         + "•  da bi preko blokirane aplikacije prikazao ekran za blokadu.\n\n"
                         + "Čuvar ne čita poruke, lozinke ni drugi tekst sa ekrana, ne snima ekran i nema dozvolu za internet. "
+                        + "Ako uključiš Zaštitu od isključivanja, na ekranima podešavanja proverava samo da li se pominje Čuvar. "
                         + "Sve što izmeri ostaje samo na ovom telefonu i briše se kad obrišeš aplikaciju.\n\n"
                         + "Ako se slažeš, u sledećem koraku uključi „Čuvar“ u Pristupačnosti.")
                 .secondary("Ne sada", null)

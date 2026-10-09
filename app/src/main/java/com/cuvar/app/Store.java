@@ -51,6 +51,7 @@ final class Store {
     private final List<DailySchedule.Rule> eSchedules = new ArrayList<>();
     private String eDay;
     private boolean eNight;
+    private boolean eProtect;
     private boolean dirty;
     private long lastSave;
     private int fails;
@@ -62,6 +63,7 @@ final class Store {
     private final android.content.ContentResolver resolver;
     private long clockOff;             // pouzdano vreme = vreme od paljenja + clockOff
     private long clockSaved;           // kada je pouzdano vreme poslednji put sačuvano (vreme od paljenja)
+    private long skewSaved;            // koliko je sat telefona bio pomeren pri poslednjem čuvanju
     private TimeZone zone;             // vremenska zona zapamćena u ovom paljenju telefona
 
     private Store(Context c) {
@@ -192,7 +194,7 @@ final class Store {
     /**
      * Koliko je prošlo od otključavanja, ili -1 ako je i pauza završena.
      * U istom paljenju telefona meri se vremenom od paljenja, pa pomeranje sata ne pomaže.
-     * Posle restarta jedino ostaje sat telefona; vraćanje sata unazad ne daje novih 5 minuta.
+     * Posle restarta meri se pouzdanim vremenom (vidi now()), pa ni pomeranje sata pa restart ne pomaže.
      */
     private long sinceUnlock(String key) {
         JSONObject o = unlocks.optJSONObject(key);
@@ -203,7 +205,7 @@ final class Store {
         if (boot != -1 && o.optInt("boot", -2) == boot) {
             since = SystemClock.elapsedRealtime() - o.optLong("el", 0L);
         } else {
-            since = System.currentTimeMillis() - o.optLong("wall", 0L);
+            since = now() - o.optLong("wall", 0L);
             if (since < 0) {
                 since = UNLOCK_USE_MS; // sat je vraćen unazad: kreće cela pauza, bez novih 5 minuta
             }
@@ -299,10 +301,10 @@ final class Store {
         sp.edit().putString("emergency", emergency.toString()).apply();
     }
 
-    /** Vremenski žig koji se meri isto kao otključavanje: od paljenja telefona, a posle restarta po satu. */
+    /** Vremenski žig koji se meri isto kao otključavanje: od paljenja telefona, a posle restarta po pouzdanom vremenu. */
     private JSONObject stamp() throws JSONException {
         JSONObject o = new JSONObject();
-        o.put("wall", System.currentTimeMillis());
+        o.put("wall", now());
         o.put("el", SystemClock.elapsedRealtime());
         o.put("boot", boot);
         return o;
@@ -318,12 +320,12 @@ final class Store {
         if (boot != -1 && t.optInt("boot", -2) == boot) {
             since = SystemClock.elapsedRealtime() - t.optLong("el", 0L);
         } else {
-            since = System.currentTimeMillis() - t.optLong("wall", 0L);
+            since = now() - t.optLong("wall", 0L);
             if (since < 0) {
                 since = ifBack;
             }
             try {
-                t.put("wall", System.currentTimeMillis() - since);
+                t.put("wall", now() - since);
                 t.put("el", SystemClock.elapsedRealtime() - since);
                 t.put("boot", boot);
                 stampMoved = true;
@@ -336,7 +338,7 @@ final class Store {
     private void saveUnlock(String key, long since) {
         try {
             JSONObject o = new JSONObject();
-            o.put("wall", System.currentTimeMillis() - since);
+            o.put("wall", now() - since);
             o.put("el", SystemClock.elapsedRealtime() - since);
             o.put("boot", boot);
             unlocks.put(key, o);
@@ -727,6 +729,32 @@ final class Store {
         return h >= DailyCode.CHANGE_HOUR && h < DailyCode.LOCK_HOUR;
     }
 
+    // ---------- Zaštita od isključivanja ----------
+
+    /** Podešena zaštita: Čuvar ne da da se otvore njegova podešavanja u Pristupačnosti, podaci o aplikaciji i brisanje. */
+    synchronized boolean protectSelf() {
+        return sp.getBoolean("protect", false);
+    }
+
+    /** Uključivanje važi odmah, isključivanje tek sledećeg jutra u 06:00. */
+    synchronized void setProtectSelf(boolean on) {
+        sp.edit().putBoolean("protect", on).apply();
+        enforce();
+    }
+
+    /** Da li zaštita sada važi. */
+    synchronized boolean protectNow() {
+        roll();
+        return eApps == null ? protectSelf() : eProtect;
+    }
+
+    /** Da li postoji ijedno pravilo za sajtove (lista ili uključen režim sa sajtovima). */
+    synchronized boolean hasSiteRules() {
+        if (enforcedSites().length() > 0) return true;
+        for (DailySchedule.Rule r : enforced()) if (r.enabled && !r.sites.isEmpty()) return true;
+        return false;
+    }
+
     // ---------- Noćna blokada ----------
 
     /** Podešena noćna blokada (uključivanje važi odmah, isključivanje tek sledećeg jutra u 06:00). */
@@ -775,8 +803,9 @@ final class Store {
 
     /**
      * U jednom paljenju telefona vreme se meri od paljenja, pa pomeranje sata ne skraćuje režim
-     * i ne donosi novu šifru ranije. Posle restarta sat se ponovo čita, ali ne može unazad
-     * u odnosu na poslednje zapamćeno vreme.
+     * i ne donosi novu šifru ranije. Pamti se i koliko je sat telefona ručno pomeren u odnosu na
+     * pouzdano vreme, pa ni pomeranje sata pa restart ne pomaže: posle paljenja se ta razlika oduzme.
+     * Kad je uključeno automatsko vreme (sa mreže), sat telefona je pouzdan i prati se.
      */
     private void startClock() {
         JSONObject o = parse(sp.getString("clock", "{}"));
@@ -788,8 +817,10 @@ final class Store {
             zone = TimeZone.getTimeZone(o.optString("zone", TimeZone.getDefault().getID()));
         } else {
             long last = o.optLong("last", 0L);
-            clockOff = Math.max(wall, last) - el;
-            zone = TimeZone.getDefault();
+            long base = autoTime() ? wall : wall - o.optLong("skew", 0L);
+            clockOff = Math.max(base, last) - el;
+            // Ručno izabrana zona ne važi ni posle restarta; prati se samo automatska zona.
+            zone = autoZone() || !o.has("zone") ? TimeZone.getDefault() : TimeZone.getTimeZone(o.optString("zone"));
         }
         saveClock();
     }
@@ -802,6 +833,8 @@ final class Store {
             o.put("boot", boot);
             o.put("el", el);
             o.put("last", el + clockOff);
+            skewSaved = System.currentTimeMillis() - (el + clockOff);
+            o.put("skew", skewSaved);
             o.put("zone", zone.getID());
             sp.edit().putString("clock", o.toString()).apply();
         } catch (JSONException ignored) {
@@ -813,13 +846,34 @@ final class Store {
     synchronized long now() {
         long el = SystemClock.elapsedRealtime();
         long wall = System.currentTimeMillis();
+        long skew = wall - (el + clockOff);
         if (el + clockOff < SANE_WALL && wall >= SANE_WALL) {
             clockOff = wall - el; // telefon je upaljen pre nego što je dobio tačno vreme
             saveClock();
-        } else if (el - clockSaved > 60000L) {
+        } else if (Math.abs(skew) > 60000L && autoTime()) {
+            clockOff = wall - el; // automatsko vreme je uključeno: sat telefona je tačan
             saveClock();
+        } else if (el - clockSaved > 60000L || Math.abs(skew - skewSaved) > 30000L) {
+            saveClock(); // sat je ručno pomeren: odmah se pamti, da restart ne pomogne
         }
         return el + clockOff;
+    }
+
+    private long autoTimeAt = -1;
+    private boolean autoTime;
+
+    /** Da li telefon uzima vreme sa mreže (provera najviše jednom u 10 s). */
+    private boolean autoTime() {
+        long el = SystemClock.elapsedRealtime();
+        if (autoTimeAt < 0 || el - autoTimeAt > 10000L) {
+            try {
+                autoTime = Settings.Global.getInt(resolver, Settings.Global.AUTO_TIME, 0) == 1;
+            } catch (Throwable t) {
+                autoTime = false;
+            }
+            autoTimeAt = el;
+        }
+        return autoTime;
     }
 
     /**
@@ -1124,9 +1178,21 @@ final class Store {
         return true;
     }
 
-    /** Da li danas još može da se poveća limit (jednom dnevno, samo kad je uključen). */
+    /** Da li danas još može da se poveća limit (jednom dnevno, samo kad je uključen i još nije potrošen). */
     synchronized boolean canRaiseDayLimit() {
-        return dayLimit() > 0 && !day().equals(sp.getString("dayLimitRaised", null));
+        String d = day();
+        return dayLimit() > 0 && !d.equals(sp.getString("dayLimitRaised", null)) && !d.equals(sp.getString("dayLimitHit", null));
+    }
+
+    /** Da li je ukupni limit danas već potrošen; tada je sve zaključano do ponoći i povećanje ne pomaže. */
+    synchronized boolean dayLimitHitToday() {
+        return day().equals(sp.getString("dayLimitHit", null));
+    }
+
+    /** Servis beleži da je limit potrošen, pa se posle toga danas više ne može povećati. */
+    synchronized void markDayLimitHit() {
+        String d = day();
+        if (!d.equals(sp.getString("dayLimitHit", null))) sp.edit().putString("dayLimitHit", d).apply();
     }
 
     /** Povećava limit za najviše dozvoljeno; vraća koliko je minuta dodato (0 ako danas više ne može). */
@@ -1191,6 +1257,7 @@ final class Store {
         eApps = parse(sp.getString("eApps", "{}"));
         eSites = parse(sp.getString("eSites", "{}"));
         eNight = sp.getBoolean("eNight", true);
+        eProtect = sp.getBoolean("eProtect", false);
         parseSchedules(sp.getString("eSchedules", "[]"), eSchedules);
         enforce();
     }
@@ -1201,6 +1268,7 @@ final class Store {
         eSchedules.clear();
         for (DailySchedule.Rule r : schedules) eSchedules.add(copy(r));
         eNight = nightBlock();
+        eProtect = protectSelf();
         eDay = rulesDay();
         saveEnforced();
     }
@@ -1208,7 +1276,7 @@ final class Store {
     private void saveEnforced() {
         sp.edit().putString("eApps", eApps.toString()).putString("eSites", eSites.toString())
                 .putString("eSchedules", schedulesJson(eSchedules)).putString("eDay", eDay)
-                .putBoolean("eNight", eNight).apply();
+                .putBoolean("eNight", eNight).putBoolean("eProtect", eProtect).apply();
     }
 
     /** Dan za odložena popuštanja: menja se u 06:00, kad se završi noćna blokada, a ne u ponoć dok ona traje. */
@@ -1233,6 +1301,7 @@ final class Store {
             return;
         }
         eNight = eNight || nightBlock();
+        eProtect = eProtect || protectSelf();
         JSONObject na = new JSONObject();
         Set<String> keys = new HashSet<>(keysOf(eApps));
         keys.addAll(keysOf(apps));
@@ -1357,6 +1426,7 @@ final class Store {
         List<String> out = new ArrayList<>();
         if (eApps == null) return out;
         if (eNight && !nightBlock()) out.add("Noćna blokada se isključuje");
+        if (eProtect && !protectSelf()) out.add("Zaštita Čuvara od isključivanja se isključuje");
         for (String pkg : keysOf(eApps)) {
             String name = pkg;
             try { name = pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString(); } catch (Exception ignored) { }
@@ -1408,7 +1478,7 @@ final class Store {
         schedules.clear();
         for (DailySchedule.Rule r : eSchedules) schedules.add(copy(r));
         sp.edit().putString("apps", apps.toString()).putString("sites", sites.toString())
-                .putString("schedules", schedulesJson()).putBoolean("night", eNight).apply();
+                .putString("schedules", schedulesJson()).putBoolean("night", eNight).putBoolean("protect", eProtect).apply();
     }
 
     // ---------- Kad Čuvar nije radio ----------
