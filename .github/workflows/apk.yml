@@ -37,6 +37,35 @@ jobs:
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" >/dev/null 2>&1 || true
           chmod +x gradlew
           ./gradlew --no-daemon assembleRelease
+          cp app/build/outputs/apk/release/app-release.apk cuvar.apk
+
+      # Rotacija ključa: stari (javni) ključ potpisuje novi tajni, pa se nova verzija
+      # instalira preko stare bez brisanja podataka. Na Androidu 9+ telefon posle toga
+      # prihvata samo novi ključ, pa APK potpisan samo javnim ključem ne može preko Čuvara.
+      - name: Potpiši APK novim ključem
+        env:
+          RELEASE_KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_B64 }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+        run: |
+          if [ -z "$RELEASE_KEYSTORE_B64" ] || [ -z "$RELEASE_STORE_PASSWORD" ]; then
+            echo "::warning::Nema RELEASE_KEYSTORE_B64/RELEASE_STORE_PASSWORD, APK ostaje potpisan starim javnim ključem."
+            exit 0
+          fi
+          umask 077
+          bt="$ANDROID_HOME/build-tools/36.0.0"
+          key="$RUNNER_TEMP/release.p12"
+          trap 'rm -f "$key"' EXIT
+          printf '%s' "$RELEASE_KEYSTORE_B64" | base64 -d > "$key"
+          "$bt/apksigner" rotate --out "$RUNNER_TEMP/lineage.bin" \
+            --old-signer --ks app/cuvar.keystore --ks-pass pass:cuvar123 --ks-key-alias cuvar \
+            --new-signer --ks "$key" --ks-pass env:RELEASE_STORE_PASSWORD --ks-key-alias cuvar2
+          "$bt/apksigner" sign --rotation-min-sdk-version 28 --lineage "$RUNNER_TEMP/lineage.bin" \
+            --ks app/cuvar.keystore --ks-pass pass:cuvar123 --ks-key-alias cuvar \
+            --next-signer --ks "$key" --ks-pass env:RELEASE_STORE_PASSWORD --ks-key-alias cuvar2 \
+            --out cuvar-rotated.apk cuvar.apk
+          mv cuvar-rotated.apk cuvar.apk
+          "$bt/apksigner" verify -v --print-certs cuvar.apk | grep -E 'Verified using|Signer|SHA-256'
+          "$bt/apksigner" lineage --in cuvar.apk --print-certs
 
       # Paket za Google Play (.aab). Potpisuje se tajnim ključem iz GitHub tajni ako postoji,
       # inače istim ključem kao APK (dovoljno za interno testiranje, ključ se kasnije menja).
@@ -56,7 +85,6 @@ jobs:
 
       - name: Objavi u Releases
         run: |
-          cp app/build/outputs/apk/release/app-release.apk cuvar.apk
           cp app/build/outputs/bundle/release/app-release.aab cuvar-play.aab
           gh release delete "v$RUN_NO" --repo "$REPO" --yes --cleanup-tag >/dev/null 2>&1 || true
           gh release create "v$RUN_NO" cuvar.apk cuvar-play.aab --repo "$REPO" --title "Cuvar v$RUN_NO" --notes "Telefon: preuzmi cuvar.apk. Google Play: cuvar-play.aab se šalje u Play Console."
