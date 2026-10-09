@@ -4,3 +4,7 @@ local.properties
 *.apk
 .idea/
 *.iml
+*.aab
+*.jks
+*.keystore
+.review/

@@ -37,6 +37,7 @@ final class PinPad extends LinearLayout {
 
         msg = Ui.text(c, " ", 14, dark ? Ui.NIGHT_ACCENT : Ui.ACCENT, false);
         msg.setGravity(Gravity.CENTER);
+        msg.setAccessibilityLiveRegion(android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE);
         LayoutParams mlp = new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
         mlp.topMargin = Ui.dp(c, 6);
         mlp.bottomMargin = Ui.dp(c, 6);
@@ -54,6 +55,9 @@ final class PinPad extends LinearLayout {
                 boolean small = OK.equals(label);
                 TextView b = Ui.text(c, label, small ? 17 : 24, small ? (dark ? Ui.NIGHT_ACCENT : Ui.ACCENT) : fg, true);
                 b.setGravity(Gravity.CENTER);
+                b.setFocusable(true);
+                if (BACK.equals(label)) b.setContentDescription("Obriši cifru");
+                else if (OK.equals(label)) b.setContentDescription("Potvrdi unos");
                 b.setBackground(Ui.pressable(key, keyDown, size / 2f));
                 b.setOnClickListener(v -> press(label));
                 LayoutParams lp = new LayoutParams(size, size);
@@ -103,6 +107,8 @@ final class PinPad extends LinearLayout {
     }
 
     private void render() {
+        dots.setContentDescription(showDigits ? "Odgovor: " + buf
+                : "Uneto cifara: " + buf.length());
         if (buf.length() == 0) {
             dots.setText("––––");
             dots.setAlpha(0.35f);

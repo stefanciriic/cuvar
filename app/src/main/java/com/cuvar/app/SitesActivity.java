@@ -43,10 +43,11 @@ public class SitesActivity extends SubActivity {
             row.setPadding(Ui.dp(SitesActivity.this, 20), Ui.dp(SitesActivity.this, 12),
                     Ui.dp(SitesActivity.this, 20), Ui.dp(SitesActivity.this, 12));
             row.addView(Ui.text(SitesActivity.this, domain, 17, Ui.INK, true));
-            int limit = store.siteLimit(domain);
-            String s = limit <= 0
-                    ? "Uvek blokiran"
-                    : "Limit " + limit + " min dnevno, danas " + Ui.fmt(store.usedToday("site:" + domain));
+            int limit = store.siteLimitNow(domain);
+            String s = siteSummary(limit);
+            if (limit > 0) s += ", danas " + Ui.fmt(store.usedToday("site:" + domain));
+            int next = store.siteLimit(domain);
+            if (next != limit) s += "\nOd sledećih 06:00: " + siteSummary(next);
             row.addView(Ui.text(SitesActivity.this, s, 13, Ui.ACCENT, false));
             return row;
         }
@@ -89,9 +90,21 @@ public class SitesActivity extends SubActivity {
 
     private void refresh() {
         sites.clear();
-        sites.addAll(store.siteList());
+        java.util.Set<String> all = new java.util.TreeSet<>(store.siteListNow());
+        all.addAll(store.siteList());
+        sites.addAll(all);
         empty.setVisibility(sites.isEmpty() ? View.VISIBLE : View.GONE);
         adapter.notifyDataSetChanged();
+    }
+
+    @Override protected void onResume() {
+        super.onResume();
+        if (empty != null) refresh();
+    }
+
+    private static String siteSummary(int limit) {
+        return limit < 0 ? "Bez ograničenja" : limit == 0 ? "Uvek blokiran"
+                : "Limit " + limit + " min dnevno";
     }
 
     /** domain == null znači dodavanje novog sajta. */
@@ -105,6 +118,10 @@ public class SitesActivity extends SubActivity {
         }
         LinearLayout box = Ui.column(this);
 
+        final CheckRow listed = new CheckRow(this, null, "Ograniči sajt", "Isključivanje važi od sledećih 06:00");
+        listed.setChecked(domain == null || store.siteLimit(domain) >= 0);
+        if (domain != null) box.addView(listed, Ui.fill(this, 0));
+
         box.addView(Sheet.label(this, "Adresa sajta"));
         final EditText address = Sheet.input(this, "npr. facebook.com", false);
         if (domain != null) {
@@ -116,7 +133,10 @@ public class SitesActivity extends SubActivity {
 
         box.addView(Sheet.label(this, "Dnevni limit u minutima (0 = uvek blokiran, otvara se dnevnom šifrom)"), Ui.fill(this, 16));
         final EditText limit = Sheet.input(this, "0", true);
-        limit.setText(String.valueOf(domain == null ? 0 : Math.max(0, store.siteLimit(domain))));
+        limit.setText(String.valueOf(domain == null ? 0 : Math.max(0, store.siteLimit(domain) < 0
+                ? store.siteLimitNow(domain) : store.siteLimit(domain))));
+        limit.setEnabled(listed.isChecked());
+        listed.setListener(limit::setEnabled);
         box.addView(limit, Ui.fill(this, 6));
         if (domain != null && store.siteLimit(domain) > 0) {
             box.addView(Ui.text(this, "Danas: " + Ui.fmt(store.usedToday("site:" + domain)), 13, Ui.MUTED, false),
@@ -132,12 +152,15 @@ public class SitesActivity extends SubActivity {
                         address.setError("Unesi adresu sajta, npr. facebook.com");
                         return false;
                     }
-                    String covering = store.matchSite(host);
+                    String covering = store.matchSiteNow(host);
                     if (domain == null && covering != null && store.unlockBusyLeft() > 0) {
                         address.setError(covering + " je već na listi, a pauza posle otključavanja još traje");
                         return false;
                     }
-                    store.setSite(host, Ui.parseInt(limit.getText().toString()));
+                    Integer value = 0;
+                    if (listed.isChecked()) value = Ui.nonNegativeNumber(limit);
+                    if (value == null) return false;
+                    if (listed.isChecked()) store.setSite(host, value); else store.removeSite(host);
                     refresh();
                     return true;
                 });

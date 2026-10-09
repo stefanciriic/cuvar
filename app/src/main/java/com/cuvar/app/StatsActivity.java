@@ -130,12 +130,10 @@ public class StatsActivity extends SubActivity {
         Map<Integer, Long> perCategory = new HashMap<>();
         List<Map<String, Long>> appsPerDay = new ArrayList<>();
         long grandTotal = 0;
-        int counted = 0; // dani od prvog dana sa podacima, za prosek
 
         // Kalendarski dani zaključno sa danas; dani bez korišćenja se računaju kao nula.
         List<String> dayKeys = store.lastDays(days);
         for (String dk : dayKeys) {
-            if (counted > 0 || store.hasDay(dk)) counted++;
             Map<String, Long> apps = new HashMap<>();
             Map<String, Long> day = store.dayMap(dk);
             // Dani pre merenja svih sajtova imaju samo sajtove sa liste; tada se prikazuju oni.
@@ -176,7 +174,7 @@ public class StatsActivity extends SubActivity {
             if (labelOf(pm, e.getKey()) != null) colored.add(e.getKey());
         }
 
-        long avg = counted > 0 ? grandTotal / counted : 0;
+        long avg = Math.max(0, avgOf(dayKeys));
         body.addView(summaryCard(grandTotal, avg), Ui.fill(this, 14));
         body.addView(donutCard(pm, perApp, colored, grandTotal), Ui.fill(this, 16));
         if (days > 1) {
@@ -205,12 +203,17 @@ public class StatsActivity extends SubActivity {
         return t;
     }
 
-    /** Prosek po danu za date dane, samo dani sa podacima; -1 ako podataka nema. */
+    /** Kalendarski prosek od prvog zabeleženog dana; kasniji prazni dani vrede nula. */
     private long avgOf(List<String> keys) {
+        String first = null;
+        for (String day : store.lastDays(14)) {
+            if (store.hasDay(day)) { first = day; break; }
+        }
+        if (first == null) return -1;
         long t = 0;
         int n = 0;
         for (String k : keys) {
-            if (!store.hasDay(k)) continue;
+            if (k.compareTo(first) < 0) continue;
             t += totalOf(k);
             n++;
         }

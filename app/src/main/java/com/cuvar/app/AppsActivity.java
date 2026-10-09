@@ -186,6 +186,7 @@ public class AppsActivity extends SubActivity {
             } catch (Throwable ignored) {
             }
             runOnUiThread(() -> {
+                if (isFinishing() || isDestroyed()) return;
                 all.clear();
                 all.addAll(out);
                 applyFilter();
@@ -202,8 +203,8 @@ public class AppsActivity extends SubActivity {
         }
         // Aplikacije koje već imaju pravilo idu na vrh, ostale po abecedi.
         Collections.sort(shown, (a, b) -> {
-            boolean ra = store.hasAppRule(a.pkg);
-            boolean rb = store.hasAppRule(b.pkg);
+            boolean ra = store.appGuarded(a.pkg);
+            boolean rb = store.appGuarded(b.pkg);
             if (ra != rb) {
                 return ra ? -1 : 1;
             }
@@ -224,10 +225,25 @@ public class AppsActivity extends SubActivity {
     }
 
     private String summary(String pkg) {
-        boolean lock = store.appLock(pkg);
-        int limit = store.appLimit(pkg);
-        int opens = store.appOpens(pkg);
-        int session = store.appSession(pkg);
+        String now = summary(pkg, true);
+        String next = summary(pkg, false);
+        if (!java.util.Objects.equals(now, next)) {
+            return (now == null ? "Bez ograničenja" : now) + "\nOd sledećih 06:00: "
+                    + (next == null ? "bez ograničenja" : next);
+        }
+        return now;
+    }
+
+    @Override protected void onResume() {
+        super.onResume();
+        if (status != null) applyFilter();
+    }
+
+    private String summary(String pkg, boolean effective) {
+        boolean lock = effective ? store.appLockNow(pkg) : store.appLock(pkg);
+        int limit = effective ? store.appLimitNow(pkg) : store.appLimit(pkg);
+        int opens = effective ? store.appOpensNow(pkg) : store.appOpens(pkg);
+        int session = effective ? store.appSessionNow(pkg) : store.appSession(pkg);
         if (!lock && limit <= 0 && opens <= 0 && session <= 0) {
             return null;
         }
@@ -301,9 +317,12 @@ public class AppsActivity extends SubActivity {
                 .secondary("Otkaži", null)
                 .primary("Sačuvaj", () -> {
                     boolean wantLock = lock.isChecked();
-                    int wantLimit = Ui.parseInt(limit.getText().toString());
-                    int wantOpens = Ui.parseInt(opens.getText().toString());
-                    int wantSession = Ui.parseInt(session.getText().toString());
+                    Integer wantLimit = Ui.nonNegativeNumber(limit);
+                    if (wantLimit == null) return false;
+                    Integer wantOpens = Ui.nonNegativeNumber(opens);
+                    if (wantOpens == null) return false;
+                    Integer wantSession = Ui.nonNegativeNumber(session);
+                    if (wantSession == null) return false;
                     boolean adding = wantLock || wantLimit > 0 || wantOpens > 0 || wantSession > 0;
                     saveGuarding(it.pkg, it.label, adding, () -> {
                         store.setApp(it.pkg, wantLock, wantLimit, wantOpens, wantSession);

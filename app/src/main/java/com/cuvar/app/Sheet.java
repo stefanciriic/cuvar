@@ -58,7 +58,14 @@ final class Sheet {
         ScrollView scroll = new ScrollView(c) {
             @Override
             protected void onMeasure(int widthSpec, int heightSpec) {
-                super.onMeasure(widthSpec, MeasureSpec.makeMeasureSpec(maxHeight, MeasureSpec.AT_MOST));
+                int available = maxHeight;
+                if (MeasureSpec.getMode(heightSpec) != MeasureSpec.UNSPECIFIED) {
+                    // Roditelj je već odbio naslov i padding. Dugmad dolaze posle sadržaja,
+                    // zato njihov prostor rezervišemo pre merenja skrolujućeg dela.
+                    available = Math.min(available, Math.max(0,
+                            MeasureSpec.getSize(heightSpec) - footerHeight(widthSpec)));
+                }
+                super.onMeasure(widthSpec, MeasureSpec.makeMeasureSpec(available, MeasureSpec.AT_MOST));
             }
         };
         scroll.addView(body);
@@ -71,6 +78,18 @@ final class Sheet {
         frame.addView(box, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM));
         dialog.setContentView(frame);
+    }
+
+    private int footerHeight(int widthSpec) {
+        int total = measuredHeightWithMargins(buttons, widthSpec);
+        if (danger != null) total += measuredHeightWithMargins(danger, widthSpec);
+        return total;
+    }
+
+    private int measuredHeightWithMargins(View view, int widthSpec) {
+        view.measure(widthSpec, View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+        LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams) view.getLayoutParams();
+        return view.getMeasuredHeight() + lp.topMargin + lp.bottomMargin;
     }
 
     /** Kratko objašnjenje ispod naslova. */

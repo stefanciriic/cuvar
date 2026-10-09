@@ -24,20 +24,13 @@ jobs:
           if [ -n "${JAVA_HOME_17_X64:-}" ]; then echo "JAVA_HOME=${JAVA_HOME_17_X64}" >> "$GITHUB_ENV"; fi
           echo "RUN_NO=$(( ${{ github.run_number }} + 100 ))" >> "$GITHUB_ENV"
 
-      - name: Proveri vremenske periode
+      - name: Proveri pravila, vreme i pitanja
         run: |
-          javac -encoding UTF-8 -d "$RUNNER_TEMP/schedule-tests" app/src/main/java/com/cuvar/app/DailySchedule.java app/src/main/java/com/cuvar/app/DailyCode.java tests/com/cuvar/app/DailyScheduleTest.java
-          java -cp "$RUNNER_TEMP/schedule-tests" com.cuvar.app.DailyScheduleTest
-
-      - name: Proveri ukupni dnevni limit
-        run: |
-          javac -encoding UTF-8 -d "$RUNNER_TEMP/daylimit-tests" app/src/main/java/com/cuvar/app/DayLimit.java tests/com/cuvar/app/DayLimitTest.java
-          java -cp "$RUNNER_TEMP/daylimit-tests" com.cuvar.app.DayLimitTest
-
-      - name: Proveri pitanja za otključavanje
-        run: |
-          javac -encoding UTF-8 -d "$RUNNER_TEMP/quiz-tests" app/src/main/java/com/cuvar/app/Quiz.java app/src/main/java/com/cuvar/app/QuizBank.java tests/com/cuvar/app/QuizTest.java
-          java -cp "$RUNNER_TEMP/quiz-tests" com.cuvar.app.QuizTest
+          out="$RUNNER_TEMP/core-tests"
+          javac --release 11 -encoding UTF-8 -d "$out" $(grep -v '^#' tests/sources.txt) tests/com/cuvar/app/*Test.java
+          for t in tests/com/cuvar/app/*Test.java; do
+            java -Dfile.encoding=UTF-8 -cp "$out" "com.cuvar.app.$(basename "$t" .java)"
+          done
 
       - name: Napravi APK
         run: |

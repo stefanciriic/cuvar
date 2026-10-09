@@ -22,6 +22,7 @@ public final class DailyScheduleTest {
         check("09:00".equals(DailySchedule.label(540)), "Format kraja", 540);
         multipleRules();
         weekDays();
+        tightening();
         dailyCode();
         System.out.println("Prošlo: " + checks + " provera.");
     }
@@ -111,6 +112,67 @@ public final class DailyScheduleTest {
             seen.add(code);
         }
         check(seen.size() == 28, "Svaki dan nova šifra", 0);
+    }
+
+    private static void tightening() {
+        DailySchedule.Rule early = rule("same", true, 0, 60, "com.game", "example.com");
+        early.days = 1;
+        DailySchedule.Rule overnight = rule("same", true, 23 * 60, 2 * 60, "com.game", "example.com");
+        overnight.days = 1;
+        check(!DailySchedule.coversWeek(overnight, early), "Ponedeljak nije utorak", 0);
+        List<DailySchedule.Rule> combined = DailySchedule.tighten(Arrays.asList(early), Arrays.asList(overnight));
+        check(combined.size() == 2, "Nespojivi periodi ostaju oba", 0);
+        verifyUnion(Arrays.asList(early, overnight), combined);
+        check(early.start == 0 && early.end == 60, "Staro pravilo nije izmenjeno", 0);
+        check(overnight.start == 23 * 60, "Novo pravilo nije izmenjeno", 0);
+
+        DailySchedule.Rule third = rule("same", true, 12 * 60, 13 * 60, "com.other", "sub.example.com");
+        third.days = 1 << 4;
+        List<DailySchedule.Rule> repeated = DailySchedule.tighten(combined, Arrays.asList(third));
+        verifyUnion(Arrays.asList(early, overnight, third), repeated);
+        verifyUnion(repeated, DailySchedule.tighten(repeated, Arrays.asList()));
+
+        DailySchedule.Rule disabled = DailySchedule.copy(third);
+        disabled.enabled = false;
+        verifyUnion(repeated, DailySchedule.tighten(repeated, Arrays.asList(disabled)));
+
+        DailySchedule.Rule wider = DailySchedule.copy(overnight);
+        wider.days = DailySchedule.ALL_DAYS;
+        wider.start = 22 * 60;
+        List<DailySchedule.Rule> covered = DailySchedule.tighten(combined, Arrays.asList(wider));
+        check(covered.size() == 1, "Pravi nadskup uklanja suvišne segmente", 0);
+        verifyUnion(Arrays.asList(wider), covered);
+        check(DailySchedule.tighten(covered, Arrays.asList(wider)).size() == 1, "Ista izmena ne gomila segmente", 0);
+
+        DailySchedule.Rule code = DailySchedule.copy(early);
+        code.code = true;
+        List<DailySchedule.Rule> withCode = DailySchedule.tighten(Arrays.asList(code), Arrays.asList(overnight));
+        check(DailySchedule.codeApp(withCode, "com.game") != null, "Stara šifra ostaje", 0);
+
+        java.util.Random random = new java.util.Random(271828);
+        for (int i = 0; i < 24; i++) {
+            DailySchedule.Rule a = rule("same", true, random.nextInt(1440), random.nextInt(1440), "com.game", "example.com");
+            DailySchedule.Rule b = rule("same", true, random.nextInt(1440), random.nextInt(1440), "com.other", "sub.example.com");
+            a.days = 1 + random.nextInt(DailySchedule.ALL_DAYS);
+            b.days = 1 + random.nextInt(DailySchedule.ALL_DAYS);
+            verifyUnion(Arrays.asList(a, b), DailySchedule.tighten(Arrays.asList(a), Arrays.asList(b)));
+        }
+    }
+
+    /** Za svaki minut nedelje važe tačno ograničenja bar jednog izvornog segmenta. */
+    private static void verifyUnion(List<DailySchedule.Rule> expected, List<DailySchedule.Rule> actual) {
+        for (int day = 0; day < 7; day++) {
+            for (int minute = 0; minute < 1440; minute++) {
+                for (String app : Arrays.asList("com.game", "com.other")) {
+                    check((DailySchedule.blockingApp(expected, app, minute, day) != null)
+                            == (DailySchedule.blockingApp(actual, app, minute, day) != null), "Unija aplikacije " + day, minute);
+                }
+                for (String site : Arrays.asList("example.com", "sub.example.com")) {
+                    check((DailySchedule.blockingSite(expected, site, minute, day) != null)
+                            == (DailySchedule.blockingSite(actual, site, minute, day) != null), "Unija sajta " + day, minute);
+                }
+            }
+        }
     }
 
     private static DailySchedule.Rule rule(String name, boolean enabled, int start, int end, String app, String site) {

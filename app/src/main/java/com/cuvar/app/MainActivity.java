@@ -36,12 +36,18 @@ public class MainActivity extends Activity {
     private Store store;
     private boolean dark;
     private LinearLayout nowBox; // sadržaj kartice „Sada“, osvežava se dok je ekran otvoren
+    private LinearLayout todaySlot;
+    private LinearLayout codeSlot;
+    private TextView subtitle;
+    private String shownDate;
+    private String shownCodeState;
     private final Handler h = new Handler(Looper.getMainLooper());
     private final Runnable refreshNow = new Runnable() {
         @Override
         public void run() {
             fillNow();
-            h.postDelayed(this, 30000L);
+            refreshTimedCards();
+            h.postDelayed(this, nextRefreshDelay());
         }
     };
 
@@ -107,7 +113,7 @@ public class MainActivity extends Activity {
             showToday();
         }
         h.removeCallbacks(refreshNow);
-        h.postDelayed(refreshNow, 30000L);
+        h.postDelayed(refreshNow, nextRefreshDelay());
     }
 
     /** Naslov kartice sa zupčanikom za podešavanja desno. */
@@ -124,15 +130,15 @@ public class MainActivity extends Activity {
         gear.setOnClickListener(v -> showSettings());
         top.addView(gear);
         col.addView(top);
-        col.addView(Ui.text(this, sub, 14, Ui.MUTED, false), Ui.fill(this, 2));
+        subtitle = Ui.text(this, sub, 14, Ui.MUTED, false);
+        col.addView(subtitle, Ui.fill(this, 2));
         return col;
     }
 
     /** Kartica Danas: šta važi sada, vreme danas i dnevna šifra. */
     private void showToday() {
-        String date = new SimpleDateFormat("EEEE, d. MMMM",
-                new Locale.Builder().setLanguage("sr").setScript("Latn").build()).format(new Date());
-        LinearLayout col = titled("Čuvar", date);
+        shownDate = dateLabel();
+        LinearLayout col = titled("Čuvar", shownDate);
 
         boolean enabled = GuardService.isEnabled(this);
         if (!enabled) {
@@ -150,14 +156,21 @@ public class MainActivity extends Activity {
         col.addView(nowCard(), Ui.fill(this, 8));
 
         col.addView(Ui.section(this, "Danas"), Ui.fill(this, 24));
-        col.addView(todayCard(enabled), Ui.fill(this, 8));
-        col.addView(codeCard(), Ui.fill(this, 10));
+        todaySlot = Ui.column(this);
+        todaySlot.addView(todayCard(enabled));
+        col.addView(todaySlot, Ui.fill(this, 8));
+        codeSlot = Ui.column(this);
+        codeSlot.addView(codeCard());
+        shownCodeState = codeState();
+        col.addView(codeSlot, Ui.fill(this, 10));
         setScreen(col);
     }
 
     /** Kartica Pravila: ukupni limit i noćna blokada na vrhu, pa pravila po aplikaciji i sajtu. */
     private void showRules() {
         nowBox = null;
+        todaySlot = null;
+        codeSlot = null;
         LinearLayout col = titled("Pravila", "Pooštravanje važi odmah, a popuštanje tek sutra od 0"
                 + DailyCode.NIGHT_END_HOUR + ":00.");
 
@@ -167,16 +180,18 @@ public class MainActivity extends Activity {
         col.addView(Ui.section(this, "Za ceo telefon"), Ui.fill(this, 24));
         LinearLayout whole = group();
         groupRow(whole, "Ukupni dnevni limit", dayLimitSummary(), v -> chooseDayLimit());
-        groupRow(whole, "Noćna blokada", store.nightBlock()
+        groupRow(whole, "Noćna blokada", store.nightBlockNow()
                 ? "Uključena · od " + DailyCode.LOCK_HOUR + ":00 do 0" + DailyCode.NIGHT_END_HOUR + ":00 sve iz pravila je zaključano"
+                    + (store.nightBlock() ? "" : " · isključuje se od sledećih 06:00")
                 : "Isključena", v -> chooseNight());
-        groupRow(whole, "Zaštita od isključivanja", store.protectSelf()
+        groupRow(whole, "Zaštita od isključivanja", store.protectNow()
                 ? "Uključena · Čuvar ne može da se isključi ni obriše"
+                    + (store.protectSelf() ? "" : " · isključuje se od sledećih 06:00")
                 : "Isključena", v -> chooseProtect());
         col.addView(whole, Ui.fill(this, 8));
 
-        int appRules = store.appRuleCount();
-        int siteRules = store.siteList().size();
+        int appRules = store.appListNow().size();
+        int siteRules = store.siteListNow().size();
         col.addView(Ui.section(this, "Po aplikaciji i sajtu"), Ui.fill(this, 24));
         LinearLayout rules = group();
         groupRow(rules, "Sva pravila na jednom mestu",
@@ -200,6 +215,39 @@ public class MainActivity extends Activity {
     }
 
     // ---------- Kartica „Sada“ ----------
+
+    private static long nextRefreshDelay() {
+        return Math.min(30000L, 60000L - System.currentTimeMillis() % 60000L);
+    }
+
+    private String dateLabel() {
+        return new SimpleDateFormat("EEEE, d. MMMM",
+                new Locale.Builder().setLanguage("sr").setScript("Latn").build()).format(new Date());
+    }
+
+    private String codeState() {
+        DailySchedule.Rule active = store.activeCodeRule();
+        if (active != null) return "hidden:" + active.id + ":" + active.name + ":" + active.end;
+        return store.dailyCodeVisible() ? "visible:" + store.dailyCode() : "unavailable";
+    }
+
+    /** Menja samo kartice čiji je vremenski sadržaj promenjen; dijalozi i skrol ostaju otvoreni. */
+    private void refreshTimedCards() {
+        if (todaySlot == null || codeSlot == null) return;
+        String date = dateLabel();
+        if (!date.equals(shownDate)) {
+            shownDate = date;
+            subtitle.setText(date);
+            todaySlot.removeAllViews();
+            todaySlot.addView(todayCard(GuardService.isEnabled(this)));
+        }
+        String state = codeState();
+        if (!state.equals(shownCodeState)) {
+            shownCodeState = state;
+            codeSlot.removeAllViews();
+            codeSlot.addView(codeCard());
+        }
+    }
 
     private View nowCard() {
         LinearLayout card = Ui.card(this);
@@ -538,12 +586,18 @@ public class MainActivity extends Activity {
     }
 
     private String scheduleSummary() {
-        List<DailySchedule.Rule> rules = store.schedules();
+        List<DailySchedule.Rule> rules = store.schedulesNow();
         if (rules.isEmpty()) return "Još nema režima";
-        int on = 0;
-        for (DailySchedule.Rule r : rules) if (r.enabled) on++;
-        if (rules.size() == 1) return (on == 1 ? "Uključen · " : "Isključen · ") + rules.get(0).label();
-        return rules.size() + " režima · uključeno " + on;
+        java.util.Set<String> ids = new java.util.HashSet<>(), enabled = new java.util.HashSet<>();
+        java.util.Set<String> periods = new java.util.LinkedHashSet<>();
+        for (DailySchedule.Rule r : rules) {
+            ids.add(r.id);
+            if (r.enabled) enabled.add(r.id);
+            periods.add(r.label());
+        }
+        if (ids.size() == 1) return (enabled.isEmpty() ? "Isključen · " : "Uključen · ")
+                + android.text.TextUtils.join("; ", periods);
+        return ids.size() + " režima · uključeno " + enabled.size();
     }
 
     /** Popuštanja pravila koja čekaju sutra, sa dugmetom da se od njih odustane; null ako ih nema. */

@@ -16,6 +16,7 @@ import android.view.Window;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.widget.LinearLayout;
+import android.widget.EditText;
 import android.widget.TextView;
 
 /** Boje i mali pomoćnici za pravljenje ekrana bez XML-a. */
@@ -288,11 +289,17 @@ final class Ui {
         return (ms / 1000L) + " s";
     }
 
-    static int parseInt(String s) {
+    /** Ne pretvara grešku u nulu: nula menja značenje pravila. */
+    static Integer nonNegativeNumber(EditText field) {
         try {
-            return Math.max(0, Integer.parseInt(s.trim()));
+            int value = Integer.parseInt(field.getText().toString().trim());
+            if (value < 0) throw new NumberFormatException();
+            field.setError(null);
+            return value;
         } catch (Exception e) {
-            return 0;
+            field.setError("Unesi ceo broj od 0 do 2147483647");
+            field.requestFocus();
+            return null;
         }
     }
 }

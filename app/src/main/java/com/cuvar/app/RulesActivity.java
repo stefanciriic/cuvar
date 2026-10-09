@@ -73,10 +73,11 @@ public class RulesActivity extends SubActivity {
         adds.addView(addSite, half2);
         content.addView(adds, Ui.fill(this, 14));
 
-        List<DailySchedule.Rule> rules = store.schedules();
+        List<DailySchedule.Rule> rules = store.schedulesNow();
 
         Set<String> apps = new LinkedHashSet<>();
         for (DailySchedule.Rule r : rules) apps.addAll(r.apps);
+        apps.addAll(store.appListNow());
         for (String pkg : store.appList()) apps.add(pkg);
         content.addView(Ui.section(this, "Aplikacije"), Ui.fill(this, 26));
         if (apps.isEmpty()) empty("Još nema pravila za aplikacije.");
@@ -90,7 +91,8 @@ public class RulesActivity extends SubActivity {
             content.addView(itemCard(a[1], icon, appLines(a[0], rules), v -> editApp(a[0], a[1])), Ui.fill(this, 10));
         }
 
-        Set<String> sites = new LinkedHashSet<>(store.siteList());
+        Set<String> sites = new LinkedHashSet<>(store.siteListNow());
+        sites.addAll(store.siteList());
         for (DailySchedule.Rule r : rules) sites.addAll(r.sites);
         content.addView(Ui.section(this, "Sajtovi"), Ui.fill(this, 26));
         if (sites.isEmpty()) empty("Još nema pravila za sajtove.");
@@ -116,6 +118,12 @@ public class RulesActivity extends SubActivity {
     }
 
     private List<Line> appLines(String pkg, List<DailySchedule.Rule> rules) {
+        List<Line> now = appLines(pkg, rules, true);
+        addPendingLines(now, appLines(pkg, store.schedules(), false));
+        return now;
+    }
+
+    private List<Line> appLines(String pkg, List<DailySchedule.Rule> rules, boolean effective) {
         List<Line> out = new ArrayList<>();
         boolean code = false;
         for (DailySchedule.Rule r : rules) {
@@ -125,19 +133,34 @@ public class RulesActivity extends SubActivity {
         }
         String rest = out.isEmpty() ? "Ceo dan: " : "Ostatak dana: ";
         List<String> parts = new ArrayList<>();
-        if (code || store.appLock(pkg)) parts.add("zaključana, otvara se dnevnom šifrom");
-        int limit = store.appLimit(pkg);
+        if (code || (effective ? store.appLockNow(pkg) : store.appLock(pkg))) parts.add("zaključana, otvara se dnevnom šifrom");
+        int limit = effective ? store.appLimitNow(pkg) : store.appLimit(pkg);
         if (limit > 0) parts.add("limit " + limit + " min (danas " + Ui.fmt(store.usedToday(pkg)) + ")");
-        int opens = store.appOpens(pkg);
+        int opens = effective ? store.appOpensNow(pkg) : store.appOpens(pkg);
         if (opens > 0) parts.add("najviše " + Ui.count(opens, "otvaranje", "otvaranja", "otvaranja")
                 + " (danas " + store.opensToday("app:" + pkg) + ")");
-        int session = store.appSession(pkg);
+        int session = effective ? store.appSessionNow(pkg) : store.appSession(pkg);
         if (session > 0) parts.add("najviše " + session + " min u komadu");
         out.add(new Line(rest + (parts.isEmpty() ? "slobodno" : android.text.TextUtils.join(", ", parts)), false));
         return out;
     }
 
     private List<Line> siteLines(String domain, List<DailySchedule.Rule> rules) {
+        List<Line> now = siteLines(domain, rules, true);
+        addPendingLines(now, siteLines(domain, store.schedules(), false));
+        return now;
+    }
+
+    private void addPendingLines(List<Line> now, List<Line> next) {
+        List<String> before = new ArrayList<>(), after = new ArrayList<>();
+        for (Line l : now) before.add(l.text);
+        for (Line l : next) after.add(l.text);
+        if (!before.equals(after)) {
+            now.add(new Line("Od sledećih 06:00: " + android.text.TextUtils.join("; ", after), false));
+        }
+    }
+
+    private List<Line> siteLines(String domain, List<DailySchedule.Rule> rules, boolean effective) {
         List<Line> out = new ArrayList<>();
         boolean code = false;
         for (DailySchedule.Rule r : rules) {
@@ -146,7 +169,7 @@ public class RulesActivity extends SubActivity {
             code |= r.enabled && r.code;
         }
         String rest = out.isEmpty() ? "Ceo dan: " : "Ostatak dana: ";
-        int limit = store.siteLimit(domain);
+        int limit = effective ? store.siteLimitNow(domain) : store.siteLimit(domain);
         String s;
         if (limit == 0) s = "uvek blokiran, otvara se dnevnom šifrom";
         else if (limit > 0) s = "limit " + limit + " min (danas " + Ui.fmt(store.usedToday("site:" + domain)) + ")";
@@ -268,9 +291,12 @@ public class RulesActivity extends SubActivity {
                 .secondary("Otkaži", null)
                 .primary("Sačuvaj", () -> {
                     boolean wantLock = lock.isChecked();
-                    int wantLimit = Ui.parseInt(limit.getText().toString());
-                    int wantOpens = Ui.parseInt(opens.getText().toString());
-                    int wantSession = Ui.parseInt(session.getText().toString());
+                    Integer wantLimit = Ui.nonNegativeNumber(limit);
+                    if (wantLimit == null) return false;
+                    Integer wantOpens = Ui.nonNegativeNumber(opens);
+                    if (wantOpens == null) return false;
+                    Integer wantSession = Ui.nonNegativeNumber(session);
+                    if (wantSession == null) return false;
                     boolean adding = wantLock || wantLimit > 0 || wantOpens > 0 || wantSession > 0;
                     for (CheckRow r : rows) adding |= r.isChecked();
                     saveGuarding(pkg, label, adding, () -> {
@@ -311,8 +337,10 @@ public class RulesActivity extends SubActivity {
         new Sheet(this, domain).view(box)
                 .secondary("Otkaži", null)
                 .primary("Sačuvaj", () -> {
+                    Integer want = -1;
+                    if (listed.isChecked()) want = Ui.nonNegativeNumber(limit);
+                    if (want == null) return false;
                     saveRules(rules, rows, domain, true);
-                    int want = listed.isChecked() ? Ui.parseInt(limit.getText().toString()) : -1;
                     if (want != current) {
                         if (want < 0) store.removeSite(domain); else store.setSite(domain, want);
                     }

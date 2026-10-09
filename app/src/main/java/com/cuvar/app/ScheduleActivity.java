@@ -68,7 +68,11 @@ public class ScheduleActivity extends SubActivity {
 
         View pending = MainActivity.pendingCard(this, store, this::render);
         if (pending != null) content.addView(pending, Ui.fill(this, 14));
-        List<DailySchedule.Rule> rules = store.schedules();
+        List<DailySchedule.Rule> rules = new ArrayList<>(store.schedules());
+        Set<String> listed = new HashSet<>();
+        for (DailySchedule.Rule r : rules) listed.add(r.id);
+        // Zakazano brisanje ne sme sakriti režim koji još blokira.
+        for (DailySchedule.Rule r : store.schedulesNow()) if (listed.add(r.id)) rules.add(r);
         content.addView(Ui.section(this, "Tvoji režimi"), Ui.fill(this, 26));
         if (rules.isEmpty()) empty("Još nema režima.");
         for (DailySchedule.Rule r : rules) content.addView(ruleCard(r), Ui.fill(this, 10));
@@ -91,30 +95,65 @@ public class ScheduleActivity extends SubActivity {
 
     /** Kartica režima: naziv i stanje u prvom redu, period i dani ispod, pa broj aplikacija i sajtova. */
     private View ruleCard(DailySchedule.Rule r) {
+        List<DailySchedule.Rule> effective = effectiveRules(r.id);
+        DailySchedule.Rule desired = store.schedule(r.id);
+        boolean pending = differs(effective, desired);
+        boolean enabledNow = false;
+        for (DailySchedule.Rule current : effective) enabledNow |= current.enabled;
         LinearLayout card = Ui.column(this);
         card.setBackground(Ui.pressable(Ui.CARD, Ui.SOFT, Ui.dp(this, 18)));
         int p = Ui.dp(this, 16);
         card.setPadding(Ui.dp(this, 18), p, p, p);
 
         LinearLayout top = Ui.row(this);
-        TextView name = Ui.text(this, r.name, 18, r.enabled ? Ui.INK : Ui.MUTED, true);
+        TextView name = Ui.text(this, r.name, 18, enabledNow ? Ui.INK : Ui.MUTED, true);
         name.setSingleLine(true);
         name.setEllipsize(android.text.TextUtils.TruncateAt.END);
         top.addView(name, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         if (store.scheduleActive(r.id)) top.addView(Ui.badge(this, "Traje sada", Ui.ACCENT), Ui.wrap(this, 8));
-        top.addView(r.enabled ? Ui.badge(this, "Uključen", Charts.good()) : Ui.badge(this, "Isključen", Ui.MUTED),
+        top.addView(enabledNow ? Ui.badge(this, "Uključen", Charts.good()) : Ui.badge(this, "Isključen", Ui.MUTED),
                 Ui.wrap(this, 8));
         card.addView(top);
 
-        card.addView(Ui.text(this, r.label() + "  ·  " + r.daysLabel(), 15, r.enabled ? Ui.INK : Ui.MUTED, false),
+        card.addView(Ui.text(this, effectiveDescription(effective), 15, enabledNow ? Ui.INK : Ui.MUTED, false),
                 Ui.fill(this, 6));
-        String items = (r.apps.isEmpty() && r.sites.isEmpty()) ? "Još ništa nije izabrano"
-                : Ui.count(r.apps.size(), "aplikacija", "aplikacije", "aplikacija") + "  ·  "
-                + Ui.count(r.sites.size(), "sajt", "sajta", "sajtova");
-        if (r.code) items += "  ·  dnevna šifra";
-        card.addView(Ui.text(this, items, 13, Ui.MUTED, false), Ui.fill(this, 4));
-        card.setOnClickListener(v -> open(r.id));
+        if (pending) card.addView(Ui.text(this, "Od sledećih 06:00: " + (desired == null
+                ? "režim se briše" : description(desired)), 13, Ui.ACCENT, false), Ui.fill(this, 6));
+        card.setOnClickListener(v -> {
+            if (desired != null) open(r.id);
+            else new Sheet(this, "Brisanje režima je zakazano")
+                    .message("Ovo još važi do sledećih 06:00:\n" + effectiveDescription(effective)
+                            + "\n\nZa odustajanje koristi karticu „Od sutra“ na listi režima.")
+                    .secondary("Zatvori", null).show();
+        });
         return card;
+    }
+
+    private List<DailySchedule.Rule> effectiveRules(String ruleId) {
+        List<DailySchedule.Rule> out = new ArrayList<>();
+        for (DailySchedule.Rule r : store.schedulesNow()) if (r.id.equals(ruleId)) out.add(r);
+        return out;
+    }
+
+    private boolean differs(List<DailySchedule.Rule> effective, DailySchedule.Rule desired) {
+        if (desired == null || effective.size() != 1) return true;
+        DailySchedule.Rule current = effective.get(0);
+        return current.enabled != desired.enabled || current.start != desired.start || current.end != desired.end
+                || current.days != desired.days || current.code != desired.code
+                || !current.apps.equals(desired.apps) || !current.sites.equals(desired.sites);
+    }
+
+    private String description(DailySchedule.Rule r) {
+        return (r.enabled ? "" : "Isključen · ") + r.label() + " · " + r.daysLabel()
+                + " · " + Ui.count(r.apps.size(), "aplikacija", "aplikacije", "aplikacija")
+                + " · " + Ui.count(r.sites.size(), "sajt", "sajta", "sajtova")
+                + (r.code ? " · dnevna šifra" : "");
+    }
+
+    private String effectiveDescription(List<DailySchedule.Rule> rules) {
+        List<String> lines = new ArrayList<>();
+        for (DailySchedule.Rule r : rules) lines.add(description(r));
+        return lines.isEmpty() ? "Bez aktivnih pravila" : android.text.TextUtils.join("\n", lines);
     }
 
     private View presetCard(String title, String sub, Runnable run) {
@@ -142,10 +181,18 @@ public class ScheduleActivity extends SubActivity {
             return;
         }
         page(rule.name, "Izaberi period i dane i dodaj aplikacije i sajtove koji će tada biti blokirani. Strože izmene važe odmah, a blaže (isključivanje, kraći period, manje dana, uklanjanje) tek sutra od 06:00.");
+        List<DailySchedule.Rule> effective = effectiveRules(id);
+        if (differs(effective, rule)) {
+            LinearLayout current = Ui.card(this);
+            current.addView(Ui.text(this, "Važi sada", 16, Ui.INK, true));
+            current.addView(Ui.text(this, effectiveDescription(effective), 14, Ui.MUTED, false), Ui.fill(this, 6));
+            current.addView(Ui.text(this, "Podešavanja ispod važe u potpunosti od sledećih 06:00. "
+                    + "Pooštravanje važi odmah.", 14, Ui.ACCENT, false), Ui.fill(this, 6));
+            content.addView(current, Ui.fill(this, 12));
+        }
         boolean active = store.scheduleActive(id);
         if (active) {
-            content.addView(Ui.text(this, "Režim je sada aktivan. Do " + DailySchedule.label(rule.end)
-                    + " ne može da se isključi, obriše, skrati ni da mu se promene dani, a aplikacije i sajtovi"
+            content.addView(Ui.text(this, "Režim je sada aktivan. Dok traje ne može da se isključi, obriše, skrati ni da mu se promene dani, a aplikacije i sajtovi"
                     + " mogu samo da se dodaju.", 14, Ui.ACCENT, true), Ui.fill(this, 12));
         }
         CheckRow enabled = new CheckRow(this, null, "Režim je uključen", "Blokira u izabranom periodu i danima");
@@ -153,6 +200,7 @@ public class ScheduleActivity extends SubActivity {
         enabled.setListener(checked -> {
             DailySchedule.Rule now = store.schedule(id);
             if (now != null && !store.setSchedule(id, now.name, checked, now.start, now.end)) refused();
+            else render();
         });
         content.addView(enabled, Ui.fill(this, 12));
         action("Naziv: " + rule.name, () -> editName(rule));
@@ -164,6 +212,7 @@ public class ScheduleActivity extends SubActivity {
         code.setChecked(rule.code);
         code.setListener(checked -> {
             if (!store.setScheduleCode(id, checked)) refused();
+            else render();
         });
         content.addView(code, Ui.fill(this, 12));
         content.addView(Ui.text(this, "Aplikacije", 20, Ui.INK, true), Ui.fill(this, 24));
@@ -369,7 +418,13 @@ public class ScheduleActivity extends SubActivity {
                 .secondary("Otkaži", null)
                 .primary("Sačuvaj", () -> {
                     boolean ok = true;
-                    for (AppItem it : items) ok &= store.setScheduleApp(id, it.pkg, selected.contains(it.pkg));
+                    DailySchedule.Rule current = store.schedule(id);
+                    if (current != null) {
+                        for (AppItem it : items) {
+                            boolean want = selected.contains(it.pkg);
+                            if (want != current.apps.contains(it.pkg)) ok &= store.setScheduleApp(id, it.pkg, want);
+                        }
+                    }
                     if (!ok) refused(); else render();
                     return true;
                 }).show();

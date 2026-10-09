@@ -1,3 +1,47 @@
+# Pokretanje svih automatskih provera
+
+Iz korena projekta, uz instaliranu Javu 11 ili noviju i PowerShell:
+
+```powershell
+./tests/run.ps1
+```
+
+Android SDK nije potreban za ove testove. Spisak čistih Java klasa je u
+`tests/sources.txt`; skripta automatski pokreće sve `*Test.java` klase.
+GitHub pri svakom push-u na `main` pokreće iste testove (`tests/sources.txt`),
+pa tek onda pravi APK.
+
+Regresione provere pokrivaju roditeljske domene, granice intervala korišćenja,
+ponoć, letnje/zimsko računanje vremena, nedeljne unije rasporeda i nečitljivu
+adresnu traku. Merenje zasnovano na događajima i njegovo povezivanje sa Androidom
+treba dodatno proveriti na telefonu:
+
+1. Koristi A četiri sekunde pa B jednu: vreme treba da pripadne odgovarajućoj
+   aplikaciji, i da se sačuva ako odmah ugasiš ekran ili otvoriš blokiranu stavku.
+2. Blokiraj `facebook.com`, a dodaj `m.facebook.com` sa 60 minuta: roditeljska
+   blokada i dalje važi. Kada roditelj ima vremenski limit, korišćenje poddomena
+   troši i roditeljski limit.
+3. Bez globalne noćne blokade, izmeni neaktivan ponedeljni režim `00:00–01:00`
+   u `23:00–02:00`: do sledećih 06:00 važe oba perioda. Proveri čuvanje posle
+   ponovnog pokretanja i „Otkaži odložene promene“.
+4. Posle brisanja/povećanja pravila lista pokazuje sadašnje ograničenje i
+   posebno promenu od 06:00; obrisana stavka ostaje vidljiva dok blokada važi.
+5. Ostavi početni ekran otvoren preko 17:00, 22:00 i ponoći: šifra i datum se
+   osvežavaju bez zatvaranja otvorenog dijaloga.
+6. Broj `2147483648`, negativan ili prazan unos ne sme sačuvati novo pravilo.
+   Proveri dijaloge sa tastaturom/velikim fontom i stanje kvačice uz TalkBack.
+7. U podeljenom ekranu promeni sajt u nefokusiranom pregledaču: njegova pravila
+   i vreme sajta i dalje važe. Ukupno vreme telefona računa fokusiranu aplikaciju,
+   tako da istovremeno prikazane aplikacije ne dupliraju ukupan zbir.
+8. Podržan pregledač bez prethodno pročitane adrese prikazuje objašnjenje blokade
+   kada postoje pravila za sajtove. Sakrivena traka tokom videa zadržava poslednji
+   potvrđen domen istog prozora; ovo je heuristika, ne prepoznavanje sadržaja videa.
+9. Potroši otvaranja A, pređi u B pa brzo nazad u A: blokada ostaje. Ponovi sa
+   nedovršenom pauzom pre otvaranja i sa već dozvoljenom sesijom.
+
+Lokalna dijagnostika koristi tag `CuvarGuard` i beleži samo naziv operacije i
+klasu greške (bez URL-a, naziva aplikacije, poruke izuzetka ili sadržaja ekrana).
+
 # Vremenski režim
 
 Automatska provera svih minuta u danu za noćni i dnevni period, prazni period i granice u ponoć, kao i za više režima (svaki sa svojim periodom, aplikacijama i sajtovima, uključujući period preko ponoći i isključen režim):
