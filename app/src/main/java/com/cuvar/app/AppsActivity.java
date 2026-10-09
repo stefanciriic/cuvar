@@ -300,10 +300,16 @@ public class AppsActivity extends SubActivity {
                 .view(box)
                 .secondary("Otkaži", null)
                 .primary("Sačuvaj", () -> {
-                    store.setApp(it.pkg, lock.isChecked(), Ui.parseInt(limit.getText().toString()),
-                            Ui.parseInt(opens.getText().toString()), Ui.parseInt(session.getText().toString()));
-                    pendingToast();
-                    applyFilter();
+                    boolean wantLock = lock.isChecked();
+                    int wantLimit = Ui.parseInt(limit.getText().toString());
+                    int wantOpens = Ui.parseInt(opens.getText().toString());
+                    int wantSession = Ui.parseInt(session.getText().toString());
+                    boolean adding = wantLock || wantLimit > 0 || wantOpens > 0 || wantSession > 0;
+                    saveGuarding(it.pkg, it.label, adding, () -> {
+                        store.setApp(it.pkg, wantLock, wantLimit, wantOpens, wantSession);
+                        pendingToast();
+                        applyFilter();
+                    });
                     return true;
                 });
         if (store.hasAppRule(it.pkg)) {

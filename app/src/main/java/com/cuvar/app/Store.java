@@ -1203,6 +1203,13 @@ final class Store {
     }
 
     /** Servis beleži da je limit potrošen, pa se posle toga danas više ne može povećati. */
+    /** Zašto bi aplikacija bez pravila bila zaključana do jutra čim dobije pravilo, ili null. */
+    synchronized String lockedOnceGuarded() {
+        if (nightActive()) return "Sada traje noćna blokada";
+        if (dayLimit() > 0 && dayLimitHitToday()) return "Ukupni dnevni limit je danas potrošen";
+        return null;
+    }
+
     synchronized void markDayLimitHit() {
         String d = day();
         if (!d.equals(sp.getString("dayLimitHit", null))) sp.edit().putString("dayLimitHit", d).apply();

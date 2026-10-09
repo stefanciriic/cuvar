@@ -53,4 +53,25 @@ abstract class SubActivity extends Activity {
         box.addView(Ui.text(this, sub, 14, Ui.MUTED, false), Ui.fill(this, 4));
         return box;
     }
+
+    /**
+     * Kad je dnevni limit potrošen ili traje noćna blokada, aplikacija bez pravila se zaključava čim dobije pravilo,
+     * a pravilo se skida tek sutra. Zato se pre toga pita, da se to ne desi slučajno.
+     */
+    protected void saveGuarding(String pkg, String label, boolean adding, Runnable save) {
+        String why = adding && !store.appGuarded(pkg) ? store.lockedOnceGuarded() : null;
+        if (why == null) {
+            save.run();
+            return;
+        }
+        new Sheet(this, "Zaključaće se odmah")
+                .message(why + ". Čim " + label + " dobije pravilo, zaključava se do sutra ujutru, "
+                        + "a pravilo može da se skine tek sutra od 06:00.")
+                .secondary("Otkaži", null)
+                .primary("Ipak dodaj", () -> {
+                    save.run();
+                    return true;
+                })
+                .show();
+    }
 }

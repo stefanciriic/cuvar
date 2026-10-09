@@ -267,17 +267,21 @@ public class RulesActivity extends SubActivity {
         new Sheet(this, label).view(box)
                 .secondary("Otkaži", null)
                 .primary("Sačuvaj", () -> {
-                    saveRules(rules, rows, pkg, false);
                     boolean wantLock = lock.isChecked();
                     int wantLimit = Ui.parseInt(limit.getText().toString());
                     int wantOpens = Ui.parseInt(opens.getText().toString());
                     int wantSession = Ui.parseInt(session.getText().toString());
-                    if (wantLock != store.appLock(pkg) || wantLimit != store.appLimit(pkg) || wantOpens != store.appOpens(pkg)
-                            || wantSession != store.appSession(pkg)) {
-                        store.setApp(pkg, wantLock, wantLimit, wantOpens, wantSession);
-                    }
-                    pendingToast();
-                    render();
+                    boolean adding = wantLock || wantLimit > 0 || wantOpens > 0 || wantSession > 0;
+                    for (CheckRow r : rows) adding |= r.isChecked();
+                    saveGuarding(pkg, label, adding, () -> {
+                        saveRules(rules, rows, pkg, false);
+                        if (wantLock != store.appLock(pkg) || wantLimit != store.appLimit(pkg) || wantOpens != store.appOpens(pkg)
+                                || wantSession != store.appSession(pkg)) {
+                            store.setApp(pkg, wantLock, wantLimit, wantOpens, wantSession);
+                        }
+                        pendingToast();
+                        render();
+                    });
                     return true;
                 }).show();
     }
