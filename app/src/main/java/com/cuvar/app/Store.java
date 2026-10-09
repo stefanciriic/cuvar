@@ -411,6 +411,11 @@ final class Store {
         return apps.has(pkg);
     }
 
+    /** Aplikacije sa PIN-om ili dnevnim limitom. */
+    synchronized List<String> appList() {
+        return keysOf(apps);
+    }
+
     synchronized int appRuleCount() {
         return apps.length();
     }

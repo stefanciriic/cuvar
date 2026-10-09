@@ -217,6 +217,9 @@ public class MainActivity extends Activity {
         int siteRules = store.siteList().size();
         col.addView(Ui.section(this, "Pravila"), Ui.fill(this, 24));
         LinearLayout rules = group();
+        groupRow(rules, "Sva pravila na jednom mestu",
+                "Šta je kad blokirano, po aplikaciji i sajtu",
+                v -> startActivity(new Intent(this, RulesActivity.class)));
         groupRow(rules, "Aplikacije",
                 appRules == 0 ? "Zaključaj PIN-om ili postavi dnevni limit" : "Pravila: " + appRules,
                 v -> startActivity(new Intent(this, AppsActivity.class)));
