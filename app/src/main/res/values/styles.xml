@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Tema prozora pri pokretanju; tamna verzija je u values-night, pa nema belog bljeska. -->
+    <style name="CuvarTheme" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/cuvar_bg</item>
+    </style>
     <!-- Biranje vremena u bojama Čuvara umesto podrazumevane plave/zelene. -->
     <style name="CuvarDialog" parent="@android:style/Theme.Material.Light.Dialog">
         <item name="android:colorAccent">#D9480F</item>

@@ -6,22 +6,32 @@ def runNo = (System.getenv('RUN_NO') ?: '1') as Integer
 
 android {
     namespace 'com.cuvar.app'
-    compileSdk 34
+    compileSdk 36
 
     defaultConfig {
         applicationId 'com.cuvar.app'
         minSdk 26
-        targetSdk 34
+        targetSdk 36
         versionCode runNo
         versionName "1.${runNo}"
     }
 
     signingConfigs {
+        // Ključ za APK sa GitHub-a (javan, samo da bi se nova verzija instalirala preko stare).
         fixed {
             storeFile file('cuvar.keystore')
             storePassword 'cuvar123'
             keyAlias 'cuvar'
             keyPassword 'cuvar123'
+        }
+        // Tajni ključ za slanje na Google Play (upload key); CI ga dobija iz GitHub tajni.
+        if (System.getenv('UPLOAD_STORE_FILE')) {
+            upload {
+                storeFile file(System.getenv('UPLOAD_STORE_FILE'))
+                storePassword System.getenv('UPLOAD_STORE_PASSWORD')
+                keyAlias System.getenv('UPLOAD_KEY_ALIAS') ?: 'upload'
+                keyPassword System.getenv('UPLOAD_KEY_PASSWORD') ?: System.getenv('UPLOAD_STORE_PASSWORD')
+            }
         }
     }
 
@@ -32,7 +42,9 @@ android {
         // Verzija koja se objavljuje: obično (ne razvojno) izdanje, potpisano istim ključem
         // kao ranije, pa se instalira preko postojeće verzije.
         release {
-            signingConfig signingConfigs.fixed
+            // -Pplay: paket za Google Play potpisan tajnim ključem (ako ga CI ima).
+            signingConfig project.hasProperty('play') && signingConfigs.findByName('upload') != null
+                    ? signingConfigs.upload : signingConfigs.fixed
             minifyEnabled false
         }
     }

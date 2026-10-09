@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Čuvar</string>
-    <string name="guard_desc">Čuvar prati koja je aplikacija otvorena i koji sajt je otvoren u pregledaču, da bi merio vreme, tražio PIN za zaključane aplikacije i blokirao izabrane sajtove. Podaci ostaju samo na ovom telefonu.</string>
+    <string name="guard_desc">Čuvar vidi koja je aplikacija otvorena i naziv sajta u pregledaču, da bi merio vreme na telefonu i blokirao aplikacije i sajtove koje izabereš. Ne čita poruke ni drugi tekst, nema dozvolu za internet i ništa ne šalje: svi podaci ostaju samo na ovom telefonu.</string>
 </resources>

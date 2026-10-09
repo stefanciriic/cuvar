@@ -6,6 +6,10 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+# Jedan build u isto vreme, pa izdanja izlaze redom.
+concurrency:
+  group: apk
+  cancel-in-progress: false
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -16,25 +20,9 @@ jobs:
       - name: Preuzmi kod
         run: |
           git clone "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" .
+          git checkout -q "${GITHUB_SHA}" # tačno onaj commit koji je pokrenuo build
           if [ -n "${JAVA_HOME_17_X64:-}" ]; then echo "JAVA_HOME=${JAVA_HOME_17_X64}" >> "$GITHUB_ENV"; fi
           echo "RUN_NO=$(( ${{ github.run_number }} + 100 ))" >> "$GITHUB_ENV"
-
-      # Radi samo jednom: raspakuje zip u obican projekat, dodaje Gradle wrapper i brise zip.
-      - name: Jednokratno - zip u obican projekat
-        run: |
-          ZIP="$(ls *.zip 2>/dev/null | sort -V | tail -n 1 || true)"
-          if [ -z "$ZIP" ]; then echo "Nema zip fajla, preskacem."; exit 0; fi
-          unzip -q -o "$ZIP"
-          curl -fsSL --retry 3 -o /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.9-bin.zip
-          unzip -q -o /tmp/gradle.zip -d /tmp
-          /tmp/gradle-8.9/bin/gradle --no-daemon wrapper --gradle-version 8.9
-          rm -f *.zip build.sh
-          printf '%s\n' '.gradle/' 'build/' 'local.properties' '*.apk' '.idea/' '*.iml' > .gitignore
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -q -m "Projekat raspakovan iz zip fajla"
-          git push -q
 
       - name: Proveri vremenske periode
         run: |
@@ -53,12 +41,29 @@ jobs:
 
       - name: Napravi APK
         run: |
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0" >/dev/null 2>&1 || true
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" >/dev/null 2>&1 || true
           chmod +x gradlew
           ./gradlew --no-daemon assembleRelease
+
+      # Paket za Google Play (.aab). Potpisuje se tajnim ključem iz GitHub tajni ako postoji,
+      # inače istim ključem kao APK (dovoljno za interno testiranje, ključ se kasnije menja).
+      - name: Napravi paket za Google Play
+        env:
+          UPLOAD_KEYSTORE_B64: ${{ secrets.UPLOAD_KEYSTORE_B64 }}
+          UPLOAD_STORE_PASSWORD: ${{ secrets.UPLOAD_STORE_PASSWORD }}
+          UPLOAD_KEY_PASSWORD: ${{ secrets.UPLOAD_KEY_PASSWORD }}
+          UPLOAD_KEY_ALIAS: ${{ secrets.UPLOAD_KEY_ALIAS }}
+        run: |
+          if [ -n "$UPLOAD_KEYSTORE_B64" ]; then
+            echo "$UPLOAD_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/upload.jks"
+            export UPLOAD_STORE_FILE="$RUNNER_TEMP/upload.jks"
+          fi
+          ./gradlew --no-daemon bundleRelease -Pplay
+          rm -f "$RUNNER_TEMP/upload.jks"
 
       - name: Objavi u Releases
         run: |
           cp app/build/outputs/apk/release/app-release.apk cuvar.apk
+          cp app/build/outputs/bundle/release/app-release.aab cuvar-play.aab
           gh release delete "v$RUN_NO" --repo "$REPO" --yes --cleanup-tag >/dev/null 2>&1 || true
-          gh release create "v$RUN_NO" cuvar.apk --repo "$REPO" --title "Cuvar v$RUN_NO" --notes "Preuzmi cuvar.apk ispod (Assets)."
+          gh release create "v$RUN_NO" cuvar.apk cuvar-play.aab --repo "$REPO" --title "Cuvar v$RUN_NO" --notes "Telefon: preuzmi cuvar.apk. Google Play: cuvar-play.aab se šalje u Play Console."

@@ -78,6 +78,7 @@ final class Store {
         workEveryDay();
         prune();
         loadEnforced();
+        if (sp.contains("pin")) sp.edit().remove("pin").apply(); // PIN više ne postoji, otključava samo dnevna šifra
     }
 
     private static JSONObject parse(String s) {
@@ -97,39 +98,9 @@ final class Store {
         return out;
     }
 
-    // ---------- PIN ----------
+    // ---------- Dnevna šifra: provera ----------
 
-    synchronized boolean hasPin() {
-        return sp.getString("pin", null) != null;
-    }
-
-    synchronized void setPin(String pin) {
-        sp.edit().putString("pin", hash(pin)).apply();
-        fails = 0;
-        blockedUntil = 0;
-    }
-
-    /** Vraća null ako je PIN tačan, inače poruku za korisnika. */
-    synchronized String tryPin(String pin) {
-        long now = SystemClock.elapsedRealtime();
-        if (now < blockedUntil) {
-            return "Previše pokušaja. Sačekaj " + ((blockedUntil - now) / 1000 + 1) + " s";
-        }
-        String saved = sp.getString("pin", null);
-        if (saved != null && saved.equals(hash(pin))) {
-            fails = 0;
-            return null;
-        }
-        fails++;
-        if (fails >= 5) {
-            fails = 0;
-            blockedUntil = now + 30000L;
-            return "Previše pokušaja. Sačekaj 30 s";
-        }
-        return "Pogrešan PIN";
-    }
-
-    /** Kao tryPin, ali za dnevnu šifru, koja važi samo od 17:00 do 22:00; pogrešni pokušaji se broje zajedno. */
+    /** Vraća null ako je dnevna šifra tačna, inače poruku. Važi samo od 17:00 do 22:00; 5 grešaka donosi 30 s čekanja. */
     synchronized String tryCode(String code) {
         long now = SystemClock.elapsedRealtime();
         if (now < blockedUntil) {
@@ -151,25 +122,11 @@ final class Store {
         return "Pogrešna dnevna šifra";
     }
 
-    private static String hash(String pin) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            byte[] d = md.digest(("cuvar:" + pin).getBytes(StandardCharsets.UTF_8));
-            StringBuilder sb = new StringBuilder();
-            for (byte b : d) {
-                sb.append(String.format(Locale.US, "%02x", b & 0xff));
-            }
-            return sb.toString();
-        } catch (Exception e) {
-            return "plain:" + pin;
-        }
-    }
-
     // ---------- Otključavanje sa pauzom ----------
 
-    /** Koliko se dugo sme koristiti posle otključavanja PIN-om. */
+    /** Koliko se dugo sme koristiti posle otključavanja šifrom. */
     static final long UNLOCK_USE_MS = 5 * 60000L;
-    /** Koliko posle toga nema nikakvog otključavanja, ni PIN-om. */
+    /** Koliko posle toga nema nikakvog otključavanja. */
     static final long UNLOCK_COOLDOWN_MS = 60 * 60000L;
 
     private static int bootCount(Context c) {
@@ -300,14 +257,14 @@ final class Store {
         try {
             if (!o.has("day")) {
                 // Pamti se koliko je ostalo do ponoći, pa pomeranje sata ne donosi novi dan ranije.
-                Calendar midnight = Calendar.getInstance();
+                Calendar midnight = calendarNow(); // pouzdano vreme, ne sat telefona
                 midnight.add(Calendar.DAY_OF_MONTH, 1);
                 midnight.set(Calendar.HOUR_OF_DAY, 0);
                 midnight.set(Calendar.MINUTE, 0);
                 midnight.set(Calendar.SECOND, 0);
                 midnight.set(Calendar.MILLISECOND, 0);
                 o.put("day", stamp());
-                o.put("toMidnight", midnight.getTimeInMillis() - System.currentTimeMillis());
+                o.put("toMidnight", midnight.getTimeInMillis() - now());
             }
             o.put("used", o.optInt("used", 0) + 1);
             o.put("key", key);

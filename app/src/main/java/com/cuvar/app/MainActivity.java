@@ -142,6 +142,7 @@ public class MainActivity extends Activity {
         col.addView(Ui.section(this, "Podešavanja"), Ui.fill(this, 24));
         LinearLayout settings = group();
         groupRow(settings, "Tema", Ui.THEME_NAMES[Ui.themeChoice(this)], v -> chooseTheme());
+        groupRow(settings, "Privatnost", "Šta Čuvar vidi i gde se čuva", v -> showPrivacy());
         col.addView(settings, Ui.fill(this, 8));
 
         TextView note = Ui.text(this,
@@ -568,12 +569,48 @@ public class MainActivity extends Activity {
 
     // ---------- Dozvole ----------
 
+    /**
+     * Objašnjenje i pristanak pre uključivanja Pristupačnosti, kako traže pravila Google Play-a:
+     * šta Čuvar vidi, zašto, i da ništa ne napušta telefon.
+     */
     private void openAccessibility() {
+        if (GuardService.isEnabled(this) || getSharedPreferences("ui", MODE_PRIVATE).getBoolean("a11yConsent", false)) {
+            openAccessibilitySettings();
+            return;
+        }
+        new Sheet(this, "Čuvar koristi Pristupačnost")
+                .message("Da bi merio vreme i blokirao ono što izabereš, Čuvar koristi Androidovu uslugu Pristupačnosti (AccessibilityService). Preko nje vidi:\n\n"
+                        + "•  koja je aplikacija trenutno otvorena,\n"
+                        + "•  adresu sajta u pregledaču (samo naziv sajta),\n"
+                        + "•  da bi preko blokirane aplikacije prikazao ekran za blokadu.\n\n"
+                        + "Čuvar ne čita poruke, lozinke ni drugi tekst sa ekrana, ne snima ekran i nema dozvolu za internet. "
+                        + "Sve što izmeri ostaje samo na ovom telefonu i briše se kad obrišeš aplikaciju.\n\n"
+                        + "Ako se slažeš, u sledećem koraku uključi „Čuvar“ u Pristupačnosti.")
+                .secondary("Ne sada", null)
+                .primary("Slažem se", () -> {
+                    getSharedPreferences("ui", MODE_PRIVATE).edit().putBoolean("a11yConsent", true).apply();
+                    openAccessibilitySettings();
+                    return true;
+                })
+                .show();
+    }
+
+    private void openAccessibilitySettings() {
         try {
             startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
         } catch (Throwable t) {
             Toast.makeText(this, "Otvori Podešavanja → Pristupačnost ručno", Toast.LENGTH_LONG).show();
         }
+    }
+
+    private void showPrivacy() {
+        new Sheet(this, "Privatnost")
+                .message("Čuvar nema dozvolu za internet i ne šalje nikakve podatke sa telefona. Nema naloga, reklama ni analitike.\n\n"
+                        + "Preko Pristupačnosti vidi koja je aplikacija otvorena i naziv sajta u pregledaču. Iz toga pamti samo "
+                        + "koliko si vremena proveo u kojoj aplikaciji i na kom sajtu, za poslednjih 14 dana, i tvoja pravila.\n\n"
+                        + "Sve je sačuvano samo u memoriji Čuvara na ovom telefonu, ne ulazi u rezervnu kopiju i briše se kad obrišeš aplikaciju.")
+                .secondary("Zatvori", null)
+                .show();
     }
 
     private void showRestrictedHelp() {

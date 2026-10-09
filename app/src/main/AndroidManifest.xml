@@ -14,9 +14,10 @@
 
     <application
         android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
-        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        android:theme="@style/CuvarTheme">
 
         <activity
             android:name=".MainActivity"

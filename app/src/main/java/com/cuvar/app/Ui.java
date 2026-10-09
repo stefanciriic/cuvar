@@ -8,10 +8,13 @@ import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.StateListDrawable;
+import android.os.Build;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.Window;
+import android.view.WindowInsets;
+import android.view.WindowInsetsController;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -208,12 +211,38 @@ final class Ui {
         return lp;
     }
 
+    /**
+     * Boje sistemskih traka i razmak oko njih. Od Androida 15 ekran ide ispod statusne i navigacione trake
+     * (ceo ekran), pa sadržaj dobija razmak tačno koliki su trake i tastatura.
+     */
+    @SuppressWarnings("deprecation")
     static void styleWindow(Activity a) {
         Window w = a.getWindow();
-        w.setStatusBarColor(BG);
-        w.setNavigationBarColor(BG);
-        w.getDecorView().setSystemUiVisibility(dark ? 0
-                : View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+        w.getDecorView().setBackgroundColor(BG);
+        if (Build.VERSION.SDK_INT < 35) {
+            w.setStatusBarColor(BG);
+            w.setNavigationBarColor(BG);
+        }
+        if (Build.VERSION.SDK_INT >= 30) {
+            WindowInsetsController ic = w.getInsetsController();
+            if (ic != null) {
+                int light = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+                        | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
+                ic.setSystemBarsAppearance(dark ? 0 : light, light);
+            }
+        } else {
+            w.getDecorView().setSystemUiVisibility(dark ? 0
+                    : View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+        }
+        if (Build.VERSION.SDK_INT >= 35) {
+            View content = a.findViewById(android.R.id.content);
+            content.setOnApplyWindowInsetsListener((v, insets) -> {
+                android.graphics.Insets b = insets.getInsets(WindowInsets.Type.systemBars()
+                        | WindowInsets.Type.displayCutout() | WindowInsets.Type.ime());
+                v.setPadding(b.left, b.top, b.right, b.bottom);
+                return WindowInsets.CONSUMED;
+            });
+        }
     }
 
     static String fmt(long ms) {

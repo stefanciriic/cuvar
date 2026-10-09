@@ -817,7 +817,7 @@ public class GuardService extends AccessibilityService {
                 safeCheck(); // pauza je počela dok je tastatura bila otvorena
                 return;
             }
-            String err = code ? store.tryCode(pin) : store.tryPin(pin);
+            String err = store.tryCode(pin);
             if (err == null) {
                 store.startUnlock(key);
                 hideOverlay();
@@ -851,7 +851,7 @@ public class GuardService extends AccessibilityService {
                 pad.setMessage("Hitno otključavanje je danas već iskorišćeno");
                 return;
             }
-            String err = code ? store.tryCode(pin) : store.tryPin(pin);
+            String err = store.tryCode(pin);
             if (err == null) {
                 store.startEmergency(key);
                 hideOverlay();
