@@ -128,6 +128,9 @@ public class RulesActivity extends SubActivity {
         if (code || store.appLock(pkg)) parts.add("zaključana, otvara se dnevnom šifrom");
         int limit = store.appLimit(pkg);
         if (limit > 0) parts.add("limit " + limit + " min (danas " + Ui.fmt(store.usedToday(pkg)) + ")");
+        int opens = store.appOpens(pkg);
+        if (opens > 0) parts.add("najviše " + Ui.count(opens, "otvaranje", "otvaranja", "otvaranja")
+                + " (danas " + store.opensToday("app:" + pkg) + ")");
         out.add(new Line(rest + (parts.isEmpty() ? "slobodno" : android.text.TextUtils.join(", ", parts)), false));
         return out;
     }
@@ -246,7 +249,12 @@ public class RulesActivity extends SubActivity {
         EditText limit = Sheet.input(this, "0", true);
         limit.setText(String.valueOf(store.appLimit(pkg)));
         box.addView(limit, Ui.fill(this, 6));
-        box.addView(Ui.text(this, "Danas korišćeno: " + Ui.fmt(store.usedToday(pkg)), 13, Ui.MUTED, false),
+        box.addView(Sheet.label(this, "Najviše otvaranja dnevno (0 = bez ograničenja)"), Ui.fill(this, 14));
+        EditText opens = Sheet.input(this, "0", true);
+        opens.setText(String.valueOf(store.appOpens(pkg)));
+        box.addView(opens, Ui.fill(this, 6));
+        box.addView(Ui.text(this, "Danas korišćeno: " + Ui.fmt(store.usedToday(pkg)) + ", otvoreno "
+                + Ui.count(store.opensToday("app:" + pkg), "put", "puta", "puta"), 13, Ui.MUTED, false),
                 Ui.fill(this, 8));
 
         new Sheet(this, label).view(box)
@@ -255,8 +263,9 @@ public class RulesActivity extends SubActivity {
                     saveRules(rules, rows, pkg, false);
                     boolean wantLock = lock.isChecked();
                     int wantLimit = Ui.parseInt(limit.getText().toString());
-                    if (wantLock != store.appLock(pkg) || wantLimit != store.appLimit(pkg)) {
-                        store.setApp(pkg, wantLock, wantLimit);
+                    int wantOpens = Ui.parseInt(opens.getText().toString());
+                    if (wantLock != store.appLock(pkg) || wantLimit != store.appLimit(pkg) || wantOpens != store.appOpens(pkg)) {
+                        store.setApp(pkg, wantLock, wantLimit, wantOpens);
                     }
                     pendingToast();
                     render();

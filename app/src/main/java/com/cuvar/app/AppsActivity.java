@@ -103,7 +103,7 @@ public class AppsActivity extends SubActivity {
 
         LinearLayout root = Ui.column(this);
         root.setBackgroundColor(Ui.BG);
-        root.addView(header("Aplikacije", "Tapni aplikaciju da je zaključaš ili joj postaviš dnevni limit. Popuštanje važi tek sutra od 06:00."));
+        root.addView(header("Aplikacije", "Tapni aplikaciju da je zaključaš, postaviš dnevni limit ili broj otvaranja. Popuštanje važi tek sutra od 06:00."));
 
         EditText search = new EditText(this);
         search.setHint("Pretraži");
@@ -226,7 +226,8 @@ public class AppsActivity extends SubActivity {
     private String summary(String pkg) {
         boolean lock = store.appLock(pkg);
         int limit = store.appLimit(pkg);
-        if (!lock && limit <= 0) {
+        int opens = store.appOpens(pkg);
+        if (!lock && limit <= 0 && opens <= 0) {
             return null;
         }
         StringBuilder sb = new StringBuilder();
@@ -238,6 +239,12 @@ public class AppsActivity extends SubActivity {
                 sb.append(" · ");
             }
             sb.append("Limit ").append(limit).append(" min, danas ").append(Ui.fmt(store.usedToday(pkg)));
+        }
+        if (opens > 0) {
+            if (sb.length() > 0) {
+                sb.append(" · ");
+            }
+            sb.append("Otvaranja ").append(store.opensToday("app:" + pkg)).append(" od ").append(opens);
         }
         return sb.toString();
     }
@@ -267,21 +274,28 @@ public class AppsActivity extends SubActivity {
         limit.setText(String.valueOf(store.appLimit(it.pkg)));
         box.addView(limit, Ui.fill(this, 6));
 
-        box.addView(Ui.text(this, "Danas korišćeno: " + Ui.fmt(store.usedToday(it.pkg)), 13, Ui.MUTED, false),
+        box.addView(Sheet.label(this, "Najviše otvaranja dnevno (0 = bez ograničenja)"), Ui.fill(this, 16));
+        final EditText opens = Sheet.input(this, "0", true);
+        opens.setText(String.valueOf(store.appOpens(it.pkg)));
+        box.addView(opens, Ui.fill(this, 6));
+
+        box.addView(Ui.text(this, "Danas korišćeno: " + Ui.fmt(store.usedToday(it.pkg)) + ", otvoreno "
+                + Ui.count(store.opensToday("app:" + it.pkg), "put", "puta", "puta"), 13, Ui.MUTED, false),
                 Ui.fill(this, 8));
 
         Sheet sheet = new Sheet(this, it.label)
                 .view(box)
                 .secondary("Otkaži", null)
                 .primary("Sačuvaj", () -> {
-                    store.setApp(it.pkg, lock.isChecked(), Ui.parseInt(limit.getText().toString()));
+                    store.setApp(it.pkg, lock.isChecked(), Ui.parseInt(limit.getText().toString()),
+                            Ui.parseInt(opens.getText().toString()));
                     pendingToast();
                     applyFilter();
                     return true;
                 });
         if (store.hasAppRule(it.pkg)) {
             sheet.danger("Ukloni sva ograničenja", () -> {
-                store.setApp(it.pkg, false, 0);
+                store.setApp(it.pkg, false, 0, 0);
                 pendingToast();
                 applyFilter();
                 return true;

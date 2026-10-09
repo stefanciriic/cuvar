@@ -42,6 +42,7 @@ final class Store {
     private final JSONObject apps;   // paket -> {lock, limit}
     private final JSONObject sites;  // domen -> {limit}
     private final JSONObject usage;  // dan -> {ključ: ms}
+    private final JSONObject opens;  // dan -> {"app:paket" ili "try:ključ": koliko puta}
     private final List<DailySchedule.Rule> schedules = new ArrayList<>();
     // Pravila koja servis zaista primenjuje. Pooštravanje važi odmah, a popuštanje tek od sledećeg dana:
     // ovde ostaje strožija verzija dok se dan ne promeni (vidi enforce()).
@@ -73,6 +74,7 @@ final class Store {
         apps = parse(sp.getString("apps", "{}"));
         sites = parse(sp.getString("sites", "{}"));
         usage = parse(sp.getString("usage", "{}"));
+        opens = parse(sp.getString("opens", "{}"));
         migrateSchedule();
         loadSchedules();
         workEveryDay();
@@ -355,12 +357,19 @@ final class Store {
         return o == null ? 0 : o.optInt("limit", 0);
     }
 
+    /** Koliko puta dnevno sme da se otvori aplikacija (0 = bez ograničenja). */
+    synchronized int appOpens(String pkg) {
+        JSONObject o = apps.optJSONObject(pkg);
+        return o == null ? 0 : o.optInt("opens", 0);
+    }
+
     /** Aplikacije kojima je danas potrošen dnevni limit. */
     synchronized List<String> appsOverLimit() {
         List<String> out = new ArrayList<>();
         for (String pkg : keysOf(enforcedApps())) {
             int limit = appLimitNow(pkg);
-            if (limit > 0 && usedToday(pkg) >= limit * 60000L) out.add(pkg);
+            int max = appOpensNow(pkg);
+            if ((limit > 0 && usedToday(pkg) >= limit * 60000L) || (max > 0 && opensToday("app:" + pkg) >= max)) out.add(pkg);
         }
         return out;
     }
@@ -389,13 +398,18 @@ final class Store {
     }
 
     synchronized void setApp(String pkg, boolean lock, int limitMin) {
-        if (!lock && limitMin <= 0) {
+        setApp(pkg, lock, limitMin, appOpens(pkg));
+    }
+
+    synchronized void setApp(String pkg, boolean lock, int limitMin, int maxOpens) {
+        if (!lock && limitMin <= 0 && maxOpens <= 0) {
             apps.remove(pkg);
         } else {
             try {
                 JSONObject o = new JSONObject();
                 o.put("lock", lock);
                 o.put("limit", Math.max(0, limitMin));
+                o.put("opens", Math.max(0, maxOpens));
                 apps.put(pkg, o);
             } catch (JSONException ignored) {
             }
@@ -1226,9 +1240,10 @@ final class Store {
             JSONObject e = eApps.optJSONObject(pkg), d = apps.optJSONObject(pkg);
             boolean lock = (e != null && e.optBoolean("lock", false)) || (d != null && d.optBoolean("lock", false));
             int limit = minLimit(e == null ? 0 : e.optInt("limit", 0), d == null ? 0 : d.optInt("limit", 0));
-            if (!lock && limit <= 0) continue;
+            int max = minLimit(e == null ? 0 : e.optInt("opens", 0), d == null ? 0 : d.optInt("opens", 0));
+            if (!lock && limit <= 0 && max <= 0) continue;
             try {
-                na.put(pkg, new JSONObject().put("lock", lock).put("limit", limit));
+                na.put(pkg, new JSONObject().put("lock", lock).put("limit", limit).put("opens", max));
             } catch (JSONException ignored) {
             }
         }
@@ -1318,6 +1333,11 @@ final class Store {
         return o == null ? 0 : o.optInt("limit", 0);
     }
 
+    synchronized int appOpensNow(String pkg) {
+        JSONObject o = enforcedApps().optJSONObject(pkg);
+        return o == null ? 0 : o.optInt("opens", 0);
+    }
+
     synchronized int siteLimitNow(String domain) {
         JSONObject o = enforcedSites().optJSONObject(domain);
         return o == null ? -1 : o.optInt("limit", 0);
@@ -1344,6 +1364,8 @@ final class Store {
             int ei = appLimitNow(pkg), di = appLimit(pkg);
             if (el && !dl) out.add(name + ": bez zaključavanja");
             if (ei != di) out.add(name + ": " + (di <= 0 ? "bez dnevnog limita" : "limit " + di + " min umesto " + ei));
+            int eo = appOpensNow(pkg), dop = appOpens(pkg);
+            if (eo != dop) out.add(name + ": " + (dop <= 0 ? "bez ograničenja otvaranja" : "najviše " + dop + " otvaranja umesto " + eo));
         }
         for (String dom : keysOf(eSites)) {
             int ei = siteLimitNow(dom), di = siteLimit(dom);
@@ -1387,6 +1409,33 @@ final class Store {
         for (DailySchedule.Rule r : eSchedules) schedules.add(copy(r));
         sp.edit().putString("apps", apps.toString()).putString("sites", sites.toString())
                 .putString("schedules", schedulesJson()).putBoolean("night", eNight).apply();
+    }
+
+    // ---------- Broj otvaranja i pokušaja ----------
+
+    /** Koliko je danas puta otvoreno ("app:paket") ili pokušano ("try:ključ"). */
+    synchronized int opensToday(String key) {
+        JSONObject d = opens.optJSONObject(day());
+        return d == null ? 0 : d.optInt(key, 0);
+    }
+
+    /** Broji jedno otvaranje ili pokušaj; vraća novi broj za danas. */
+    synchronized int countOpen(String key) {
+        String k = day();
+        JSONObject d = opens.optJSONObject(k);
+        try {
+            if (d == null) {
+                d = new JSONObject();
+                opens.put(k, d);
+                List<String> days = keysOf(opens);
+                Collections.sort(days);
+                while (days.size() > 14) opens.remove(days.remove(0));
+            }
+            d.put(key, d.optInt(key, 0) + 1);
+        } catch (JSONException ignored) {
+        }
+        sp.edit().putString("opens", opens.toString()).apply();
+        return d.optInt(key, 0);
     }
 
     synchronized void flush() {

@@ -51,6 +51,8 @@ public class GuardService extends AccessibilityService {
     static volatile boolean running;
 
     private static final long TICK_MS = 5000L;
+    /** Povratak u istu aplikaciju za manje od ovoga ne računa se kao novo otvaranje. */
+    private static final long OPEN_GRACE_MS = 15000L;
 
     private static final int KIND_LOCK = 1;       // aplikacija zaključana PIN-om
     private static final int KIND_TIME = 2;       // istekao dnevni limit aplikacije
@@ -60,6 +62,7 @@ public class GuardService extends AccessibilityService {
     private static final int KIND_CODE = 6;       // van perioda režima, otključava se dnevnom šifrom
     private static final int KIND_NIGHT = 8;      // noćna blokada od 22:00, ništa se ne otključava do 06:00
     private static final int KIND_DAY = 7;        // potrošen ukupni dnevni limit, ništa se ne otključava do ponoći
+    private static final int KIND_OPENS = 9;      // potrošena otvaranja aplikacije za danas
 
     /** Pregledači i ID polja sa adresom u svakom od njih. */
     private static final Map<String, String> BROWSERS = new HashMap<>();
@@ -101,6 +104,10 @@ public class GuardService extends AccessibilityService {
     private boolean overlayCode;      // otključava se dnevnom šifrom umesto PIN-om
     private TextView cooldownLabel;  // odbrojavanje do sledećeg mogućeg otključavanja
     private Set<String> exempt;      // aplikacije koje se ne računaju u ukupni limit i ne blokiraju se zbog njega
+    private String pendingOpen;      // aplikacija upravo otvorena; broji se kad se zaista prikaže, bez blokade
+    private String opensBlocked;     // aplikacija otvorena posle potrošenih otvaranja; blokirana dok se ne izađe
+    private String lastLeftPkg;      // aplikacija iz koje se upravo izašlo
+    private long lastLeftAt;
     private long exemptAt;
 
     private final Runnable tick = new Runnable() {
@@ -323,9 +330,21 @@ public class GuardService extends AccessibilityService {
         }
 
         if (!pkg.equals(currentPkg)) {
+            long nowEl = SystemClock.elapsedRealtime();
+            // Kratak izlazak (deljenje, izbor fajla, dozvola) i povratak nije novo otvaranje.
+            boolean back = pkg.equals(lastLeftPkg) && nowEl - lastLeftAt < OPEN_GRACE_MS;
+            if (currentPkg != null) {
+                lastLeftPkg = currentPkg;
+                lastLeftAt = nowEl;
+            }
             currentPkg = pkg;
             currentSite = null;
             currentHost = null;
+            if (!back) {
+                int max = store.appOpensNow(pkg);
+                opensBlocked = max > 0 && store.opensToday("app:" + pkg) >= max ? pkg : null;
+                pendingOpen = opensBlocked == null && max > 0 ? pkg : null;
+            }
         }
 
         String urlBarId = BROWSERS.get(pkg);
@@ -368,6 +387,9 @@ public class GuardService extends AccessibilityService {
             } else if (site != null) {
                 blocks.add(new Block("site:" + site, KIND_NIGHT, null, false));
             }
+        }
+        if (pkg.equals(opensBlocked)) {
+            blocks.add(new Block(appKey, KIND_OPENS, null, false));
         }
         DailySchedule.Rule rule = store.scheduleBlockingApp(pkg);
         if (rule != null) {
@@ -416,6 +438,14 @@ public class GuardService extends AccessibilityService {
         }
         long coolLeft = show == null || hard(show.kind) ? 0 : store.cooldownLeft(show.key);
 
+        if (show != null && (overlay == null || !show.key.equals(overlayKey))) {
+            store.countOpen("try:" + show.key); // novi pokušaj da se otvori nešto blokirano
+        }
+        if (show == null && pkg.equals(pendingOpen)) {
+            store.countOpen("app:" + pkg); // otvaranje se broji tek kad se aplikacija zaista vidi
+            pendingOpen = null;
+        }
+
         if (show != null) {
             showOverlay(show.key, show.kind, show.rule, coolLeft > 0, show.code);
             if (cooldownLabel != null && coolLeft > 0) {
@@ -428,7 +458,8 @@ public class GuardService extends AccessibilityService {
 
     /** Blokade koje se ne otključavaju: vremenski režim, potrošen limit aplikacije, sajta ili ukupni. */
     private static boolean hard(int kind) {
-        return kind == KIND_SCHEDULE || kind == KIND_DAY || kind == KIND_NIGHT || kind == KIND_TIME || kind == KIND_SITE_TIME;
+        return kind == KIND_SCHEDULE || kind == KIND_DAY || kind == KIND_NIGHT || kind == KIND_TIME || kind == KIND_SITE_TIME
+                || kind == KIND_OPENS;
     }
 
     /** Početni ekran, Čuvar, pozivi i poruke: ne računaju se u ukupni limit i nikad se zbog njega ne blokiraju. */
@@ -621,6 +652,12 @@ public class GuardService extends AccessibilityService {
                     + DayLimit.label(store.dayLimit()) + ". " + name
                     + " je zaključan do ponoći i ne može da se otključa, ni šifrom.";
             joke = Jokes.pick(Jokes.TIME_UP);
+        } else if (kind == KIND_OPENS) {
+            String pkg = key.substring(4);
+            title = "Otvaranja za danas su potrošena";
+            sub = name + " si danas otvorio " + Ui.count(store.opensToday(key), "put", "puta", "puta") + ", a dozvoljeno je "
+                    + store.appOpensNow(pkg) + ". Do ponoći se ne otvara, ni šifrom.";
+            joke = Jokes.pick(Jokes.TIME_UP);
         } else if (kind == KIND_SCHEDULE && rule != null) {
             title = "Režim „" + rule.name + "“ je aktivan";
             sub = name + " je blokiran " + rule.daysLabel() + " od " + DailySchedule.label(rule.start)
@@ -671,10 +708,28 @@ public class GuardService extends AccessibilityService {
         s.setGravity(Gravity.CENTER);
         box.addView(s, Ui.fill(c, 8));
 
+        int tries = store.opensToday("try:" + key);
+        if (tries > 1) {
+            TextView tr = Ui.text(c, "Ovo ti je danas " + tries + ". pokušaj.", 15, 0xFFFFFFFF, true);
+            tr.setGravity(Gravity.CENTER);
+            box.addView(tr, Ui.fill(c, 10));
+        }
+
         TextView j = Ui.text(c, joke, 16, Ui.NIGHT_ACCENT, false);
         j.setGravity(Gravity.CENTER);
         j.setTypeface(Typeface.create("sans-serif", Typeface.ITALIC));
         box.addView(j, Ui.fill(c, 16));
+
+        // Najveće dugme na ekranu je izlaz: najlakši izbor je da odustaneš.
+        TextView close = overlayButton(c, "Zatvori");
+        close.setTextSize(17);
+        close.setBackground(Ui.pressable(Ui.ACCENT, Ui.ACCENT_DOWN, Ui.dp(c, 14)));
+        close.setOnClickListener(v -> {
+            performGlobalAction(GLOBAL_ACTION_HOME);
+            h.removeCallbacks(recheckSoon);
+            h.postDelayed(recheckSoon, 600);
+        });
+        box.addView(close, Ui.fill(c, 20));
 
         if (cooling) {
             // Pauza posle otključavanja: nema dugmeta ni PIN-a, samo odbrojavanje.
@@ -718,14 +773,7 @@ public class GuardService extends AccessibilityService {
             });
             actions.addView(back, actionParams(c));
         }
-        TextView home = overlayButton(c, isSite ? "Početni ekran" : "Izađi");
-        home.setOnClickListener(v -> {
-            performGlobalAction(GLOBAL_ACTION_HOME);
-            h.removeCallbacks(recheckSoon);
-            h.postDelayed(recheckSoon, 600);
-        });
-        actions.addView(home, actionParams(c));
-        box.addView(actions, Ui.fill(c, 18));
+        if (actions.getChildCount() > 0) box.addView(actions, Ui.fill(c, 12));
 
         scroll.addView(box, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT));

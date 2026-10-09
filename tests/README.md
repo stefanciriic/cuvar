@@ -67,3 +67,10 @@ Provera na telefonu:
 2. Povećaj limit: dodaje se najviše 30 % (do 1 h), 20 % (2 h) ili 10 % (od 4 h), i drugi put istog dana dugme je sivo. Isključivanje piše da važi od sutra.
 3. Postavi limit 15 min iznad današnjeg vremena: stiže upozorenje (jednom dnevno).
 4. Posle ponoći (po pouzdanom vremenu) blokada nestaje, a zakazana vrednost važi.
+
+# Broj otvaranja i dugme „Zatvori“
+
+1. U Aplikacijama izaberi aplikaciju i upiši „Najviše otvaranja dnevno“, npr. 2. Otvori je, izađi na početni ekran, otvori ponovo: radi. Treći put posle izlaska prikazuje „Otvaranja za danas su potrošena“, bez otključavanja do ponoći.
+2. Izlazak na kratko (deljenje, izbor slike, manje od 15 s) i povratak u istu aplikaciju ne troši novo otvaranje.
+3. Ekran blokade ima veliko narandžasto dugme „Zatvori“ (vodi na početni ekran), a od drugog pokušaja istog dana piše „Ovo ti je danas N. pokušaj.“
+4. Povećanje broja otvaranja ili brisanje važi tek sutra od 06:00, smanjenje odmah.
