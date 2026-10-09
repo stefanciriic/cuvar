@@ -40,6 +40,8 @@ public class SitesActivity extends SubActivity {
             // Lista je kratka, pa red pravimo svaki put iznova.
             String domain = sites.get(position);
             LinearLayout row = Ui.column(SitesActivity.this);
+            row.setBackground(Ui.pressable(Ui.CARD, Ui.SOFT, Ui.dp(SitesActivity.this, 16)));
+            row.setElevation(Ui.dp(SitesActivity.this, 1));
             row.setPadding(Ui.dp(SitesActivity.this, 20), Ui.dp(SitesActivity.this, 12),
                     Ui.dp(SitesActivity.this, 20), Ui.dp(SitesActivity.this, 12));
             row.addView(Ui.text(SitesActivity.this, domain, 17, Ui.INK, true));
@@ -74,6 +76,8 @@ public class SitesActivity extends SubActivity {
         root.addView(empty);
 
         ListView list = new ListView(this);
+        list.setPadding(Ui.dp(this, 10), Ui.dp(this, 4), Ui.dp(this, 10), Ui.dp(this, 12));
+        list.setClipToPadding(false);
         list.setDivider(null);
         list.setDividerHeight(0);
         list.setAdapter(adapter);

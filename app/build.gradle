@@ -17,15 +17,9 @@ android {
     }
 
     signingConfigs {
-        // Ključ za APK sa GitHub-a (javan, samo da bi se nova verzija instalirala preko stare).
-        fixed {
-            storeFile file('cuvar.keystore')
-            storePassword 'cuvar123'
-            keyAlias 'cuvar'
-            keyPassword 'cuvar123'
-        }
-        // Tajni ključ za slanje na Google Play (upload key); CI ga dobija iz GitHub tajni.
-        if (System.getenv('UPLOAD_STORE_FILE')) {
+        // AAB za Play se potpisuje upload ključem samo kada CI eksplicitno obezbedi tajne.
+        if (project.hasProperty('play') && System.getenv('UPLOAD_STORE_FILE')
+                && System.getenv('UPLOAD_STORE_PASSWORD')) {
             upload {
                 storeFile file(System.getenv('UPLOAD_STORE_FILE'))
                 storePassword System.getenv('UPLOAD_STORE_PASSWORD')
@@ -37,14 +31,14 @@ android {
 
     buildTypes {
         debug {
-            signingConfig signingConfigs.fixed
+            applicationIdSuffix '.debug'
+            versionNameSuffix '-debug'
         }
-        // Verzija koja se objavljuje: obično (ne razvojno) izdanje, potpisano istim ključem
-        // kao ranije, pa se instalira preko postojeće verzije.
+        // APK se potpisuje u CI posle pravljenja certificate lineage-a.
         release {
-            // -Pplay: paket za Google Play potpisan tajnim ključem (ako ga CI ima).
-            signingConfig project.hasProperty('play') && signingConfigs.findByName('upload') != null
-                    ? signingConfigs.upload : signingConfigs.fixed
+            if (project.hasProperty('play') && signingConfigs.findByName('upload') != null) {
+                signingConfig signingConfigs.upload
+            }
             minifyEnabled false
         }
     }

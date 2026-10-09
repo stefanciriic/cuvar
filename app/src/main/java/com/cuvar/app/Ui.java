@@ -136,6 +136,7 @@ final class Ui {
         t.setText(s);
         t.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp);
         t.setTextColor(color);
+        t.setIncludeFontPadding(false);
         if (bold) {
             t.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
         }
@@ -145,6 +146,9 @@ final class Ui {
     static TextView button(Context c, String label, boolean primary) {
         TextView t = text(c, label, 16, primary ? 0xFFFFFFFF : INK, true);
         t.setGravity(Gravity.CENTER);
+        t.setAllCaps(false);
+        t.setMinHeight(dp(c, 52));
+        t.setMinimumWidth(dp(c, 52));
         float r = dp(c, 14);
         t.setBackground(primary ? pressable(ACCENT, ACCENT_DOWN, r) : pressable(SOFT, SOFT_DOWN, r));
         int p = dp(c, 15);
@@ -206,10 +210,15 @@ final class Ui {
         bar.addView(line, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1));
         LinearLayout row = row(c);
         row.setBackgroundColor(CARD);
+        row.setPadding(dp(c, 8), dp(c, 4), dp(c, 8), dp(c, 4));
+        row.setElevation(dp(c, 3));
         for (int i = 0; i < TABS.length; i++) {
             final int tab = i;
             LinearLayout cell = column(c);
             cell.setGravity(android.view.Gravity.CENTER);
+            cell.setMinimumHeight(dp(c, 64));
+            cell.setContentDescription(TABS[i] + (i == active ? ", izabrano" : ""));
+            cell.setFocusable(true);
             int p = dp(c, 10);
             cell.setPadding(0, p, 0, p);
             View mark = new View(c);
@@ -220,7 +229,9 @@ final class Ui {
             TextView t = text(c, TABS[i], 14, i == active ? ACCENT : MUTED, true);
             t.setGravity(android.view.Gravity.CENTER);
             cell.addView(t, fill(c, 6));
-            cell.setBackground(pressable(CARD, SOFT, 0));
+            int selectedBg = (ACCENT & 0x00FFFFFF) | 0x16000000;
+            cell.setBackground(pressable(i == active ? selectedBg : CARD, SOFT, dp(c, 14)));
+            cell.setSelected(i == active);
             if (i != active) cell.setOnClickListener(v -> onTab.accept(tab));
             row.addView(cell, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         }
@@ -231,6 +242,8 @@ final class Ui {
     static LinearLayout card(Context c) {
         LinearLayout l = column(c);
         l.setBackground(round(CARD, dp(c, 18)));
+        l.setElevation(dp(c, 2));
+        l.setClipToOutline(true);
         int p = dp(c, 18);
         l.setPadding(p, p, p, p);
         return l;

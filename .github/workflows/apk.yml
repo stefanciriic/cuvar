@@ -32,12 +32,12 @@ jobs:
             java -Dfile.encoding=UTF-8 -cp "$out" "com.cuvar.app.$(basename "$t" .java)"
           done
 
-      - name: Napravi APK
+      - name: Napravi unsigned APK
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" >/dev/null 2>&1 || true
           chmod +x gradlew
           ./gradlew --no-daemon assembleRelease
-          cp app/build/outputs/apk/release/app-release.apk cuvar.apk
+          cp app/build/outputs/apk/release/app-release-unsigned.apk cuvar-unsigned.apk
 
       # Rotacija ključa: stari (javni) ključ potpisuje novi tajni, pa se nova verzija
       # instalira preko stare bez brisanja podataka. Na Androidu 9+ telefon posle toga
@@ -46,29 +46,35 @@ jobs:
         env:
           RELEASE_KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_B64 }}
           RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          LEGACY_KEYSTORE_B64: ${{ secrets.LEGACY_KEYSTORE_B64 }}
+          LEGACY_STORE_PASSWORD: ${{ secrets.LEGACY_STORE_PASSWORD }}
+          LEGACY_KEY_PASSWORD: ${{ secrets.LEGACY_KEY_PASSWORD }}
+          LEGACY_KEY_ALIAS: ${{ secrets.LEGACY_KEY_ALIAS }}
         run: |
-          if [ -z "$RELEASE_KEYSTORE_B64" ] || [ -z "$RELEASE_STORE_PASSWORD" ]; then
-            echo "::warning::Nema RELEASE_KEYSTORE_B64/RELEASE_STORE_PASSWORD, APK ostaje potpisan starim javnim ključem."
-            exit 0
+          if [ -z "$RELEASE_KEYSTORE_B64" ] || [ -z "$RELEASE_STORE_PASSWORD" ] || [ -z "$LEGACY_KEYSTORE_B64" ] || [ -z "$LEGACY_STORE_PASSWORD" ]; then
+            echo "::error::Nedostaje novi ili legacy privatni ključ. APK se neće objaviti."
+            exit 1
           fi
           umask 077
           bt="$ANDROID_HOME/build-tools/36.0.0"
-          key="$RUNNER_TEMP/release.p12"
-          trap 'rm -f "$key"' EXIT
+          legacy="$RUNNER_TEMP/cuvar-legacy.jks"
+          key="$RUNNER_TEMP/cuvar-release.jks"
+          trap 'rm -f "$legacy" "$key"' EXIT
+          printf '%s' "$LEGACY_KEYSTORE_B64" | base64 -d > "$legacy"
           printf '%s' "$RELEASE_KEYSTORE_B64" | base64 -d > "$key"
           "$bt/apksigner" rotate --out "$RUNNER_TEMP/lineage.bin" \
-            --old-signer --ks app/cuvar.keystore --ks-pass pass:cuvar123 --ks-key-alias cuvar \
-            --new-signer --ks "$key" --ks-pass env:RELEASE_STORE_PASSWORD --ks-key-alias cuvar2
+            --old-signer --ks "$legacy" --ks-pass env:LEGACY_STORE_PASSWORD --key-pass env:LEGACY_KEY_PASSWORD --ks-key-alias "${LEGACY_KEY_ALIAS:-cuvar}" \
+            --new-signer --ks "$key" --ks-pass env:RELEASE_STORE_PASSWORD --key-pass env:RELEASE_KEY_PASSWORD --ks-key-alias "${RELEASE_KEY_ALIAS:-cuvar2}"
           "$bt/apksigner" sign --rotation-min-sdk-version 28 --lineage "$RUNNER_TEMP/lineage.bin" \
-            --ks app/cuvar.keystore --ks-pass pass:cuvar123 --ks-key-alias cuvar \
-            --next-signer --ks "$key" --ks-pass env:RELEASE_STORE_PASSWORD --ks-key-alias cuvar2 \
-            --out cuvar-rotated.apk cuvar.apk
-          mv cuvar-rotated.apk cuvar.apk
+            --ks "$legacy" --ks-pass env:LEGACY_STORE_PASSWORD --key-pass env:LEGACY_KEY_PASSWORD --ks-key-alias "${LEGACY_KEY_ALIAS:-cuvar}" \
+            --next-signer --ks "$key" --ks-pass env:RELEASE_STORE_PASSWORD --key-pass env:RELEASE_KEY_PASSWORD --ks-key-alias "${RELEASE_KEY_ALIAS:-cuvar2}" \
+            --out cuvar.apk cuvar-unsigned.apk
           "$bt/apksigner" verify -v --print-certs cuvar.apk | grep -E 'Verified using|Signer|SHA-256'
           "$bt/apksigner" lineage --in cuvar.apk --print-certs
 
-      # Paket za Google Play (.aab). Potpisuje se tajnim ključem iz GitHub tajni ako postoji,
-      # inače istim ključem kao APK (dovoljno za interno testiranje, ključ se kasnije menja).
+      # Paket za Google Play (.aab) je opcioni artefakt i uvek traži zaseban upload ključ.
       - name: Napravi paket za Google Play
         env:
           UPLOAD_KEYSTORE_B64: ${{ secrets.UPLOAD_KEYSTORE_B64 }}
@@ -76,10 +82,13 @@ jobs:
           UPLOAD_KEY_PASSWORD: ${{ secrets.UPLOAD_KEY_PASSWORD }}
           UPLOAD_KEY_ALIAS: ${{ secrets.UPLOAD_KEY_ALIAS }}
         run: |
-          if [ -n "$UPLOAD_KEYSTORE_B64" ]; then
-            echo "$UPLOAD_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/upload.jks"
-            export UPLOAD_STORE_FILE="$RUNNER_TEMP/upload.jks"
+          if [ -z "$UPLOAD_KEYSTORE_B64" ] || [ -z "$UPLOAD_STORE_PASSWORD" ]; then
+            echo "Google Play paket nije napravljen: nedostaju UPLOAD_* tajne."
+            exit 0
           fi
+          umask 077
+          printf '%s' "$UPLOAD_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/upload.jks"
+          export UPLOAD_STORE_FILE="$RUNNER_TEMP/upload.jks"
           ./gradlew --no-daemon bundleRelease -Pplay
           rm -f "$RUNNER_TEMP/upload.jks"
 

@@ -66,6 +66,8 @@ public class AppsActivity extends SubActivity {
             Holder hd;
             if (convertView == null) {
                 LinearLayout row = Ui.row(AppsActivity.this);
+                row.setBackground(Ui.pressable(Ui.CARD, Ui.SOFT, Ui.dp(AppsActivity.this, 16)));
+                row.setElevation(Ui.dp(AppsActivity.this, 1));
                 row.setPadding(Ui.dp(AppsActivity.this, 20), Ui.dp(AppsActivity.this, 11),
                         Ui.dp(AppsActivity.this, 20), Ui.dp(AppsActivity.this, 11));
                 hd = new Holder();
@@ -140,6 +142,8 @@ public class AppsActivity extends SubActivity {
         root.addView(status);
 
         ListView list = new ListView(this);
+        list.setPadding(Ui.dp(this, 10), Ui.dp(this, 4), Ui.dp(this, 10), Ui.dp(this, 12));
+        list.setClipToPadding(false);
         list.setDivider(null);
         list.setDividerHeight(0);
         list.setAdapter(adapter);
