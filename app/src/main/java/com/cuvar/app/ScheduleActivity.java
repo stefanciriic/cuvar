@@ -66,6 +66,8 @@ public class ScheduleActivity extends SubActivity {
         add.setOnClickListener(v -> open(store.addSchedule().id));
         content.addView(add, Ui.fill(this, 10));
 
+        View pending = MainActivity.pendingCard(this, store, this::render);
+        if (pending != null) content.addView(pending, Ui.fill(this, 14));
         List<DailySchedule.Rule> rules = store.schedules();
         content.addView(Ui.section(this, "Tvoji režimi"), Ui.fill(this, 26));
         if (rules.isEmpty()) empty("Još nema režima.");
@@ -139,7 +141,7 @@ public class ScheduleActivity extends SubActivity {
             finish();
             return;
         }
-        page(rule.name, "Izaberi period i dane i dodaj aplikacije i sajtove koji će tada biti blokirani.");
+        page(rule.name, "Izaberi period i dane i dodaj aplikacije i sajtove koji će tada biti blokirani. Strože izmene važe odmah, a blaže (isključivanje, kraći period, manje dana, uklanjanje) tek od sutra.");
         boolean active = store.scheduleActive(id);
         if (active) {
             content.addView(Ui.text(this, "Režim je sada aktivan. Do " + DailySchedule.label(rule.end)
@@ -158,7 +160,7 @@ public class ScheduleActivity extends SubActivity {
         action("Dani: " + rule.daysLabel(), () -> editDays(rule));
         content.addView(Ui.text(this, "Po vremenu telefona; pomeranje sata ne skraćuje režim. Period može da prelazi ponoć i tada pripada danu u kome počinje. Blokada traje do kraja perioda.", 14, Ui.MUTED, false), Ui.fill(this, 8));
         CheckRow code = new CheckRow(this, null, "Van perioda traži dnevnu šifru",
-                "Aplikacije i sajtovi ovog režima su i van perioda zaključani i otvaraju se samo dnevnom šifrom, ne stalnim PIN-om. Šifra se menja svakog dana u 17:00 i vidi se na početnom ekranu Čuvara.");
+                "Aplikacije i sajtovi ovog režima su i van perioda zaključani i otvaraju se samo dnevnom šifrom, od 17:00 do ponoći. Šifra se vidi na početnom ekranu Čuvara.");
         code.setChecked(rule.code);
         code.setListener(checked -> {
             if (!store.setScheduleCode(id, checked)) refused();

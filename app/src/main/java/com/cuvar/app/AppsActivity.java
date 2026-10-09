@@ -103,7 +103,7 @@ public class AppsActivity extends SubActivity {
 
         LinearLayout root = Ui.column(this);
         root.setBackgroundColor(Ui.BG);
-        root.addView(header("Aplikacije", "Tapni aplikaciju da je zaključaš PIN-om ili joj postaviš dnevni limit."));
+        root.addView(header("Aplikacije", "Tapni aplikaciju da je zaključaš ili joj postaviš dnevni limit. Popuštanje važi tek od sutra."));
 
         EditText search = new EditText(this);
         search.setHint("Pretraži");
@@ -231,7 +231,7 @@ public class AppsActivity extends SubActivity {
         }
         StringBuilder sb = new StringBuilder();
         if (lock) {
-            sb.append("PIN");
+            sb.append("Zaključana");
         }
         if (limit > 0) {
             if (sb.length() > 0) {
@@ -240,6 +240,12 @@ public class AppsActivity extends SubActivity {
             sb.append("Limit ").append(limit).append(" min, danas ").append(Ui.fmt(store.usedToday(pkg)));
         }
         return sb.toString();
+    }
+
+    private void pendingToast() {
+        if (!store.pendingChanges(getPackageManager()).isEmpty()) {
+            Toast.makeText(this, "Pooštravanje važi odmah, a popuštanje tek od sutra.", Toast.LENGTH_LONG).show();
+        }
     }
 
     private void showEdit(final Item it) {
@@ -252,7 +258,7 @@ public class AppsActivity extends SubActivity {
         }
         LinearLayout box = Ui.column(this);
 
-        final CheckRow lock = new CheckRow(this, null, "Zaključaj PIN-om", "Traži PIN pri svakom otvaranju");
+        final CheckRow lock = new CheckRow(this, null, "Zaključaj", "Otvara se samo dnevnom šifrom, od 17:00 do ponoći");
         lock.setChecked(store.appLock(it.pkg));
         box.addView(lock);
 
@@ -268,18 +274,15 @@ public class AppsActivity extends SubActivity {
                 .view(box)
                 .secondary("Otkaži", null)
                 .primary("Sačuvaj", () -> {
-                    boolean wantLock = lock.isChecked();
-                    if (wantLock && !store.hasPin()) {
-                        Toast.makeText(this, "Prvo postavi PIN na početnom ekranu", Toast.LENGTH_LONG).show();
-                        wantLock = false;
-                    }
-                    store.setApp(it.pkg, wantLock, Ui.parseInt(limit.getText().toString()));
+                    store.setApp(it.pkg, lock.isChecked(), Ui.parseInt(limit.getText().toString()));
+                    pendingToast();
                     applyFilter();
                     return true;
                 });
         if (store.hasAppRule(it.pkg)) {
             sheet.danger("Ukloni sva ograničenja", () -> {
                 store.setApp(it.pkg, false, 0);
+                pendingToast();
                 applyFilter();
                 return true;
             });

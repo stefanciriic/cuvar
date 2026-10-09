@@ -25,7 +25,7 @@ import java.util.Set;
 
 /**
  * Sva pravila na jednom mestu: za svaku aplikaciju i sajt piše u kojim režimima je blokirana
- * i šta važi ostatak dana (PIN, dnevni limit, dnevna šifra). Tap otvara sva podešavanja te stavke.
+ * i šta važi ostatak dana (zaključavanje, dnevni limit). Tap otvara sva podešavanja te stavke.
  */
 public class RulesActivity extends SubActivity {
 
@@ -53,10 +53,13 @@ public class RulesActivity extends SubActivity {
         LinearLayout how = Ui.card(this);
         how.addView(Ui.text(this, "Kako se slažu", 15, Ui.INK, true));
         how.addView(Ui.text(this, "1. Režim je najjači: u svom periodu blokira i ne može da se otključa.\n"
-                + "2. Ostatak dana važe PIN, dnevni limit i dnevna šifra (ako režim ima šifru).\n"
-                + "3. Ukupni dnevni limit, kad se potroši, zaključava sve ovo do ponoći.",
+                + "2. Ostatak dana: zaključano se otvara samo dnevnom šifrom (17:00 do ponoći), a potrošen limit se ne otvara do ponoći.\n"
+                + "3. Ukupni dnevni limit, kad se potroši, zaključava sve ovo do ponoći.\n"
+                + "4. Strože pravilo važi odmah, a blaže tek od sutra.",
                 14, Ui.MUTED, false), Ui.fill(this, 6));
         content.addView(how, Ui.fill(this, 10));
+        View pending = MainActivity.pendingCard(this, store, this::render);
+        if (pending != null) content.addView(pending, Ui.fill(this, 10));
 
         LinearLayout adds = Ui.row(this);
         TextView addApp = Ui.button(this, "+ Aplikacija", true);
@@ -122,8 +125,7 @@ public class RulesActivity extends SubActivity {
         }
         String rest = out.isEmpty() ? "Ceo dan: " : "Ostatak dana: ";
         List<String> parts = new ArrayList<>();
-        if (code) parts.add("otključava se dnevnom šifrom");
-        else if (store.appLock(pkg)) parts.add("otključava se PIN-om");
+        if (code || store.appLock(pkg)) parts.add("zaključana, otvara se dnevnom šifrom");
         int limit = store.appLimit(pkg);
         if (limit > 0) parts.add("limit " + limit + " min (danas " + Ui.fmt(store.usedToday(pkg)) + ")");
         out.add(new Line(rest + (parts.isEmpty() ? "slobodno" : android.text.TextUtils.join(", ", parts)), false));
@@ -141,10 +143,10 @@ public class RulesActivity extends SubActivity {
         String rest = out.isEmpty() ? "Ceo dan: " : "Ostatak dana: ";
         int limit = store.siteLimit(domain);
         String s;
-        if (limit == 0) s = "uvek blokiran (otključava se PIN-om)";
+        if (limit == 0) s = "uvek blokiran, otvara se dnevnom šifrom";
         else if (limit > 0) s = "limit " + limit + " min (danas " + Ui.fmt(store.usedToday("site:" + domain)) + ")";
         else s = "slobodno";
-        if (code) s = (limit < 0 ? "" : s + ", ") + "otključava se dnevnom šifrom";
+        if (code && limit != 0) s = (limit < 0 ? "" : s + ", ") + "zaključan, otvara se dnevnom šifrom";
         out.add(new Line(rest + s, false));
         return out;
     }
@@ -210,15 +212,10 @@ public class RulesActivity extends SubActivity {
         return rows;
     }
 
-    /** Pravila liste (PIN/limit) se ne menjaju dok traje pauza posle otključavanja, kao i na ostalim ekranima. */
-    private boolean listLocked(boolean hadRule) {
-        long busy = hadRule ? store.unlockBusyLeft() : 0;
-        if (busy > 0) {
-            Toast.makeText(this, "Nedavno je nešto otključano. PIN i limit se mogu menjati za " + Ui.fmt(busy)
-                    + ". Režimi su sačuvani.", Toast.LENGTH_LONG).show();
-            return true;
+    private void pendingToast() {
+        if (!store.pendingChanges(getPackageManager()).isEmpty()) {
+            Toast.makeText(this, "Pooštravanje važi odmah, a popuštanje tek od sutra.", Toast.LENGTH_LONG).show();
         }
-        return false;
     }
 
     private boolean saveRules(List<DailySchedule.Rule> rules, List<CheckRow> rows, String key, boolean site) {
@@ -229,7 +226,7 @@ public class RulesActivity extends SubActivity {
             ok &= site ? store.setScheduleSite(id, key, on) : store.setScheduleApp(id, key, on);
         }
         if (!ok) {
-            Toast.makeText(this, "Režim koji sada traje ne može da izgubi stavku do kraja perioda", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "Režim koji sada traje ne može da izgubi stavku dok traje", Toast.LENGTH_LONG).show();
         }
         return ok;
     }
@@ -238,12 +235,11 @@ public class RulesActivity extends SubActivity {
         List<DailySchedule.Rule> rules = store.schedules();
         Set<String> in = new HashSet<>();
         for (DailySchedule.Rule r : rules) if (r.apps.contains(pkg)) in.add(r.id);
-        boolean hadRule = store.hasAppRule(pkg);
 
         LinearLayout box = Ui.column(this);
         List<CheckRow> rows = ruleChecks(box, rules, in);
         box.addView(Sheet.label(this, "Ostatak dana"), Ui.fill(this, 18));
-        CheckRow lock = new CheckRow(this, null, "Zaključaj PIN-om", "Traži PIN pri svakom otvaranju");
+        CheckRow lock = new CheckRow(this, null, "Zaključaj", "Otvara se samo dnevnom šifrom, od 17:00 do ponoći");
         lock.setChecked(store.appLock(pkg));
         box.addView(lock, Ui.fill(this, 6));
         box.addView(Sheet.label(this, "Dnevni limit u minutima (0 = bez limita)"), Ui.fill(this, 14));
@@ -260,12 +256,9 @@ public class RulesActivity extends SubActivity {
                     boolean wantLock = lock.isChecked();
                     int wantLimit = Ui.parseInt(limit.getText().toString());
                     if (wantLock != store.appLock(pkg) || wantLimit != store.appLimit(pkg)) {
-                        if (wantLock && !store.hasPin()) {
-                            Toast.makeText(this, "Prvo postavi PIN na početnom ekranu", Toast.LENGTH_LONG).show();
-                            wantLock = false;
-                        }
-                        if (!listLocked(hadRule)) store.setApp(pkg, wantLock, wantLimit);
+                        store.setApp(pkg, wantLock, wantLimit);
                     }
+                    pendingToast();
                     render();
                     return true;
                 }).show();
@@ -281,7 +274,7 @@ public class RulesActivity extends SubActivity {
         List<CheckRow> rows = ruleChecks(box, rules, in);
         box.addView(Sheet.label(this, "Ostatak dana"), Ui.fill(this, 18));
         CheckRow listed = new CheckRow(this, null, "Ograniči i van režima",
-                "Dnevni limit ispod; 0 znači uvek blokiran (otključava se PIN-om)");
+                "Dnevni limit ispod; 0 znači uvek blokiran (otvara se dnevnom šifrom)");
         listed.setChecked(current >= 0);
         box.addView(listed, Ui.fill(this, 6));
         box.addView(Sheet.label(this, "Dnevni limit u minutima"), Ui.fill(this, 14));
@@ -298,9 +291,10 @@ public class RulesActivity extends SubActivity {
                 .primary("Sačuvaj", () -> {
                     saveRules(rules, rows, domain, true);
                     int want = listed.isChecked() ? Ui.parseInt(limit.getText().toString()) : -1;
-                    if (want != current && !listLocked(current >= 0)) {
+                    if (want != current) {
                         if (want < 0) store.removeSite(domain); else store.setSite(domain, want);
                     }
+                    pendingToast();
                     render();
                     return true;
                 }).show();

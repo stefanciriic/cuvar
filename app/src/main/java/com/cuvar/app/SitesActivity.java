@@ -59,7 +59,7 @@ public class SitesActivity extends SubActivity {
         LinearLayout root = Ui.column(this);
         root.setBackgroundColor(Ui.BG);
         root.addView(header("Sajtovi",
-                "Radi u Chrome-u. Ako imaš i druge pregledače, zaključaj ih PIN-om na listi aplikacija."));
+                "Radi u Chrome-u. Ako imaš i druge pregledače, zaključaj ih na listi aplikacija."));
 
         TextView add = Ui.button(this, "Dodaj sajt", true);
         add.setOnClickListener(v -> showEdit(null));
@@ -114,7 +114,7 @@ public class SitesActivity extends SubActivity {
         }
         box.addView(address, Ui.fill(this, 6));
 
-        box.addView(Sheet.label(this, "Dnevni limit u minutima (0 = uvek blokiran)"), Ui.fill(this, 16));
+        box.addView(Sheet.label(this, "Dnevni limit u minutima (0 = uvek blokiran, otvara se dnevnom šifrom)"), Ui.fill(this, 16));
         final EditText limit = Sheet.input(this, "0", true);
         limit.setText(String.valueOf(domain == null ? 0 : Math.max(0, store.siteLimit(domain))));
         box.addView(limit, Ui.fill(this, 6));

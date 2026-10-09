@@ -29,7 +29,7 @@ final class Jokes {
 
     /** Aplikacija zaključana PIN-om. */
     static final String[] LOCK = {
-            "Kuc, kuc. Ko je? PIN.",
+            "Kuc, kuc. Ko je? Šifra, ali tek u pet.",
             "Ova aplikacija je pod ključem. Ti imaš ključ. Valjda.",
             "Samo da proverimo da si to stvarno ti.",
     };

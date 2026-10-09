@@ -34,7 +34,6 @@ public class MainActivity extends Activity {
     }
 
     private Store store;
-    private boolean pinSetup;
     private boolean dark;
     private LinearLayout nowBox; // sadržaj kartice „Sada“, osvežava se dok je ekran otvoren
     private final Handler h = new Handler(Looper.getMainLooper());
@@ -62,35 +61,16 @@ public class MainActivity extends Activity {
             recreate();
             return;
         }
-        if (store.hasPin() && !Session.valid()) {
-            Session.authed = false;
-            showGate();
-            return;
-        }
-        Session.seen();
-        if (!pinSetup) {
-            showDashboard();
-        }
+        showDashboard();
     }
 
     @Override
     protected void onPause() {
         super.onPause();
         h.removeCallbacks(refreshNow);
-        Session.seen();
     }
 
-    @Override
-    public void onBackPressed() {
-        if (pinSetup) {
-            pinSetup = false;
-            showDashboard();
-        } else {
-            super.onBackPressed();
-        }
-    }
-
-    // ---------- PIN ekrani ----------
+    // ---------- Ekrani ----------
 
     private void setScreen(LinearLayout content) {
         ScrollView scroll = new ScrollView(this);
@@ -101,82 +81,9 @@ public class MainActivity extends Activity {
         setContentView(scroll);
     }
 
-    private LinearLayout pinBox(TextView title, TextView sub, PinPad pad) {
-        LinearLayout box = Ui.column(this);
-        box.setGravity(Gravity.CENTER);
-        int p = Ui.dp(this, 24);
-        box.setPadding(p, p, p, p);
-        TextView eyebrow = Ui.text(this, "ČUVAR", 12, Ui.ACCENT, true);
-        eyebrow.setLetterSpacing(0.25f);
-        eyebrow.setGravity(Gravity.CENTER);
-        box.addView(eyebrow, Ui.fill(this, 0));
-        title.setGravity(Gravity.CENTER);
-        box.addView(title, Ui.fill(this, 10));
-        sub.setGravity(Gravity.CENTER);
-        box.addView(sub, Ui.fill(this, 8));
-        box.addView(pad, Ui.fill(this, 24));
-        return box;
-    }
-
-    private void showGate() {
-        pinSetup = false;
-        TextView title = Ui.text(this, "Zaključano", 26, Ui.INK, true);
-        TextView sub = Ui.text(this, "Unesi PIN da otvoriš podešavanja.", 15, Ui.MUTED, false);
-        final PinPad pad = new PinPad(this, false);
-        pad.setListener(pin -> {
-            String err = store.tryPin(pin);
-            if (err == null) {
-                Session.authed = true;
-                Session.seen();
-                showDashboard();
-            } else {
-                pad.clear();
-                pad.setMessage(err);
-            }
-        });
-        setScreen(pinBox(title, sub, pad));
-    }
-
-    private void showPinSetup() {
-        pinSetup = true;
-        final String intro = "Unesi 4 do 8 cifara, pa tapni OK.";
-        final TextView title = Ui.text(this, "Novi PIN", 26, Ui.INK, true);
-        final TextView sub = Ui.text(this, intro, 15, Ui.MUTED, false);
-        final PinPad pad = new PinPad(this, false);
-        final String[] first = {null};
-        pad.setListener(pin -> {
-            if (first[0] == null) {
-                if (pin.length() < 4) {
-                    pad.clear();
-                    pad.setMessage("PIN mora imati bar 4 cifre");
-                    return;
-                }
-                first[0] = pin;
-                pad.clear();
-                title.setText("Ponovi PIN");
-                sub.setText("Unesi isti PIN još jednom.");
-            } else if (first[0].equals(pin)) {
-                store.setPin(pin);
-                Session.authed = true;
-                Session.seen();
-                pinSetup = false;
-                Toast.makeText(this, "PIN je sačuvan", Toast.LENGTH_SHORT).show();
-                showDashboard();
-            } else {
-                first[0] = null;
-                pad.clear();
-                title.setText("Novi PIN");
-                sub.setText(intro);
-                pad.setMessage("PIN-ovi se ne poklapaju, pokušaj ponovo");
-            }
-        });
-        setScreen(pinBox(title, sub, pad));
-    }
-
     // ---------- Glavni ekran ----------
 
     private void showDashboard() {
-        pinSetup = false;
         LinearLayout col = Ui.column(this);
         col.setPadding(Ui.dp(this, 20), Ui.dp(this, 28), Ui.dp(this, 20), Ui.dp(this, 36));
 
@@ -185,14 +92,8 @@ public class MainActivity extends Activity {
                 new Locale.Builder().setLanguage("sr").setScript("Latn").build()).format(new Date());
         col.addView(Ui.text(this, date, 14, Ui.MUTED, false), Ui.fill(this, 2));
 
-        boolean hasPin = store.hasPin();
         boolean enabled = GuardService.isEnabled(this);
 
-        if (!hasPin) {
-            col.addView(setupCard("Postavi PIN",
-                    "PIN štiti ova podešavanja i otključava zaključane aplikacije i sajtove.",
-                    "Postavi PIN", v -> showPinSetup(), null, null), Ui.fill(this, 18));
-        }
         if (!enabled) {
             col.addView(setupCard("Uključi Čuvara",
                     "U Pristupačnosti pronađi „Čuvar“ (pod Preuzete ili Instalirane aplikacije) i uključi ga. "
@@ -209,9 +110,7 @@ public class MainActivity extends Activity {
 
         col.addView(Ui.section(this, "Danas"), Ui.fill(this, 24));
         col.addView(todayCard(enabled), Ui.fill(this, 8));
-        if (store.usesDailyCode()) {
-            col.addView(codeCard(), Ui.fill(this, 10));
-        }
+        col.addView(codeCard(), Ui.fill(this, 10));
 
         int appRules = store.appRuleCount();
         int siteRules = store.siteList().size();
@@ -221,7 +120,7 @@ public class MainActivity extends Activity {
                 "Šta je kad blokirano, po aplikaciji i sajtu",
                 v -> startActivity(new Intent(this, RulesActivity.class)));
         groupRow(rules, "Aplikacije",
-                appRules == 0 ? "Zaključaj PIN-om ili postavi dnevni limit" : "Pravila: " + appRules,
+                appRules == 0 ? "Zaključaj ili postavi dnevni limit" : "Pravila: " + appRules,
                 v -> startActivity(new Intent(this, AppsActivity.class)));
         groupRow(rules, "Sajtovi",
                 siteRules == 0 ? "Blokiraj sajtove ili im postavi dnevni limit" : "Na listi: " + siteRules,
@@ -230,17 +129,16 @@ public class MainActivity extends Activity {
                 v -> startActivity(new Intent(this, ScheduleActivity.class)));
         groupRow(rules, "Ukupni dnevni limit", dayLimitSummary(), v -> chooseDayLimit());
         col.addView(rules, Ui.fill(this, 8));
+        View pending = pendingCard(this, store, this::showDashboard);
+        if (pending != null) col.addView(pending, Ui.fill(this, 10));
 
         col.addView(Ui.section(this, "Podešavanja"), Ui.fill(this, 24));
         LinearLayout settings = group();
         groupRow(settings, "Tema", Ui.THEME_NAMES[Ui.themeChoice(this)], v -> chooseTheme());
-        if (hasPin) {
-            groupRow(settings, "Promeni PIN", "PIN štiti podešavanja i zaključane aplikacije", v -> showPinSetup());
-        }
         col.addView(settings, Ui.fill(this, 8));
 
         TextView note = Ui.text(this,
-                "Savet: zaključaj PIN-om i Podešavanja telefona, da Čuvar ne može lako da se isključi ili obriše.",
+                "Savet: zaključaj i Podešavanja telefona (u Aplikacijama), da Čuvar ne može lako da se isključi ili obriše. Otvaraće se samo dnevnom šifrom.",
                 13, Ui.MUTED, false);
         col.addView(note, Ui.fill(this, 18));
 
@@ -398,8 +296,8 @@ public class MainActivity extends Activity {
         TextView code = Ui.text(this, store.dailyCode(), 38, Ui.INK, true);
         code.setLetterSpacing(0.2f);
         card.addView(code, Ui.fill(this, 4));
-        card.addView(Ui.text(this, "Današnja šifra. Otključava aplikacije i sajtove iz režima sa šifrom, umesto PIN-a."
-                + " Vidi se do ponoći, a sutra u " + DailyCode.CHANGE_HOUR + ":00 dobijaš novu.",
+        card.addView(Ui.text(this, "Današnja šifra. Jedino ona otključava zaključane aplikacije i sajtove, i to samo do ponoći."
+                + " Sutra u " + DailyCode.CHANGE_HOUR + ":00 dobijaš novu.",
                 14, Ui.MUTED, false), Ui.fill(this, 6));
         return card;
     }
@@ -419,7 +317,7 @@ public class MainActivity extends Activity {
         LinearLayout box = Ui.column(this);
         String intro = "Računa se sve vreme na telefonu osim poziva, poruka, početnog ekrana i Čuvara. "
                 + "Kad se limit potroši, sve zaključane i ograničene aplikacije i sajtovi ostaju zaključani "
-                + "do ponoći: bez PIN-a, dnevne šifre i hitnog otključavanja. Upozorenje stiže "
+                + "do ponoći: bez dnevne šifre i hitnog otključavanja. Upozorenje stiže "
                 + DayLimit.WARN_MS / 60000L + " min ranije.\n\n";
         intro += limit > 0
                 ? "Manji limit važi odmah. Povećati se može jednom dnevno, najviše za "
@@ -494,6 +392,26 @@ public class MainActivity extends Activity {
         for (DailySchedule.Rule r : rules) if (r.enabled) on++;
         if (rules.size() == 1) return (on == 1 ? "Uključen · " : "Isključen · ") + rules.get(0).label();
         return rules.size() + " režima · uključeno " + on;
+    }
+
+    /** Popuštanja pravila koja čekaju sutra, sa dugmetom da se od njih odustane; null ako ih nema. */
+    static View pendingCard(android.app.Activity a, Store store, Runnable refresh) {
+        List<String> items = store.pendingChanges(a.getPackageManager());
+        if (items.isEmpty()) return null;
+        LinearLayout card = Ui.card(a);
+        card.addView(Ui.text(a, "Od sutra", 16, Ui.ACCENT, true));
+        card.addView(Ui.text(a, "Blaža pravila važe tek od ponoći. Do tada važi strožije.", 13, Ui.MUTED, false),
+                Ui.fill(a, 4));
+        StringBuilder sb = new StringBuilder();
+        for (String it : items) sb.append(sb.length() == 0 ? "" : "\n").append("•  ").append(it);
+        card.addView(Ui.text(a, sb.toString(), 14, Ui.INK, false), Ui.fill(a, 8));
+        TextView cancel = Ui.button(a, "Odustani od ovih promena", false);
+        cancel.setOnClickListener(v -> {
+            store.cancelPending();
+            refresh.run();
+        });
+        card.addView(cancel, Ui.fill(a, 12));
+        return card;
     }
 
     /** Kartica sa više redova odvojenih tankom linijom. */

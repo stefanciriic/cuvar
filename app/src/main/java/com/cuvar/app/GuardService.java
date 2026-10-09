@@ -332,7 +332,7 @@ public class GuardService extends AccessibilityService {
             String url = readUrl(root, urlBarId);
             if (url != null) {
                 String host = Store.hostOf(url);
-                currentSite = host == null ? null : store.matchSite(host);
+                currentSite = host == null ? null : store.matchSiteNow(host);
                 currentHost = host;
             }
         }
@@ -370,14 +370,14 @@ public class GuardService extends AccessibilityService {
                     KIND_SCHEDULE, siteRule, false));
         }
         if (rule == null) {
-            boolean lock = store.appLock(pkg);
-            int limit = store.appLimit(pkg);
+            boolean lock = store.appLockNow(pkg);
+            int limit = store.appLimitNow(pkg);
             boolean timeUp = limit > 0 && store.usedToday(pkg) >= limit * 60000L;
             // Van perioda režim sa dnevnom šifrom drži svoje aplikacije zaključane, a umesto PIN-a traži šifru.
             DailySchedule.Rule codeRule = store.codeRuleForApp(pkg);
             if (lock || timeUp || codeRule != null) {
                 int k = timeUp ? KIND_TIME : codeRule != null ? KIND_CODE : KIND_LOCK;
-                blocks.add(new Block(appKey, k, null, codeRule != null));
+                blocks.add(new Block(appKey, k, null, true));
             }
         }
         if (web && siteRule == null) {
@@ -388,24 +388,24 @@ public class GuardService extends AccessibilityService {
             }
         }
         if (urlBarId != null && currentSite != null) {
-            int siteLimit = store.siteLimit(currentSite);
+            int siteLimit = store.siteLimitNow(currentSite);
             if (siteLimit == 0) {
-                blocks.add(new Block("site:" + currentSite, KIND_SITE, null, false));
+                blocks.add(new Block("site:" + currentSite, KIND_SITE, null, true));
             } else if (siteLimit > 0 && store.usedToday("site:" + currentSite) >= siteLimit * 60000L) {
-                blocks.add(new Block("site:" + currentSite, KIND_SITE_TIME, null, false));
+                blocks.add(new Block("site:" + currentSite, KIND_SITE_TIME, null, true));
             }
         }
 
-        // Otključavanje PIN-om važi 5 minuta, a zatim sat vremena nema otključavanja (vidi Store),
-        // osim jednog hitnog otključavanja dnevno. Vremenski režim se nikad ne otključava.
+        // Otključavanje dnevnom šifrom važi 5 minuta, a zatim sat vremena nema otključavanja (vidi Store),
+        // osim jednog hitnog otključavanja dnevno. Režim i potrošen limit se nikad ne otključavaju.
         Block show = null;
         for (Block b : blocks) {
-            if (b.kind == KIND_SCHEDULE || b.kind == KIND_DAY || (store.unlockLeft(b.key) <= 0 && store.emergencyLeft(b.key) <= 0)) {
+            if (hard(b.kind) || (store.unlockLeft(b.key) <= 0 && store.emergencyLeft(b.key) <= 0)) {
                 show = b;
                 break;
             }
         }
-        long coolLeft = show == null || show.kind == KIND_SCHEDULE || show.kind == KIND_DAY ? 0 : store.cooldownLeft(show.key);
+        long coolLeft = show == null || hard(show.kind) ? 0 : store.cooldownLeft(show.key);
 
         if (show != null) {
             showOverlay(show.key, show.kind, show.rule, coolLeft > 0, show.code);
@@ -415,6 +415,11 @@ public class GuardService extends AccessibilityService {
         } else {
             hideOverlay();
         }
+    }
+
+    /** Blokade koje se ne otključavaju: vremenski režim, potrošen limit aplikacije, sajta ili ukupni. */
+    private static boolean hard(int kind) {
+        return kind == KIND_SCHEDULE || kind == KIND_DAY || kind == KIND_TIME || kind == KIND_SITE_TIME;
     }
 
     /** Početni ekran, Čuvar, pozivi i poruke: ne računaju se u ukupni limit i nikad se zbog njega ne blokiraju. */
@@ -610,21 +615,22 @@ public class GuardService extends AccessibilityService {
             joke = Jokes.pick(Jokes.SCHEDULE);
         } else if (kind == KIND_CODE) {
             title = name + " je zaključan";
-            sub = "Unesi dnevnu šifru. Nova šifra se vidi u Čuvaru svakog dana od "
-                    + DailyCode.CHANGE_HOUR + ":00.";
+            sub = "Unesi dnevnu šifru. Važi od " + DailyCode.CHANGE_HOUR + ":00 do ponoći i vidi se u Čuvaru.";
             joke = Jokes.pick(Jokes.LOCK);
         } else if (kind == KIND_LOCK) {
             title = name + " je zaključan";
-            sub = "Unesi PIN da otvoriš aplikaciju.";
+            sub = "Otvara se dnevnom šifrom, od " + DailyCode.CHANGE_HOUR + ":00 do ponoći. Šifra se vidi u Čuvaru.";
             joke = Jokes.pick(Jokes.LOCK);
         } else if (kind == KIND_SITE) {
             title = "Sajt je blokiran";
-            sub = name + " je na tvojoj listi blokiranih sajtova.";
+            sub = name + " je na tvojoj listi blokiranih sajtova. Otvara se dnevnom šifrom, od "
+                    + DailyCode.CHANGE_HOUR + ":00 do ponoći.";
             joke = Jokes.pick(Jokes.SITE);
         } else {
             title = "Vreme je isteklo";
             long used = store.usedToday(isSite ? key : key.substring(4));
-            sub = "Danas si na " + name + " proveo " + Ui.fmt(used) + ". Dnevni limit je potrošen, sutra kreće ispočetka.";
+            sub = "Danas si na " + name + " proveo " + Ui.fmt(used) + ". Dnevni limit je potrošen i "
+                    + name + " je zaključan do ponoći, ni šifrom se ne otvara.";
             joke = Jokes.pick(Jokes.TIME_UP);
         }
 
@@ -671,7 +677,7 @@ public class GuardService extends AccessibilityService {
                 ask.setOnClickListener(v -> showQuiz(urgent, () -> showEmergencyPad(urgent, key, code), null));
                 urgent.addView(ask);
             }
-        } else if ((store.hasPin() || code) && kind != KIND_SCHEDULE && kind != KIND_DAY) {
+        } else if (code && !hard(kind)) {
             final LinearLayout unlock = Ui.column(c);
             unlock.setGravity(Gravity.CENTER_HORIZONTAL);
             box.addView(unlock, Ui.fill(c, 22));
@@ -844,7 +850,7 @@ public class GuardService extends AccessibilityService {
     }
 
     private static TextView codeNote(Context c) {
-        TextView t = Ui.text(c, "Unesi dnevnu šifru (6 cifara), ne stalni PIN.", 15, 0xFFFFFFFF, true);
+        TextView t = Ui.text(c, "Unesi dnevnu šifru (6 cifara) iz Čuvara.", 15, 0xFFFFFFFF, true);
         t.setGravity(Gravity.CENTER);
         return t;
     }
@@ -853,7 +859,7 @@ public class GuardService extends AccessibilityService {
     private static TextView rulesNote(Context c) {
         TextView t = Ui.text(c, "Otključano je " + Store.UNLOCK_USE_MS / 60000L
                 + " min, a posle toga " + Store.UNLOCK_COOLDOWN_MS / 60000L
-                + " min nema otključavanja ničega, ni PIN-om.", 13, Ui.NIGHT_MUTED, false);
+                + " min nema otključavanja ničega, ni šifrom.", 13, Ui.NIGHT_MUTED, false);
         t.setGravity(Gravity.CENTER);
         return t;
     }

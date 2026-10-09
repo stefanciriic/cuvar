@@ -6,7 +6,7 @@ import android.view.Gravity;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
-/** Zajednička osnova za ekrane sa listama: traži PIN ako je sesija istekla. */
+/** Zajednička osnova za ekrane sa listama. */
 abstract class SubActivity extends Activity {
 
     protected Store store;
@@ -28,17 +28,6 @@ abstract class SubActivity extends Activity {
             recreate();
             return;
         }
-        if (store.hasPin() && !Session.valid()) {
-            finish(); // početni ekran će tražiti PIN
-            return;
-        }
-        Session.seen();
-    }
-
-    @Override
-    protected void onPause() {
-        super.onPause();
-        Session.seen();
     }
 
     /** Zaglavlje sa strelicom nazad, naslovom i kratkim objašnjenjem. */

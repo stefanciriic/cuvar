@@ -43,6 +43,12 @@ final class Store {
     private final JSONObject sites;  // domen -> {limit}
     private final JSONObject usage;  // dan -> {ključ: ms}
     private final List<DailySchedule.Rule> schedules = new ArrayList<>();
+    // Pravila koja servis zaista primenjuje. Pooštravanje važi odmah, a popuštanje tek od sledećeg dana:
+    // ovde ostaje strožija verzija dok se dan ne promeni (vidi enforce()).
+    private JSONObject eApps;
+    private JSONObject eSites;
+    private final List<DailySchedule.Rule> eSchedules = new ArrayList<>();
+    private String eDay;
     private boolean dirty;
     private long lastSave;
     private int fails;
@@ -70,6 +76,7 @@ final class Store {
         loadSchedules();
         workEveryDay();
         prune();
+        loadEnforced();
     }
 
     private static JSONObject parse(String s) {
@@ -121,11 +128,14 @@ final class Store {
         return "Pogrešan PIN";
     }
 
-    /** Kao tryPin, ali za dnevnu šifru; pogrešni pokušaji se broje zajedno sa PIN-om. */
+    /** Kao tryPin, ali za dnevnu šifru, koja važi samo od 17:00 do ponoći; pogrešni pokušaji se broje zajedno. */
     synchronized String tryCode(String code) {
         long now = SystemClock.elapsedRealtime();
         if (now < blockedUntil) {
             return "Previše pokušaja. Sačekaj " + ((blockedUntil - now) / 1000 + 1) + " s";
+        }
+        if (!dailyCodeVisible()) {
+            return "Dnevna šifra važi od " + DailyCode.CHANGE_HOUR + ":00 do ponoći";
         }
         if (dailyCode().equals(code)) {
             fails = 0;
@@ -390,8 +400,8 @@ final class Store {
     /** Aplikacije kojima je danas potrošen dnevni limit. */
     synchronized List<String> appsOverLimit() {
         List<String> out = new ArrayList<>();
-        for (String pkg : keysOf(apps)) {
-            int limit = appLimit(pkg);
+        for (String pkg : keysOf(enforcedApps())) {
+            int limit = appLimitNow(pkg);
             if (limit > 0 && usedToday(pkg) >= limit * 60000L) out.add(pkg);
         }
         return out;
@@ -400,8 +410,8 @@ final class Store {
     /** Sajtovi sa liste kojima je danas potrošen dnevni limit (bez onih koji su uvek blokirani). */
     synchronized List<String> sitesOverLimit() {
         List<String> out = new ArrayList<>();
-        for (String d : siteList()) {
-            int limit = siteLimit(d);
+        for (String d : keysOf(enforcedSites())) {
+            int limit = siteLimitNow(d);
             if (limit > 0 && usedToday("site:" + d) >= limit * 60000L) out.add(d);
         }
         return out;
@@ -433,6 +443,7 @@ final class Store {
             }
         }
         sp.edit().putString("apps", apps.toString()).apply();
+        enforce();
     }
 
     // ---------- Vremenski režimi ----------
@@ -461,10 +472,14 @@ final class Store {
     }
 
     private void loadSchedules() {
+        parseSchedules(sp.getString("schedules", "[]"), schedules);
+    }
+
+    private static void parseSchedules(String json, List<DailySchedule.Rule> schedules) {
         schedules.clear();
         JSONArray arr;
         try {
-            arr = new JSONArray(sp.getString("schedules", "[]"));
+            arr = new JSONArray(json);
         } catch (JSONException e) {
             arr = new JSONArray();
         }
@@ -485,6 +500,10 @@ final class Store {
     }
 
     private String schedulesJson() {
+        return schedulesJson(schedules);
+    }
+
+    private static String schedulesJson(List<DailySchedule.Rule> schedules) {
         JSONArray arr = new JSONArray();
         for (DailySchedule.Rule r : schedules) {
             try {
@@ -507,6 +526,7 @@ final class Store {
 
     private void saveSchedules() {
         sp.edit().putString("schedules", schedulesJson()).apply();
+        enforce();
     }
 
     private static String newScheduleId() {
@@ -679,26 +699,26 @@ final class Store {
     /** Režim koji trenutno blokira aplikaciju, ili null. */
     synchronized DailySchedule.Rule scheduleBlockingApp(String pkg) {
         Calendar now = calendarNow();
-        DailySchedule.Rule r = DailySchedule.blockingApp(schedules, pkg, minuteOf(now), dayOf(now));
+        DailySchedule.Rule r = DailySchedule.blockingApp(enforced(), pkg, minuteOf(now), dayOf(now));
         return r == null ? null : copy(r);
     }
 
     /** Režim koji trenutno blokira host (i poddomene), ili null. */
     synchronized DailySchedule.Rule scheduleBlockingSite(String host) {
         Calendar now = calendarNow();
-        DailySchedule.Rule r = DailySchedule.blockingSite(schedules, host, minuteOf(now), dayOf(now));
+        DailySchedule.Rule r = DailySchedule.blockingSite(enforced(), host, minuteOf(now), dayOf(now));
         return r == null ? null : copy(r);
     }
 
     /** Režim sa dnevnom šifrom koji sadrži aplikaciju, ili null. */
     synchronized DailySchedule.Rule codeRuleForApp(String pkg) {
-        DailySchedule.Rule r = DailySchedule.codeApp(schedules, pkg);
+        DailySchedule.Rule r = DailySchedule.codeApp(enforced(), pkg);
         return r == null ? null : copy(r);
     }
 
     /** Režim sa dnevnom šifrom koji sadrži host (i poddomene), ili null. */
     synchronized DailySchedule.Rule codeRuleForSite(String host) {
-        DailySchedule.Rule r = DailySchedule.codeSite(schedules, host);
+        DailySchedule.Rule r = DailySchedule.codeSite(enforced(), host);
         return r == null ? null : copy(r);
     }
 
@@ -706,7 +726,7 @@ final class Store {
     synchronized List<DailySchedule.Rule> activeSchedules() {
         Calendar now = calendarNow();
         List<DailySchedule.Rule> out = new ArrayList<>();
-        for (DailySchedule.Rule r : schedules) {
+        for (DailySchedule.Rule r : enforced()) {
             if (r.active(minuteOf(now), dayOf(now))) out.add(copy(r));
         }
         return out;
@@ -721,7 +741,7 @@ final class Store {
     /** Uključen režim sa dnevnom šifrom koji je upravo aktivan (tada se šifra ne prikazuje), ili null. */
     synchronized DailySchedule.Rule activeCodeRule() {
         Calendar now = calendarNow();
-        for (DailySchedule.Rule r : schedules) {
+        for (DailySchedule.Rule r : enforced()) {
             if (r.code && r.active(minuteOf(now), dayOf(now))) return copy(r);
         }
         return null;
@@ -858,11 +878,13 @@ final class Store {
         } catch (JSONException ignored) {
         }
         sp.edit().putString("sites", sites.toString()).apply();
+        enforce();
     }
 
     synchronized void removeSite(String domain) {
         sites.remove(domain);
         sp.edit().putString("sites", sites.toString()).apply();
+        enforce();
     }
 
     /** Vraća domen sa liste koji pokriva dati host (npr. m.facebook.com -> facebook.com) ili null. */
@@ -1148,20 +1170,231 @@ final class Store {
 
     /** Da li je aplikacija u nekom pravilu: zaključana, sa limitom ili u uključenom režimu. */
     synchronized boolean appGuarded(String pkg) {
-        if (apps.has(pkg)) return true;
-        for (DailySchedule.Rule r : schedules) if (r.enabled && r.apps.contains(pkg)) return true;
+        if (enforcedApps().has(pkg)) return true;
+        for (DailySchedule.Rule r : enforced()) if (r.enabled && r.apps.contains(pkg)) return true;
         return false;
     }
 
     /** Domen sa liste ili iz uključenog režima koji pokriva host, ili null. */
     synchronized String siteGuarded(String host) {
-        String best = matchSite(host);
-        for (DailySchedule.Rule r : schedules) {
+        String best = matchSiteNow(host);
+        for (DailySchedule.Rule r : enforced()) {
             if (!r.enabled) continue;
             String d = DailySchedule.matchDomain(host, r.sites);
             if (d != null && (best == null || d.length() > best.length())) best = d;
         }
         return best;
+    }
+
+    // ---------- Pravila koja važe sada (popuštanje od sutra) ----------
+
+    private void loadEnforced() {
+        eDay = sp.getString("eDay", null);
+        if (eDay == null) {
+            // Prvo pokretanje ove verzije: važi ono što je podešeno.
+            copyToEnforced();
+            return;
+        }
+        eApps = parse(sp.getString("eApps", "{}"));
+        eSites = parse(sp.getString("eSites", "{}"));
+        parseSchedules(sp.getString("eSchedules", "[]"), eSchedules);
+        enforce();
+    }
+
+    private void copyToEnforced() {
+        eApps = parse(apps.toString());
+        eSites = parse(sites.toString());
+        eSchedules.clear();
+        for (DailySchedule.Rule r : schedules) eSchedules.add(copy(r));
+        eDay = day();
+        saveEnforced();
+    }
+
+    private void saveEnforced() {
+        sp.edit().putString("eApps", eApps.toString()).putString("eSites", eSites.toString())
+                .putString("eSchedules", schedulesJson(eSchedules)).putString("eDay", eDay).apply();
+    }
+
+    /** Novog dana važi tačno ono što je podešeno, i sva odložena popuštanja stupaju na snagu. */
+    private void roll() {
+        if (eApps == null) return;
+        if (!day().equals(eDay)) copyToEnforced();
+    }
+
+    /** Posle svake izmene: ono što važi sada postaje strožije od starog i novog podešavanja. */
+    private void enforce() {
+        if (eApps == null) return;
+        if (!day().equals(eDay)) {
+            copyToEnforced();
+            return;
+        }
+        JSONObject na = new JSONObject();
+        Set<String> keys = new HashSet<>(keysOf(eApps));
+        keys.addAll(keysOf(apps));
+        for (String pkg : keys) {
+            JSONObject e = eApps.optJSONObject(pkg), d = apps.optJSONObject(pkg);
+            boolean lock = (e != null && e.optBoolean("lock", false)) || (d != null && d.optBoolean("lock", false));
+            int limit = minLimit(e == null ? 0 : e.optInt("limit", 0), d == null ? 0 : d.optInt("limit", 0));
+            if (!lock && limit <= 0) continue;
+            try {
+                na.put(pkg, new JSONObject().put("lock", lock).put("limit", limit));
+            } catch (JSONException ignored) {
+            }
+        }
+        JSONObject ns = new JSONObject();
+        keys = new HashSet<>(keysOf(eSites));
+        keys.addAll(keysOf(sites));
+        for (String dom : keys) {
+            JSONObject e = eSites.optJSONObject(dom), d = sites.optJSONObject(dom);
+            int a = e == null ? -1 : e.optInt("limit", 0), b = d == null ? -1 : d.optInt("limit", 0);
+            int limit = a < 0 ? b : b < 0 ? a : (a == 0 || b == 0) ? 0 : Math.min(a, b);
+            try {
+                ns.put(dom, new JSONObject().put("limit", limit));
+            } catch (JSONException ignored) {
+            }
+        }
+        List<DailySchedule.Rule> nr = new ArrayList<>();
+        for (DailySchedule.Rule d : schedules) {
+            DailySchedule.Rule e = find(eSchedules, d.id);
+            nr.add(e == null ? copy(d) : stricter(e, d));
+        }
+        for (DailySchedule.Rule e : eSchedules) if (rule(e.id) == null) nr.add(copy(e)); // obrisan od sutra
+        eApps = na;
+        eSites = ns;
+        eSchedules.clear();
+        eSchedules.addAll(nr);
+        saveEnforced();
+    }
+
+    /** Manji od dva dnevna limita; 0 znači bez limita. */
+    private static int minLimit(int a, int b) {
+        if (a <= 0) return Math.max(0, b);
+        if (b <= 0) return a;
+        return Math.min(a, b);
+    }
+
+    private static DailySchedule.Rule find(List<DailySchedule.Rule> list, String id) {
+        for (DailySchedule.Rule r : list) if (r.id.equals(id)) return r;
+        return null;
+    }
+
+    /** Spoj važećeg i novog podešavanja režima koji ništa ne popušta. */
+    private static DailySchedule.Rule stricter(DailySchedule.Rule e, DailySchedule.Rule d) {
+        DailySchedule.Rule m = copy(e);
+        m.name = d.name;
+        if (!e.enabled || covers(d, e)) {
+            m.start = d.start;
+            m.end = d.end;
+        }
+        m.enabled = e.enabled || d.enabled;
+        m.code = e.code || d.code;
+        m.days = e.days | d.days;
+        m.apps.addAll(d.apps);
+        m.sites.addAll(d.sites);
+        return m;
+    }
+
+    /** Da li period a obuhvata ceo period b. */
+    private static boolean covers(DailySchedule.Rule a, DailySchedule.Rule b) {
+        for (int m = 0; m < 24 * 60; m++) {
+            if (DailySchedule.contains(b.start, b.end, m) && !DailySchedule.contains(a.start, a.end, m)) return false;
+        }
+        return true;
+    }
+
+    private List<DailySchedule.Rule> enforced() {
+        roll();
+        return eApps == null ? schedules : eSchedules;
+    }
+
+    private JSONObject enforcedApps() {
+        roll();
+        return eApps == null ? apps : eApps;
+    }
+
+    private JSONObject enforcedSites() {
+        roll();
+        return eSites == null ? sites : eSites;
+    }
+
+    synchronized boolean appLockNow(String pkg) {
+        JSONObject o = enforcedApps().optJSONObject(pkg);
+        return o != null && o.optBoolean("lock", false);
+    }
+
+    synchronized int appLimitNow(String pkg) {
+        JSONObject o = enforcedApps().optJSONObject(pkg);
+        return o == null ? 0 : o.optInt("limit", 0);
+    }
+
+    synchronized int siteLimitNow(String domain) {
+        JSONObject o = enforcedSites().optJSONObject(domain);
+        return o == null ? -1 : o.optInt("limit", 0);
+    }
+
+    synchronized String matchSiteNow(String host) {
+        String best = null;
+        for (String d : keysOf(enforcedSites())) {
+            if ((host.equals(d) || host.endsWith("." + d)) && (best == null || d.length() > best.length())) best = d;
+        }
+        return best;
+    }
+
+    /** Popuštanja koja čekaju sutra, opisana rečima; prazno ako ih nema. */
+    synchronized List<String> pendingChanges(android.content.pm.PackageManager pm) {
+        roll();
+        List<String> out = new ArrayList<>();
+        if (eApps == null) return out;
+        for (String pkg : keysOf(eApps)) {
+            String name = pkg;
+            try { name = pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString(); } catch (Exception ignored) { }
+            boolean el = appLockNow(pkg), dl = appLock(pkg);
+            int ei = appLimitNow(pkg), di = appLimit(pkg);
+            if (el && !dl) out.add(name + ": bez zaključavanja");
+            if (ei != di) out.add(name + ": " + (di <= 0 ? "bez dnevnog limita" : "limit " + di + " min umesto " + ei));
+        }
+        for (String dom : keysOf(eSites)) {
+            int ei = siteLimitNow(dom), di = siteLimit(dom);
+            if (ei == di) continue;
+            out.add(dom + ": " + (di < 0 ? "skida se sa liste" : di == 0 ? "uvek blokiran" : "limit " + di + " min"
+                    + (ei == 0 ? " umesto stalne blokade" : " umesto " + ei)));
+        }
+        for (DailySchedule.Rule e : eSchedules) {
+            DailySchedule.Rule d = rule(e.id);
+            if (d == null) {
+                out.add("Režim „" + e.name + "“ se briše");
+                continue;
+            }
+            if (e.enabled && !d.enabled) out.add("Režim „" + d.name + "“ se isključuje");
+            if (d.enabled && (e.start != d.start || e.end != d.end)) out.add("Režim „" + d.name + "“: " + d.label() + " umesto " + e.label());
+            if (e.days != d.days) out.add("Režim „" + d.name + "“: " + d.daysLabel() + " umesto " + e.daysLabel());
+            if (e.code && !d.code) out.add("Režim „" + d.name + "“ bez dnevne šifre van perioda");
+            int apps = 0, sites = 0;
+            for (String a : e.apps) if (!d.apps.contains(a)) apps++;
+            for (String x : e.sites) if (!d.sites.contains(x)) sites++;
+            if (apps + sites > 0) out.add("Režim „" + d.name + "“: uklanja se " + (apps > 0 ? Ui.count(apps, "aplikacija", "aplikacije", "aplikacija") : "")
+                    + (apps > 0 && sites > 0 ? " i " : "") + (sites > 0 ? Ui.count(sites, "sajt", "sajta", "sajtova") : ""));
+        }
+        return out;
+    }
+
+    /** Odustaje od popuštanja koja čekaju sutra: podešavanje se vraća na ono što sada važi. */
+    synchronized void cancelPending() {
+        roll();
+        if (eApps == null) return;
+        try {
+            JSONObject a = new JSONObject(eApps.toString());
+            for (String k : keysOf(apps)) apps.remove(k);
+            for (String k : keysOf(a)) apps.put(k, a.get(k));
+            JSONObject s = new JSONObject(eSites.toString());
+            for (String k : keysOf(sites)) sites.remove(k);
+            for (String k : keysOf(s)) sites.put(k, s.get(k));
+        } catch (JSONException ignored) {
+        }
+        schedules.clear();
+        for (DailySchedule.Rule r : eSchedules) schedules.add(copy(r));
+        sp.edit().putString("apps", apps.toString()).putString("sites", sites.toString())
+                .putString("schedules", schedulesJson()).apply();
     }
 
     synchronized void flush() {
