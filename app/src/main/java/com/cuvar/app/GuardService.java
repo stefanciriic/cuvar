@@ -97,6 +97,8 @@ public class GuardService extends AccessibilityService {
     private DailySchedule.Rule overlayRule; // režim prikazan na ekranu za blokadu
     private long lastTick;
     private boolean checkPending;
+    private boolean contentEvents = true; // da li stižu i događaji o promeni sadržaja (samo za pregledače)
+    private long lastEventCheck;
 
     private View overlay;
     private String overlayKey;
@@ -213,8 +215,8 @@ public class GuardService extends AccessibilityService {
             AccessibilityServiceInfo info = getServiceInfo();
             if (info != null) {
                 info.eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
-                        | AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
                         | AccessibilityEvent.TYPE_WINDOWS_CHANGED;
+                contentEvents = false;
                 info.flags |= AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
                         | AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS;
                 info.notificationTimeout = 100;
@@ -257,7 +259,12 @@ public class GuardService extends AccessibilityService {
         if (type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
                 || type == AccessibilityEvent.TYPE_WINDOWS_CHANGED) {
             // Otvoren je novi prozor: proveri odmah, pa još dva puta jer sistem ponekad kasni.
-            safeCheck();
+            // Kad događaji stižu u nizu, odmah se proverava najviše jednom u 300 ms, da se ne opterećuje telefon.
+            long nowEl = SystemClock.elapsedRealtime();
+            if (nowEl - lastEventCheck >= 300) {
+                lastEventCheck = nowEl;
+                safeCheck();
+            }
             h.removeCallbacks(recheckSoon);
             h.postDelayed(recheckSoon, 350);
             h.removeCallbacks(recheckLater);
@@ -350,6 +357,7 @@ public class GuardService extends AccessibilityService {
                 lastLeftAt = nowEl;
             }
             currentPkg = pkg;
+            setContentEvents(BROWSERS.containsKey(pkg));
             currentSite = null;
             currentHost = null;
             if (!back) {
@@ -478,12 +486,38 @@ public class GuardService extends AccessibilityService {
         }
     }
 
+    /**
+     * Promene sadržaja ekrana trebaju samo za adresu u pregledaču. Dok je napred druga aplikacija,
+     * Čuvar ih ne prima, pa ni aplikacije (npr. mape koje se stalno iscrtavaju) ne moraju da ih šalju.
+     */
+    private void setContentEvents(boolean on) {
+        if (on == contentEvents) return;
+        try {
+            AccessibilityServiceInfo info = getServiceInfo();
+            if (info == null) return;
+            if (on) {
+                info.eventTypes |= AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED;
+            } else {
+                info.eventTypes &= ~AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED;
+            }
+            setServiceInfo(info);
+            contentEvents = on;
+        } catch (Throwable ignored) {
+        }
+    }
+
     /** Paketi ostalih aplikacija koje su sada na ekranu (podeljen ekran, plutajući prozor, slika u slici). */
     private List<String> otherAppWindows(String active) {
         List<String> out = new ArrayList<>();
         try {
+            List<AccessibilityWindowInfo> apps = new ArrayList<>();
             for (AccessibilityWindowInfo w : getWindows()) {
-                if (w == null || w.getType() != AccessibilityWindowInfo.TYPE_APPLICATION) continue;
+                if (w != null && w.getType() == AccessibilityWindowInfo.TYPE_APPLICATION) apps.add(w);
+            }
+            // Samo jedna aplikacija na ekranu (uobičajeno): ne pita se aplikacija za sadržaj bez potrebe.
+            if (apps.size() < 2) return out;
+            for (AccessibilityWindowInfo w : apps) {
+                if (w.isActive() || w.isFocused()) continue;
                 AccessibilityNodeInfo r = w.getRoot();
                 if (r == null || r.getPackageName() == null) continue;
                 String p = r.getPackageName().toString();
