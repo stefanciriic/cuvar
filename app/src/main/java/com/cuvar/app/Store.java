@@ -762,6 +762,13 @@ final class Store {
     }
 
     /** Da li postoji ijedno pravilo za sajtove (lista ili uključen režim sa sajtovima). */
+    /** Sve aplikacije koje sada imaju neko pravilo (zaključavanje, limit ili vremenski režim). */
+    synchronized Set<String> guardedApps() {
+        Set<String> out = new HashSet<>(keysOf(enforcedApps()));
+        for (DailySchedule.Rule r : enforced()) if (r.enabled) out.addAll(r.apps);
+        return out;
+    }
+
     synchronized boolean hasSiteRules() {
         if (enforcedSites().length() > 0) return true;
         for (DailySchedule.Rule r : enforced()) if (r.enabled && !r.sites.isEmpty()) return true;

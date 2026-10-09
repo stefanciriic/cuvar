@@ -104,3 +104,11 @@ Provera na telefonu:
 3. Izlazak na početni ekran i povratak pre isteka pauze ne prekida komad ni pauzu.
 4. Posle 15 min pauze aplikacija se opet otvara i komad kreće od nule. Kartica Sada pokazuje koliko je pauze ostalo.
 5. Smanjenje ili brisanje ovog ograničenja važi tek sutra od 06:00 (kartica „Od sutra“).
+
+## Pregledač unutar aplikacije i kopije aplikacija
+
+1. Stavi neki sajt na listu blokiranih. U Instagramu, Facebooku ili Messengeru otvori link ka tom sajtu: pojavi se blokada sajta sa dugmetom „Nazad“.
+2. Otvori link ka sajtu koji nije na listi: otvara se normalno (vreme se računa sajtu).
+3. Ako Čuvar u tom pregledaču ne vidi adresu, a postoje pravila za sajtove, pojavi se „Link je zaključan“ sa savetom da se link otvori u Chrome-u.
+4. Aplikacija za kloniranje (Parallel Space, Dual Space, App Cloner...) zaključana je dok postoje pravila za aplikacije.
+5. Kopija aplikacije sa drugim paketom (npr. „Instagram 2“) dobija ista pravila i isto vreme kao original.
