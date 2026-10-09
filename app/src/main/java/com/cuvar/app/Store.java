@@ -1411,6 +1411,104 @@ final class Store {
                 .putString("schedules", schedulesJson()).putBoolean("night", eNight).apply();
     }
 
+    // ---------- Kad Čuvar nije radio ----------
+
+    private long beatSaved;
+
+    /** Servis radi; čuva se najviše jednom u minutu, ili odmah kad force. */
+    synchronized void guardBeat(boolean force) {
+        long el = SystemClock.elapsedRealtime();
+        if (!force && el - beatSaved < 60000L) return;
+        saveBeat(false);
+    }
+
+    /** Servis je ugašen (isključen u Pristupačnosti ili zaustavljen). */
+    synchronized void guardStopped() {
+        saveBeat(true);
+    }
+
+    private void saveBeat(boolean stopped) {
+        long el = SystemClock.elapsedRealtime();
+        try {
+            JSONObject o = new JSONObject();
+            o.put("t", now());
+            o.put("el", el);
+            o.put("boot", boot);
+            o.put("stopped", stopped);
+            sp.edit().putString("beat", o.toString()).apply();
+        } catch (JSONException ignored) {
+        }
+        beatSaved = el;
+    }
+
+    /**
+     * Pri pokretanju servisa: ako je posle poslednjeg znaka života prošlo vreme u kome Čuvar nije radio,
+     * to se zapisuje. Safe Mode se vidi po tome što je telefon u međuvremenu paljen više puta.
+     */
+    synchronized void guardStarted() {
+        JSONObject b = parse(sp.getString("beat", "{}"));
+        long el = SystemClock.elapsedRealtime();
+        long t = now();
+        if (b.has("t")) {
+            int lastBoot = b.optInt("boot", -1);
+            long lastT = b.optLong("t");
+            if (boot != -1 && lastBoot == boot) {
+                long gap = el - b.optLong("el", el);
+                if (gap > 2 * 60000L) {
+                    logGap(lastT, t, b.optBoolean("stopped") ? "isključen u Pristupačnosti" : "zaustavljen (verovatno zbog baterije)");
+                }
+            } else {
+                long bootAt = t - el;
+                if (boot != -1 && lastBoot != -1 && boot - lastBoot > 1) {
+                    logGap(lastT, bootAt, "telefon je paljen bez Čuvara, na primer u Safe Mode-u");
+                }
+                if (el > 3 * 60000L) {
+                    logGap(bootAt, t, "posle paljenja telefona nije radio " + Ui.fmt(el));
+                }
+            }
+        }
+        saveBeat(false);
+    }
+
+    private void logGap(long from, long to, String what) {
+        JSONArray a;
+        try {
+            a = new JSONArray(sp.getString("gaps", "[]"));
+        } catch (JSONException e) {
+            a = new JSONArray();
+        }
+        try {
+            a.put(new JSONObject().put("from", from).put("to", to).put("what", what));
+        } catch (JSONException ignored) {
+        }
+        while (a.length() > 20) a.remove(0);
+        sp.edit().putString("gaps", a.toString()).apply();
+    }
+
+    /** Zapisi iz poslednjih n dana, najnoviji prvi, npr. "pet 9.10. 14:05–14:40: isključen u Pristupačnosti". */
+    synchronized List<String> guardGaps(int days) {
+        List<String> out = new ArrayList<>();
+        JSONArray a;
+        try {
+            a = new JSONArray(sp.getString("gaps", "[]"));
+        } catch (JSONException e) {
+            return out;
+        }
+        long since = now() - days * 86400000L;
+        SimpleDateFormat f = new SimpleDateFormat("EEE d.M. HH:mm",
+                new Locale.Builder().setLanguage("sr").setScript("Latn").build());
+        SimpleDateFormat hm = new SimpleDateFormat("HH:mm", Locale.US);
+        f.setTimeZone(zone());
+        hm.setTimeZone(zone());
+        for (int i = a.length() - 1; i >= 0; i--) {
+            JSONObject o = a.optJSONObject(i);
+            if (o == null || o.optLong("to") < since) continue;
+            out.add(f.format(new Date(o.optLong("from"))) + "–" + hm.format(new Date(o.optLong("to")))
+                    + ": " + o.optString("what"));
+        }
+        return out;
+    }
+
     // ---------- Broj otvaranja i pokušaja ----------
 
     /** Koliko je danas puta otvoreno ("app:paket") ili pokušano ("try:ključ"). */

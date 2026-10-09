@@ -74,3 +74,9 @@ Provera na telefonu:
 2. Izlazak na kratko (deljenje, izbor slike, manje od 15 s) i povratak u istu aplikaciju ne troši novo otvaranje.
 3. Ekran blokade ima veliko narandžasto dugme „Zatvori“ (vodi na početni ekran), a od drugog pokušaja istog dana piše „Ovo ti je danas N. pokušaj.“
 4. Povećanje broja otvaranja ili brisanje važi tek sutra od 06:00, smanjenje odmah.
+
+# Rupe: podeljen ekran i Čuvar ugašen
+
+1. Otvori zaključanu aplikaciju u podeljenom ekranu ili kao plutajući prozor, dok je druga aplikacija u fokusu: ekran blokade se pojavljuje.
+2. Isključi Čuvara u Pristupačnosti na par minuta pa ga uključi: na kartici „Sada“ piše „Čuvar nije radio“ sa vremenom i razlogom.
+3. Pokreni telefon u Safe Mode, pa normalno: piše da je telefon paljen bez Čuvara.

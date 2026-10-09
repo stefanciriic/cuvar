@@ -28,6 +28,7 @@ import android.view.View;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
+import android.view.accessibility.AccessibilityWindowInfo;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -130,6 +131,7 @@ public class GuardService extends AccessibilityService {
                         }
                     }
                 }
+                store.guardBeat(false);
             } catch (Throwable ignored) {
             }
             safeCheck();
@@ -167,6 +169,7 @@ public class GuardService extends AccessibilityService {
                 hideOverlay();
                 if (store != null) {
                     store.flush();
+                    store.guardBeat(true);
                 }
             } else {
                 h.removeCallbacks(recheckSoon);
@@ -233,6 +236,10 @@ public class GuardService extends AccessibilityService {
         }
 
         running = true;
+        try {
+            store.guardStarted();
+        } catch (Throwable ignored) {
+        }
         lastTick = SystemClock.elapsedRealtime();
         h.removeCallbacks(tick);
         h.postDelayed(tick, TICK_MS);
@@ -269,6 +276,9 @@ public class GuardService extends AccessibilityService {
 
     @Override
     public boolean onUnbind(Intent intent) {
+        if (store != null) {
+            store.guardStopped();
+        }
         shutdown();
         return super.onUnbind(intent);
     }
@@ -436,6 +446,16 @@ public class GuardService extends AccessibilityService {
                 break;
             }
         }
+        if (show == null) {
+            // Podeljen ekran, plutajući prozor ili slika u slici: proveri i aplikacije koje nisu u fokusu.
+            for (String other : otherAppWindows(pkg)) {
+                Block b = appOnlyBlock(other);
+                if (b != null) {
+                    show = b;
+                    break;
+                }
+            }
+        }
         long coolLeft = show == null || hard(show.kind) ? 0 : store.cooldownLeft(show.key);
 
         if (show != null && (overlay == null || !show.key.equals(overlayKey))) {
@@ -454,6 +474,50 @@ public class GuardService extends AccessibilityService {
         } else {
             hideOverlay();
         }
+    }
+
+    /** Paketi ostalih aplikacija koje su sada na ekranu (podeljen ekran, plutajući prozor, slika u slici). */
+    private List<String> otherAppWindows(String active) {
+        List<String> out = new ArrayList<>();
+        try {
+            for (AccessibilityWindowInfo w : getWindows()) {
+                if (w == null || w.getType() != AccessibilityWindowInfo.TYPE_APPLICATION) continue;
+                AccessibilityNodeInfo r = w.getRoot();
+                if (r == null || r.getPackageName() == null) continue;
+                String p = r.getPackageName().toString();
+                if (p.equals(active) || p.equals(getPackageName()) || TRANSPARENT.contains(p) || out.contains(p)) continue;
+                out.add(p);
+            }
+        } catch (Throwable ignored) {
+        }
+        return out;
+    }
+
+    /** Blokada aplikacije koja je na ekranu, ali nije u fokusu (bez sajtova i broja otvaranja), ili null. */
+    private Block appOnlyBlock(String p) {
+        if (exempt().contains(p)) return null;
+        String k = "app:" + p;
+        Block b = null;
+        int dayLimit = store.dayLimit();
+        if (store.appGuarded(p) && DayLimit.reached(dayLimit, store.phoneToday(exempt()))) {
+            b = new Block(k, KIND_DAY, null, false);
+        } else if (store.appGuarded(p) && store.nightActive()) {
+            b = new Block(k, KIND_NIGHT, null, false);
+        } else {
+            DailySchedule.Rule rule = store.scheduleBlockingApp(p);
+            if (rule != null) {
+                b = new Block(k, KIND_SCHEDULE, rule, false);
+            } else {
+                int limit = store.appLimitNow(p);
+                boolean timeUp = limit > 0 && store.usedToday(p) >= limit * 60000L;
+                DailySchedule.Rule codeRule = store.codeRuleForApp(p);
+                if (store.appLockNow(p) || timeUp || codeRule != null) {
+                    b = new Block(k, timeUp ? KIND_TIME : codeRule != null ? KIND_CODE : KIND_LOCK, null, true);
+                }
+            }
+        }
+        if (b != null && !hard(b.kind) && (store.unlockLeft(k) > 0 || store.emergencyLeft(k) > 0)) return null;
+        return b;
     }
 
     /** Blokade koje se ne otključavaju: vremenski režim, potrošen limit aplikacije, sajta ili ukupni. */

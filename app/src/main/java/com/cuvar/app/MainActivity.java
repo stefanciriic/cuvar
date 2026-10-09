@@ -186,6 +186,11 @@ public class MainActivity extends Activity {
             nowLine("●  Čuvar je isključen", "Ništa se ne meri ni blokira dok ga ne uključiš.", Ui.ACCENT);
         }
 
+        List<String> gaps = store.guardGaps(7);
+        if (!gaps.isEmpty()) {
+            nowLine("Čuvar nije radio", android.text.TextUtils.join("\n", gaps.subList(0, Math.min(3, gaps.size()))), Ui.ACCENT);
+        }
+
         boolean any = false;
         if (store.nightActive()) {
             nowLine("Noćna blokada", "Do 0" + DailyCode.NIGHT_END_HOUR + ":00 sve iz pravila je zaključano.", Ui.INK);
