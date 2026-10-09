@@ -72,28 +72,69 @@ public class MainActivity extends Activity {
 
     // ---------- Ekrani ----------
 
+    /** Izabrana kartica donje trake: 0 = Danas, 1 = Pravila (Statistika je poseban ekran). */
+    static int tab;
+
     private void setScreen(LinearLayout content) {
         ScrollView scroll = new ScrollView(this);
         scroll.setBackgroundColor(Ui.BG);
         scroll.setFillViewport(true);
         scroll.addView(content, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT));
-        setContentView(scroll);
+        LinearLayout root = Ui.column(this);
+        root.setBackgroundColor(Ui.BG);
+        root.addView(scroll, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+        root.addView(Ui.bottomBar(this, tab, this::openTab));
+        setContentView(root);
+    }
+
+    private void openTab(int t) {
+        if (t == 2) {
+            startActivity(new Intent(this, StatsActivity.class).putExtra(StatsActivity.AS_TAB, true));
+            overridePendingTransition(0, 0);
+            return;
+        }
+        tab = t;
+        showDashboard();
     }
 
     // ---------- Glavni ekran ----------
 
     private void showDashboard() {
-        LinearLayout col = Ui.column(this);
-        col.setPadding(Ui.dp(this, 20), Ui.dp(this, 28), Ui.dp(this, 20), Ui.dp(this, 36));
+        if (tab == 1) {
+            showRules();
+        } else {
+            showToday();
+        }
+        h.removeCallbacks(refreshNow);
+        h.postDelayed(refreshNow, 30000L);
+    }
 
-        col.addView(Ui.text(this, "Čuvar", 34, Ui.INK, true));
+    /** Naslov kartice sa zupčanikom za podešavanja desno. */
+    private LinearLayout titled(String title, String sub) {
+        LinearLayout col = Ui.column(this);
+        col.setPadding(Ui.dp(this, 20), Ui.dp(this, 28), Ui.dp(this, 20), Ui.dp(this, 28));
+        LinearLayout top = Ui.row(this);
+        top.addView(Ui.text(this, title, 34, Ui.INK, true),
+                new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        TextView gear = Ui.text(this, "⚙", 26, Ui.MUTED, false);
+        int p = Ui.dp(this, 8);
+        gear.setPadding(p, p, p, p);
+        gear.setContentDescription("Podešavanja");
+        gear.setOnClickListener(v -> showSettings());
+        top.addView(gear);
+        col.addView(top);
+        col.addView(Ui.text(this, sub, 14, Ui.MUTED, false), Ui.fill(this, 2));
+        return col;
+    }
+
+    /** Kartica Danas: šta važi sada, vreme danas i dnevna šifra. */
+    private void showToday() {
         String date = new SimpleDateFormat("EEEE, d. MMMM",
                 new Locale.Builder().setLanguage("sr").setScript("Latn").build()).format(new Date());
-        col.addView(Ui.text(this, date, 14, Ui.MUTED, false), Ui.fill(this, 2));
+        LinearLayout col = titled("Čuvar", date);
 
         boolean enabled = GuardService.isEnabled(this);
-
         if (!enabled) {
             col.addView(setupCard("Uključi Čuvara",
                     "U Pristupačnosti pronađi „Čuvar“ (pod Preuzete ili Instalirane aplikacije) i uključi ga. "
@@ -110,53 +151,49 @@ public class MainActivity extends Activity {
 
         col.addView(Ui.section(this, "Danas"), Ui.fill(this, 24));
         col.addView(todayCard(enabled), Ui.fill(this, 8));
-        LinearLayout stats = group();
-        groupRow(stats, "Statistika", "Krug po aplikacijama, kolone po danima, poređenje sa prošlom nedeljom",
-                v -> startActivity(new Intent(this, StatsActivity.class)));
-        col.addView(stats, Ui.fill(this, 10));
         col.addView(codeCard(), Ui.fill(this, 10));
+        setScreen(col);
+    }
+
+    /** Kartica Pravila: ukupni limit i noćna blokada na vrhu, pa pravila po aplikaciji i sajtu. */
+    private void showRules() {
+        nowBox = null;
+        LinearLayout col = titled("Pravila", "Pooštravanje važi odmah, a popuštanje tek sutra od 0"
+                + DailyCode.NIGHT_END_HOUR + ":00.");
+
+        View pending = pendingCard(this, store, this::showDashboard);
+        if (pending != null) col.addView(pending, Ui.fill(this, 18));
+
+        col.addView(Ui.section(this, "Za ceo telefon"), Ui.fill(this, 24));
+        LinearLayout whole = group();
+        groupRow(whole, "Ukupni dnevni limit", dayLimitSummary(), v -> chooseDayLimit());
+        groupRow(whole, "Noćna blokada", store.nightBlock()
+                ? "Uključena · od " + DailyCode.LOCK_HOUR + ":00 do 0" + DailyCode.NIGHT_END_HOUR + ":00 sve iz pravila je zaključano"
+                : "Isključena", v -> chooseNight());
+        col.addView(whole, Ui.fill(this, 8));
 
         int appRules = store.appRuleCount();
         int siteRules = store.siteList().size();
-        col.addView(Ui.section(this, "Pravila"), Ui.fill(this, 24));
+        col.addView(Ui.section(this, "Po aplikaciji i sajtu"), Ui.fill(this, 24));
         LinearLayout rules = group();
         groupRow(rules, "Sva pravila na jednom mestu",
                 "Šta je kad blokirano, po aplikaciji i sajtu",
                 v -> startActivity(new Intent(this, RulesActivity.class)));
         groupRow(rules, "Aplikacije",
-                appRules == 0 ? "Zaključaj ili postavi dnevni limit" : "Pravila: " + appRules,
+                appRules == 0 ? "Zaključaj, postavi dnevni limit ili broj otvaranja" : "Pravila: " + appRules,
                 v -> startActivity(new Intent(this, AppsActivity.class)));
         groupRow(rules, "Sajtovi",
                 siteRules == 0 ? "Blokiraj sajtove ili im postavi dnevni limit" : "Na listi: " + siteRules,
                 v -> startActivity(new Intent(this, SitesActivity.class)));
         groupRow(rules, "Vremenski režimi", scheduleSummary(),
                 v -> startActivity(new Intent(this, ScheduleActivity.class)));
-        groupRow(rules, "Ukupni dnevni limit", dayLimitSummary(), v -> chooseDayLimit());
-        groupRow(rules, "Noćna blokada", store.nightBlock()
-                ? "Uključena · od " + DailyCode.LOCK_HOUR + ":00 do 0" + DailyCode.NIGHT_END_HOUR + ":00 sve iz pravila je zaključano"
-                : "Isključena", v -> chooseNight());
         col.addView(rules, Ui.fill(this, 8));
-        View pending = pendingCard(this, store, this::showDashboard);
-        if (pending != null) col.addView(pending, Ui.fill(this, 10));
-
-        col.addView(Ui.section(this, "Podešavanja"), Ui.fill(this, 24));
-        LinearLayout settings = group();
-        groupRow(settings, "Tema", Ui.THEME_NAMES[Ui.themeChoice(this)], v -> chooseTheme());
-        groupRow(settings, "Privatnost", "Šta Čuvar vidi i gde se čuva", v -> showPrivacy());
-        col.addView(settings, Ui.fill(this, 8));
 
         TextView note = Ui.text(this,
                 "Savet: zaključaj i Podešavanja telefona (u Aplikacijama), da Čuvar ne može lako da se isključi ili obriše. Otvaraće se samo dnevnom šifrom.",
                 13, Ui.MUTED, false);
         col.addView(note, Ui.fill(this, 18));
-
-        TextView version = Ui.text(this, "Verzija " + BuildConfig.VERSION_NAME, 12, Ui.MUTED, false);
-        version.setGravity(Gravity.CENTER);
-        col.addView(version, Ui.fill(this, 10));
-
         setScreen(col);
-        h.removeCallbacks(refreshNow);
-        h.postDelayed(refreshNow, 30000L);
     }
 
     // ---------- Kartica „Sada“ ----------
@@ -248,6 +285,26 @@ public class MainActivity extends Activity {
 
     private static String minutes(long ms) {
         return ((ms + 59999L) / 60000L) + " min";
+    }
+
+    /** Zupčanik: tema, privatnost i verzija. */
+    private void showSettings() {
+        LinearLayout box = Ui.column(this);
+        LinearLayout g = group();
+        Sheet sheet = new Sheet(this, "Podešavanja").view(box).secondary("Zatvori", null);
+        groupRow(g, "Tema", Ui.THEME_NAMES[Ui.themeChoice(this)], v -> {
+            sheet.dismiss();
+            chooseTheme();
+        });
+        groupRow(g, "Privatnost", "Šta Čuvar vidi i gde se čuva", v -> {
+            sheet.dismiss();
+            showPrivacy();
+        });
+        box.addView(g);
+        TextView version = Ui.text(this, "Verzija " + BuildConfig.VERSION_NAME, 12, Ui.MUTED, false);
+        version.setGravity(Gravity.CENTER);
+        box.addView(version, Ui.fill(this, 14));
+        sheet.show();
     }
 
     private void chooseTheme() {
@@ -518,7 +575,8 @@ public class MainActivity extends Activity {
         long total = 0;
         for (Map.Entry<String, Long> e : store.todayMap().entrySet()) {
             String key = e.getKey();
-            if (key.startsWith("site:") || key.startsWith("web:") || key.equals(home) || key.equals(me)) {
+            if (key.startsWith("site:") || key.startsWith("web:") || key.equals(home) || key.equals(me)
+                    || !GuardService.tracked(this, key)) {
                 continue;
             }
             String label = labelOf(pm, key);

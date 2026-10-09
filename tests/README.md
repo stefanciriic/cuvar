@@ -80,3 +80,11 @@ Provera na telefonu:
 1. Otvori zaključanu aplikaciju u podeljenom ekranu ili kao plutajući prozor, dok je druga aplikacija u fokusu: ekran blokade se pojavljuje.
 2. Isključi Čuvara u Pristupačnosti na par minuta pa ga uključi: na kartici „Sada“ piše „Čuvar nije radio“ sa vremenom i razlogom.
 3. Pokreni telefon u Safe Mode, pa normalno: piše da je telefon paljen bez Čuvara.
+
+## Raspored u tri kartice i sistemske aplikacije
+
+1. Dole se vide kartice Danas, Pravila i Statistika; tap menja ekran bez animacije.
+2. Danas: kartice Sada, vreme danas i dnevna šifra. Zupčanik gore desno otvara Temu, Privatnost i verziju.
+3. Pravila: „Za ceo telefon“ (ukupni limit, noćna blokada) i „Po aplikaciji i sajtu“.
+4. Statistika kao kartica nema strelicu nazad; tap na Danas ili Pravila vraća na glavni ekran.
+5. Otvori ekran biometrije ili drugu sistemsku aplikaciju bez ikonice: ne sme da se pojavi u vremenu danas ni u statistici, i ne ulazi u ukupni dnevni limit.

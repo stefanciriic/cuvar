@@ -120,7 +120,9 @@ public class GuardService extends AccessibilityService {
             try {
                 boolean active = power.isInteractive() && !keyguard.isKeyguardLocked();
                 if (active && overlay == null && currentPkg != null && dt > 0 && dt <= 3 * TICK_MS) {
-                    store.addUsage(currentPkg, dt);
+                    if (tracked(GuardService.this, currentPkg)) {
+                        store.addUsage(currentPkg, dt);
+                    }
                     if (BROWSERS.containsKey(currentPkg)) {
                         if (currentSite != null) {
                             store.addUsage("site:" + currentSite, dt); // za limite sa liste sajtova
@@ -524,6 +526,25 @@ public class GuardService extends AccessibilityService {
     private static boolean hard(int kind) {
         return kind == KIND_SCHEDULE || kind == KIND_DAY || kind == KIND_NIGHT || kind == KIND_TIME || kind == KIND_SITE_TIME
                 || kind == KIND_OPENS;
+    }
+
+    private static final Map<String, Boolean> TRACKED = new HashMap<>();
+
+    /**
+     * Meri se samo vreme aplikacija koje imaju ikonicu u meniju. Sistemski prozori bez ikonice
+     * (biometrija, dozvole, instalacija) ne ulaze u statistiku ni u limite.
+     */
+    static synchronized boolean tracked(Context c, String pkg) {
+        Boolean t = TRACKED.get(pkg);
+        if (t == null) {
+            try {
+                t = c.getPackageManager().getLaunchIntentForPackage(pkg) != null;
+            } catch (Throwable e) {
+                t = true;
+            }
+            TRACKED.put(pkg, t);
+        }
+        return t;
     }
 
     /** Početni ekran, Čuvar, pozivi i poruke: ne računaju se u ukupni limit i nikad se zbog njega ne blokiraju. */

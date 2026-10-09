@@ -31,6 +31,9 @@ public class StatsActivity extends SubActivity {
         long ms;
     }
 
+    /** Otvoren kao kartica donje trake glavnog ekrana (bez strelice nazad). */
+    static final String AS_TAB = "asTab";
+
     private int days = 7;
     private LinearLayout body;
     private TextView tab1;
@@ -43,7 +46,8 @@ public class StatsActivity extends SubActivity {
 
         LinearLayout root = Ui.column(this);
         root.setBackgroundColor(Ui.BG);
-        root.addView(header("Statistika", "Pregled korišćenja telefona kroz vreme."));
+        final boolean asTab = getIntent().getBooleanExtra(AS_TAB, false);
+        root.addView(header("Statistika", "Pregled korišćenja telefona kroz vreme.", !asTab));
 
         LinearLayout tabs = Ui.row(this);
         tabs.setPadding(Ui.dp(this, 20), 0, Ui.dp(this, 20), 0);
@@ -74,7 +78,19 @@ public class StatsActivity extends SubActivity {
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
         scroll.addView(root);
-        setContentView(scroll);
+        if (asTab) {
+            LinearLayout page = Ui.column(this);
+            page.setBackgroundColor(Ui.BG);
+            page.addView(scroll, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+            page.addView(Ui.bottomBar(this, 2, t -> {
+                MainActivity.tab = t;
+                finish();
+                overridePendingTransition(0, 0);
+            }));
+            setContentView(page);
+        } else {
+            setContentView(scroll);
+        }
 
         render();
     }
@@ -140,7 +156,7 @@ public class StatsActivity extends SubActivity {
                     }
                     continue; // vreme sajta je već deo vremena pregledača, ne broji se duplo u ukupno
                 }
-                if (skip.contains(key)) {
+                if (skip.contains(key) || !GuardService.tracked(this, key)) {
                     continue;
                 }
                 grandTotal += ms;
@@ -183,7 +199,7 @@ public class StatsActivity extends SubActivity {
         long t = 0;
         for (Map.Entry<String, Long> e : store.dayMap(dayKey).entrySet()) {
             String k = e.getKey();
-            if (k.startsWith("web:") || k.startsWith("site:") || skip.contains(k)) continue;
+            if (k.startsWith("web:") || k.startsWith("site:") || skip.contains(k) || !GuardService.tracked(this, k)) continue;
             t += e.getValue();
         }
         return t;

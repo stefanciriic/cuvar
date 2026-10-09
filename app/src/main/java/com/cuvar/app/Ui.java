@@ -195,6 +195,38 @@ final class Ui {
         return l;
     }
 
+    static final String[] TABS = {"Danas", "Pravila", "Statistika"};
+
+    /** Donja traka sa karticama glavnog ekrana; onTab dobija redni broj tapnute kartice. */
+    static LinearLayout bottomBar(Context c, int active, java.util.function.IntConsumer onTab) {
+        LinearLayout bar = column(c);
+        View line = new View(c);
+        line.setBackgroundColor(LINE);
+        bar.addView(line, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1));
+        LinearLayout row = row(c);
+        row.setBackgroundColor(CARD);
+        for (int i = 0; i < TABS.length; i++) {
+            final int tab = i;
+            LinearLayout cell = column(c);
+            cell.setGravity(android.view.Gravity.CENTER);
+            int p = dp(c, 10);
+            cell.setPadding(0, p, 0, p);
+            View mark = new View(c);
+            mark.setBackground(round(i == active ? ACCENT : 0x00000000, dp(c, 2)));
+            LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(dp(c, 28), dp(c, 4));
+            mlp.gravity = android.view.Gravity.CENTER_HORIZONTAL;
+            cell.addView(mark, mlp);
+            TextView t = text(c, TABS[i], 14, i == active ? ACCENT : MUTED, true);
+            t.setGravity(android.view.Gravity.CENTER);
+            cell.addView(t, fill(c, 6));
+            cell.setBackground(pressable(CARD, SOFT, 0));
+            if (i != active) cell.setOnClickListener(v -> onTab.accept(tab));
+            row.addView(cell, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        }
+        bar.addView(row);
+        return bar;
+    }
+
     static LinearLayout card(Context c) {
         LinearLayout l = column(c);
         l.setBackground(round(CARD, dp(c, 18)));

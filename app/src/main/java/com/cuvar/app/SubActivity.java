@@ -32,8 +32,17 @@ abstract class SubActivity extends Activity {
 
     /** Zaglavlje sa strelicom nazad, naslovom i kratkim objašnjenjem. */
     protected LinearLayout header(String title, String sub) {
+        return header(title, sub, true);
+    }
+
+    protected LinearLayout header(String title, String sub, boolean withBack) {
         LinearLayout box = Ui.column(this);
-        box.setPadding(Ui.dp(this, 20), Ui.dp(this, 20), Ui.dp(this, 20), Ui.dp(this, 10));
+        box.setPadding(Ui.dp(this, 20), Ui.dp(this, withBack ? 20 : 28), Ui.dp(this, 20), Ui.dp(this, 10));
+        if (!withBack) {
+            box.addView(Ui.text(this, title, 34, Ui.INK, true));
+            box.addView(Ui.text(this, sub, 14, Ui.MUTED, false), Ui.fill(this, 2));
+            return box;
+        }
         TextView back = Ui.text(this, "‹ Nazad", 15, Ui.ACCENT, true);
         back.setGravity(Gravity.CENTER_VERTICAL);
         back.setPadding(0, Ui.dp(this, 8), Ui.dp(this, 16), Ui.dp(this, 8));
