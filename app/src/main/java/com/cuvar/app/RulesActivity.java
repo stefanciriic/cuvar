@@ -53,9 +53,9 @@ public class RulesActivity extends SubActivity {
         LinearLayout how = Ui.card(this);
         how.addView(Ui.text(this, "Kako se slažu", 15, Ui.INK, true));
         how.addView(Ui.text(this, "1. Režim je najjači: u svom periodu blokira i ne može da se otključa.\n"
-                + "2. Ostatak dana: zaključano se otvara samo dnevnom šifrom (17:00 do ponoći), a potrošen limit se ne otvara do ponoći.\n"
+                + "2. Ostatak dana: zaključano se otvara samo dnevnom šifrom (17:00 do 22:00), a potrošen limit se ne otvara do ponoći.\n"
                 + "3. Ukupni dnevni limit, kad se potroši, zaključava sve ovo do ponoći.\n"
-                + "4. Strože pravilo važi odmah, a blaže tek od sutra.",
+                + "4. Strože pravilo važi odmah, a blaže tek sutra od 06:00.\n5. Od 22:00 do 06:00 sve ovo je zaključano (noćna blokada).",
                 14, Ui.MUTED, false), Ui.fill(this, 6));
         content.addView(how, Ui.fill(this, 10));
         View pending = MainActivity.pendingCard(this, store, this::render);
@@ -214,7 +214,7 @@ public class RulesActivity extends SubActivity {
 
     private void pendingToast() {
         if (!store.pendingChanges(getPackageManager()).isEmpty()) {
-            Toast.makeText(this, "Pooštravanje važi odmah, a popuštanje tek od sutra.", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "Pooštravanje važi odmah, a popuštanje tek sutra od 06:00.", Toast.LENGTH_LONG).show();
         }
     }
 
@@ -239,7 +239,7 @@ public class RulesActivity extends SubActivity {
         LinearLayout box = Ui.column(this);
         List<CheckRow> rows = ruleChecks(box, rules, in);
         box.addView(Sheet.label(this, "Ostatak dana"), Ui.fill(this, 18));
-        CheckRow lock = new CheckRow(this, null, "Zaključaj", "Otvara se samo dnevnom šifrom, od 17:00 do ponoći");
+        CheckRow lock = new CheckRow(this, null, "Zaključaj", "Otvara se samo dnevnom šifrom, od 17:00 do 22:00");
         lock.setChecked(store.appLock(pkg));
         box.addView(lock, Ui.fill(this, 6));
         box.addView(Sheet.label(this, "Dnevni limit u minutima (0 = bez limita)"), Ui.fill(this, 14));

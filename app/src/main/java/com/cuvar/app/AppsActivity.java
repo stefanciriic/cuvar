@@ -103,7 +103,7 @@ public class AppsActivity extends SubActivity {
 
         LinearLayout root = Ui.column(this);
         root.setBackgroundColor(Ui.BG);
-        root.addView(header("Aplikacije", "Tapni aplikaciju da je zaključaš ili joj postaviš dnevni limit. Popuštanje važi tek od sutra."));
+        root.addView(header("Aplikacije", "Tapni aplikaciju da je zaključaš ili joj postaviš dnevni limit. Popuštanje važi tek sutra od 06:00."));
 
         EditText search = new EditText(this);
         search.setHint("Pretraži");
@@ -244,7 +244,7 @@ public class AppsActivity extends SubActivity {
 
     private void pendingToast() {
         if (!store.pendingChanges(getPackageManager()).isEmpty()) {
-            Toast.makeText(this, "Pooštravanje važi odmah, a popuštanje tek od sutra.", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "Pooštravanje važi odmah, a popuštanje tek sutra od 06:00.", Toast.LENGTH_LONG).show();
         }
     }
 
@@ -258,7 +258,7 @@ public class AppsActivity extends SubActivity {
         }
         LinearLayout box = Ui.column(this);
 
-        final CheckRow lock = new CheckRow(this, null, "Zaključaj", "Otvara se samo dnevnom šifrom, od 17:00 do ponoći");
+        final CheckRow lock = new CheckRow(this, null, "Zaključaj", "Otvara se samo dnevnom šifrom, od 17:00 do 22:00");
         lock.setChecked(store.appLock(it.pkg));
         box.addView(lock);
 

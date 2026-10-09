@@ -58,6 +58,7 @@ public class GuardService extends AccessibilityService {
     private static final int KIND_SITE_TIME = 4;  // istekao dnevni limit sajta
     private static final int KIND_SCHEDULE = 5;
     private static final int KIND_CODE = 6;       // van perioda režima, otključava se dnevnom šifrom
+    private static final int KIND_NIGHT = 8;      // noćna blokada od 22:00, ništa se ne otključava do 06:00
     private static final int KIND_DAY = 7;        // potrošen ukupni dnevni limit, ništa se ne otključava do ponoći
 
     /** Pregledači i ID polja sa adresom u svakom od njih. */
@@ -360,6 +361,14 @@ public class GuardService extends AccessibilityService {
                 }
             }
         }
+        if (store.nightActive() && !exempt().contains(pkg)) {
+            String site = web ? store.siteGuarded(currentHost) : null;
+            if (store.appGuarded(pkg)) {
+                blocks.add(new Block(appKey, KIND_NIGHT, null, false));
+            } else if (site != null) {
+                blocks.add(new Block("site:" + site, KIND_NIGHT, null, false));
+            }
+        }
         DailySchedule.Rule rule = store.scheduleBlockingApp(pkg);
         if (rule != null) {
             blocks.add(new Block(appKey, KIND_SCHEDULE, rule, false));
@@ -419,7 +428,7 @@ public class GuardService extends AccessibilityService {
 
     /** Blokade koje se ne otključavaju: vremenski režim, potrošen limit aplikacije, sajta ili ukupni. */
     private static boolean hard(int kind) {
-        return kind == KIND_SCHEDULE || kind == KIND_DAY || kind == KIND_TIME || kind == KIND_SITE_TIME;
+        return kind == KIND_SCHEDULE || kind == KIND_DAY || kind == KIND_NIGHT || kind == KIND_TIME || kind == KIND_SITE_TIME;
     }
 
     /** Početni ekran, Čuvar, pozivi i poruke: ne računaju se u ukupni limit i nikad se zbog njega ne blokiraju. */
@@ -601,11 +610,16 @@ public class GuardService extends AccessibilityService {
         String title;
         String sub;
         String joke;
-        if (kind == KIND_DAY) {
+        if (kind == KIND_NIGHT) {
+            title = "Noćna blokada";
+            sub = "Od " + DailyCode.LOCK_HOUR + ":00 do 0" + DailyCode.NIGHT_END_HOUR + ":00 sve iz tvojih pravila je zaključano. "
+                    + name + " se ne otvara do jutra, ni šifrom.";
+            joke = Jokes.pick(Jokes.SCHEDULE);
+        } else if (kind == KIND_DAY) {
             title = "Dnevni limit je potrošen";
             sub = "Danas si na telefonu proveo " + Ui.fmt(store.phoneToday(exempt())) + ", a limit je "
                     + DayLimit.label(store.dayLimit()) + ". " + name
-                    + " je zaključan do ponoći i ne može da se otključa, ni PIN-om ni šifrom.";
+                    + " je zaključan do ponoći i ne može da se otključa, ni šifrom.";
             joke = Jokes.pick(Jokes.TIME_UP);
         } else if (kind == KIND_SCHEDULE && rule != null) {
             title = "Režim „" + rule.name + "“ je aktivan";
@@ -615,16 +629,16 @@ public class GuardService extends AccessibilityService {
             joke = Jokes.pick(Jokes.SCHEDULE);
         } else if (kind == KIND_CODE) {
             title = name + " je zaključan";
-            sub = "Unesi dnevnu šifru. Važi od " + DailyCode.CHANGE_HOUR + ":00 do ponoći i vidi se u Čuvaru.";
+            sub = "Unesi dnevnu šifru. Važi od " + DailyCode.CHANGE_HOUR + ":00 do " + DailyCode.LOCK_HOUR + ":00 i vidi se u Čuvaru.";
             joke = Jokes.pick(Jokes.LOCK);
         } else if (kind == KIND_LOCK) {
             title = name + " je zaključan";
-            sub = "Otvara se dnevnom šifrom, od " + DailyCode.CHANGE_HOUR + ":00 do ponoći. Šifra se vidi u Čuvaru.";
+            sub = "Otvara se dnevnom šifrom, od " + DailyCode.CHANGE_HOUR + ":00 do " + DailyCode.LOCK_HOUR + ":00. Šifra se vidi u Čuvaru.";
             joke = Jokes.pick(Jokes.LOCK);
         } else if (kind == KIND_SITE) {
             title = "Sajt je blokiran";
             sub = name + " je na tvojoj listi blokiranih sajtova. Otvara se dnevnom šifrom, od "
-                    + DailyCode.CHANGE_HOUR + ":00 do ponoći.";
+                    + DailyCode.CHANGE_HOUR + ":00 do " + DailyCode.LOCK_HOUR + ":00.";
             joke = Jokes.pick(Jokes.SITE);
         } else {
             title = "Vreme je isteklo";

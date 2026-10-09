@@ -49,6 +49,7 @@ final class Store {
     private JSONObject eSites;
     private final List<DailySchedule.Rule> eSchedules = new ArrayList<>();
     private String eDay;
+    private boolean eNight;
     private boolean dirty;
     private long lastSave;
     private int fails;
@@ -128,14 +129,14 @@ final class Store {
         return "Pogrešan PIN";
     }
 
-    /** Kao tryPin, ali za dnevnu šifru, koja važi samo od 17:00 do ponoći; pogrešni pokušaji se broje zajedno. */
+    /** Kao tryPin, ali za dnevnu šifru, koja važi samo od 17:00 do 22:00; pogrešni pokušaji se broje zajedno. */
     synchronized String tryCode(String code) {
         long now = SystemClock.elapsedRealtime();
         if (now < blockedUntil) {
             return "Previše pokušaja. Sačekaj " + ((blockedUntil - now) / 1000 + 1) + " s";
         }
         if (!dailyCodeVisible()) {
-            return "Dnevna šifra važi od " + DailyCode.CHANGE_HOUR + ":00 do ponoći";
+            return "Dnevna šifra važi od " + DailyCode.CHANGE_HOUR + ":00 do " + DailyCode.LOCK_HOUR + ":00";
         }
         if (dailyCode().equals(code)) {
             fails = 0;
@@ -749,9 +750,30 @@ final class Store {
 
     // ---------- Dnevna šifra ----------
 
-    /** Šifra se prikazuje samo od 17:00 do ponoći, pa je ujutru i tokom dana nema na ekranu. */
+    /** Šifra se prikazuje i važi samo od 17:00 do 22:00. */
     synchronized boolean dailyCodeVisible() {
-        return calendarNow().get(Calendar.HOUR_OF_DAY) >= DailyCode.CHANGE_HOUR;
+        int h = calendarNow().get(Calendar.HOUR_OF_DAY);
+        return h >= DailyCode.CHANGE_HOUR && h < DailyCode.LOCK_HOUR;
+    }
+
+    // ---------- Noćna blokada ----------
+
+    /** Podešena noćna blokada (uključivanje važi odmah, isključivanje tek sledećeg jutra u 06:00). */
+    synchronized boolean nightBlock() {
+        return sp.getBoolean("night", true);
+    }
+
+    synchronized void setNightBlock(boolean on) {
+        sp.edit().putBoolean("night", on).apply();
+        enforce();
+    }
+
+    /** Da li noćna blokada upravo traje: od 22:00 do 06:00 sve iz pravila je zaključano. */
+    synchronized boolean nightActive() {
+        roll();
+        boolean on = eApps == null ? nightBlock() : eNight;
+        int h = calendarNow().get(Calendar.HOUR_OF_DAY);
+        return on && (h >= DailyCode.LOCK_HOUR || h < DailyCode.NIGHT_END_HOUR);
     }
 
     /** Šifra koja važi sada (od 17:00 do 17:00 sledećeg dana, po pouzdanom vremenu). */
@@ -1197,6 +1219,7 @@ final class Store {
         }
         eApps = parse(sp.getString("eApps", "{}"));
         eSites = parse(sp.getString("eSites", "{}"));
+        eNight = sp.getBoolean("eNight", true);
         parseSchedules(sp.getString("eSchedules", "[]"), eSchedules);
         enforce();
     }
@@ -1206,28 +1229,39 @@ final class Store {
         eSites = parse(sites.toString());
         eSchedules.clear();
         for (DailySchedule.Rule r : schedules) eSchedules.add(copy(r));
-        eDay = day();
+        eNight = nightBlock();
+        eDay = rulesDay();
         saveEnforced();
     }
 
     private void saveEnforced() {
         sp.edit().putString("eApps", eApps.toString()).putString("eSites", eSites.toString())
-                .putString("eSchedules", schedulesJson(eSchedules)).putString("eDay", eDay).apply();
+                .putString("eSchedules", schedulesJson(eSchedules)).putString("eDay", eDay)
+                .putBoolean("eNight", eNight).apply();
     }
 
-    /** Novog dana važi tačno ono što je podešeno, i sva odložena popuštanja stupaju na snagu. */
+    /** Dan za odložena popuštanja: menja se u 06:00, kad se završi noćna blokada, a ne u ponoć dok ona traje. */
+    private String rulesDay() {
+        Calendar c = calendarNow();
+        c.add(Calendar.HOUR_OF_DAY, -DailyCode.NIGHT_END_HOUR);
+        return String.format(Locale.US, "%04d%02d%02d",
+                c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH));
+    }
+
+    /** U 06:00 važi tačno ono što je podešeno, i sva odložena popuštanja stupaju na snagu. */
     private void roll() {
         if (eApps == null) return;
-        if (!day().equals(eDay)) copyToEnforced();
+        if (!rulesDay().equals(eDay)) copyToEnforced();
     }
 
     /** Posle svake izmene: ono što važi sada postaje strožije od starog i novog podešavanja. */
     private void enforce() {
         if (eApps == null) return;
-        if (!day().equals(eDay)) {
+        if (!rulesDay().equals(eDay)) {
             copyToEnforced();
             return;
         }
+        eNight = eNight || nightBlock();
         JSONObject na = new JSONObject();
         Set<String> keys = new HashSet<>(keysOf(eApps));
         keys.addAll(keysOf(apps));
@@ -1345,6 +1379,7 @@ final class Store {
         roll();
         List<String> out = new ArrayList<>();
         if (eApps == null) return out;
+        if (eNight && !nightBlock()) out.add("Noćna blokada se isključuje");
         for (String pkg : keysOf(eApps)) {
             String name = pkg;
             try { name = pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString(); } catch (Exception ignored) { }
@@ -1394,7 +1429,7 @@ final class Store {
         schedules.clear();
         for (DailySchedule.Rule r : eSchedules) schedules.add(copy(r));
         sp.edit().putString("apps", apps.toString()).putString("sites", sites.toString())
-                .putString("schedules", schedulesJson()).apply();
+                .putString("schedules", schedulesJson()).putBoolean("night", eNight).apply();
     }
 
     synchronized void flush() {

@@ -128,6 +128,9 @@ public class MainActivity extends Activity {
         groupRow(rules, "Vremenski režimi", scheduleSummary(),
                 v -> startActivity(new Intent(this, ScheduleActivity.class)));
         groupRow(rules, "Ukupni dnevni limit", dayLimitSummary(), v -> chooseDayLimit());
+        groupRow(rules, "Noćna blokada", store.nightBlock()
+                ? "Uključena · od " + DailyCode.LOCK_HOUR + ":00 do 0" + DailyCode.NIGHT_END_HOUR + ":00 sve iz pravila je zaključano"
+                : "Isključena", v -> chooseNight());
         col.addView(rules, Ui.fill(this, 8));
         View pending = pendingCard(this, store, this::showDashboard);
         if (pending != null) col.addView(pending, Ui.fill(this, 10));
@@ -179,6 +182,10 @@ public class MainActivity extends Activity {
         }
 
         boolean any = false;
+        if (store.nightActive()) {
+            nowLine("Noćna blokada", "Do 0" + DailyCode.NIGHT_END_HOUR + ":00 sve iz pravila je zaključano.", Ui.INK);
+            any = true;
+        }
         for (DailySchedule.Rule r : store.activeSchedules()) {
             if (r.apps.isEmpty() && r.sites.isEmpty()) continue;
             nowLine("Režim „" + r.name + "“", "Traje do " + DailySchedule.label(r.end)
@@ -274,7 +281,7 @@ public class MainActivity extends Activity {
         return card;
     }
 
-    /** Dnevna šifra za aplikacije režima sa šifrom; vidi se samo od 17:00 do ponoći i dok takav režim ne traje. */
+    /** Dnevna šifra za aplikacije režima sa šifrom; vidi se samo od 17:00 do 22:00 i dok takav režim ne traje. */
     private View codeCard() {
         LinearLayout card = Ui.card(this);
         TextView eyebrow = Ui.text(this, "DNEVNA ŠIFRA", 12, Ui.MUTED, true);
@@ -290,13 +297,13 @@ public class MainActivity extends Activity {
         if (!store.dailyCodeVisible()) {
             card.addView(Ui.text(this, "Stiže u " + DailyCode.CHANGE_HOUR + ":00", 30, Ui.INK, true), Ui.fill(this, 4));
             card.addView(Ui.text(this, "Svaki dan dobijaš jednu novu šifru u " + DailyCode.CHANGE_HOUR
-                    + ":00 i vidi se ovde do ponoći.", 14, Ui.MUTED, false), Ui.fill(this, 6));
+                    + ":00 i vidi se ovde do " + DailyCode.LOCK_HOUR + ":00.", 14, Ui.MUTED, false), Ui.fill(this, 6));
             return card;
         }
         TextView code = Ui.text(this, store.dailyCode(), 38, Ui.INK, true);
         code.setLetterSpacing(0.2f);
         card.addView(code, Ui.fill(this, 4));
-        card.addView(Ui.text(this, "Današnja šifra. Jedino ona otključava zaključane aplikacije i sajtove, i to samo do ponoći."
+        card.addView(Ui.text(this, "Današnja šifra. Jedino ona otključava zaključane aplikacije i sajtove, i to samo do " + DailyCode.LOCK_HOUR + ":00."
                 + " Sutra u " + DailyCode.CHANGE_HOUR + ":00 dobijaš novu.",
                 14, Ui.MUTED, false), Ui.fill(this, 6));
         return card;
@@ -385,6 +392,22 @@ public class MainActivity extends Activity {
         sheet.show();
     }
 
+    /** Uključivanje važi odmah, isključivanje tek sutra od 06:00. */
+    private void chooseNight() {
+        boolean on = store.nightBlock();
+        Sheet sheet = new Sheet(this, "Noćna blokada").message("Od " + DailyCode.LOCK_HOUR + ":00 do 0"
+                + DailyCode.NIGHT_END_HOUR + ":00 sve aplikacije i sajtovi iz tvojih pravila su zaključani i ne otvaraju se, "
+                + "ni dnevnom šifrom ni hitnim otključavanjem. Pozivi i poruke rade.\n\n"
+                + (on ? "Isključivanje važi tek sutra od 0" + DailyCode.NIGHT_END_HOUR + ":00." : "Uključivanje važi odmah."))
+                .secondary("Zatvori", null);
+        sheet.primary(on ? "Isključi od sutra" : "Uključi", () -> {
+            store.setNightBlock(!on);
+            showDashboard();
+            return true;
+        });
+        sheet.show();
+    }
+
     private String scheduleSummary() {
         List<DailySchedule.Rule> rules = store.schedules();
         if (rules.isEmpty()) return "Još nema režima";
@@ -400,7 +423,7 @@ public class MainActivity extends Activity {
         if (items.isEmpty()) return null;
         LinearLayout card = Ui.card(a);
         card.addView(Ui.text(a, "Od sutra", 16, Ui.ACCENT, true));
-        card.addView(Ui.text(a, "Blaža pravila važe tek od ponoći. Do tada važi strožije.", 13, Ui.MUTED, false),
+        card.addView(Ui.text(a, "Blaža pravila važe tek sutra od 0" + DailyCode.NIGHT_END_HOUR + ":00. Do tada važi strožije.", 13, Ui.MUTED, false),
                 Ui.fill(a, 4));
         StringBuilder sb = new StringBuilder();
         for (String it : items) sb.append(sb.length() == 0 ? "" : "\n").append("•  ").append(it);

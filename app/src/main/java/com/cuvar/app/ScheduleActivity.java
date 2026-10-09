@@ -141,7 +141,7 @@ public class ScheduleActivity extends SubActivity {
             finish();
             return;
         }
-        page(rule.name, "Izaberi period i dane i dodaj aplikacije i sajtove koji će tada biti blokirani. Strože izmene važe odmah, a blaže (isključivanje, kraći period, manje dana, uklanjanje) tek od sutra.");
+        page(rule.name, "Izaberi period i dane i dodaj aplikacije i sajtove koji će tada biti blokirani. Strože izmene važe odmah, a blaže (isključivanje, kraći period, manje dana, uklanjanje) tek sutra od 06:00.");
         boolean active = store.scheduleActive(id);
         if (active) {
             content.addView(Ui.text(this, "Režim je sada aktivan. Do " + DailySchedule.label(rule.end)
@@ -160,7 +160,7 @@ public class ScheduleActivity extends SubActivity {
         action("Dani: " + rule.daysLabel(), () -> editDays(rule));
         content.addView(Ui.text(this, "Po vremenu telefona; pomeranje sata ne skraćuje režim. Period može da prelazi ponoć i tada pripada danu u kome počinje. Blokada traje do kraja perioda.", 14, Ui.MUTED, false), Ui.fill(this, 8));
         CheckRow code = new CheckRow(this, null, "Van perioda traži dnevnu šifru",
-                "Aplikacije i sajtovi ovog režima su i van perioda zaključani i otvaraju se samo dnevnom šifrom, od 17:00 do ponoći. Šifra se vidi na početnom ekranu Čuvara.");
+                "Aplikacije i sajtovi ovog režima su i van perioda zaključani i otvaraju se samo dnevnom šifrom, od 17:00 do 22:00. Šifra se vidi na početnom ekranu Čuvara.");
         code.setChecked(rule.code);
         code.setListener(checked -> {
             if (!store.setScheduleCode(id, checked)) refused();

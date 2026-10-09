@@ -14,6 +14,10 @@ import javax.crypto.spec.SecretKeySpec;
  */
 final class DailyCode {
     static final int CHANGE_HOUR = 17;
+    /** Od ovog sata šifra više ne važi i počinje noćna blokada. */
+    static final int LOCK_HOUR = 22;
+    /** Noćna blokada traje do ovog sata ujutru. */
+    static final int NIGHT_END_HOUR = 6;
 
     private DailyCode() {
     }
