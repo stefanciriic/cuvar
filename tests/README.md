@@ -112,3 +112,9 @@ Provera na telefonu:
 3. Ako Čuvar u tom pregledaču ne vidi adresu, a postoje pravila za sajtove, pojavi se „Link je zaključan“ sa savetom da se link otvori u Chrome-u.
 4. Aplikacija za kloniranje (Parallel Space, Dual Space, App Cloner...) zaključana je dok postoje pravila za aplikacije.
 5. Kopija aplikacije sa drugim paketom (npr. „Instagram 2“) dobija ista pravila i isto vreme kao original.
+
+## Brzi povratak ne skida blokadu
+
+1. Aplikaciji A postavi 1 otvaranje dnevno, otvori je i izađi, pa je otvori ponovo: blokada „Otvaranja su potrošena“.
+2. Pređi u drugu aplikaciju i za manje od 15 s vrati se u A: blokada ostaje.
+3. Otvori aplikaciju sa pravilom, na pauzi od 6 s pređi u drugu aplikaciju i brzo se vrati: pauza se ponovo pojavljuje, a otvaranje se broji tek posle „Nastavi“.

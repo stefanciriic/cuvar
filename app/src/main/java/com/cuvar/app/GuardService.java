@@ -140,6 +140,7 @@ public class GuardService extends AccessibilityService {
     private long pauseShownAt;
     private String lastLeftPkg;      // aplikacija iz koje se upravo izašlo
     private long lastLeftAt;
+    private boolean leftBlocked, leftPending, leftPause;
     private long exemptAt;
     private Set<String> webApps;     // sve aplikacije koje otvaraju veb adrese (pregledači)
     private long webAppsAt;
@@ -405,12 +406,20 @@ public class GuardService extends AccessibilityService {
             if (currentPkg != null) {
                 lastLeftPkg = currentPkg;
                 lastLeftAt = nowEl;
+                // Stanje aplikacije iz koje se izlazi: povratak u nju nastavlja tačno odatle (blokada, pauza, nebrojano otvaranje).
+                leftBlocked = currentPkg.equals(opensBlocked);
+                leftPending = currentPkg.equals(pendingOpen);
+                leftPause = currentPkg.equals(pausePkg);
             }
             currentPkg = pkg;
             setContentEvents(wantsContent(pkg));
             currentSite = null;
             currentHost = null;
-            if (!back) {
+            if (back) {
+                opensBlocked = leftBlocked ? pkg : null;
+                pendingOpen = leftPending ? pkg : null;
+                pausePkg = leftPause ? pkg : null;
+            } else {
                 int max = store.appOpensNow(pkg);
                 opensBlocked = max > 0 && store.opensToday("app:" + pkg) >= max ? pkg : null;
                 pendingOpen = opensBlocked == null && max > 0 ? pkg : null;
