@@ -39,16 +39,6 @@
             </intent-filter>
         </activity>
 
-        <!-- Lokalni VPN samo za DNS: blokirani sajtovi se ne otvaraju ni u jednoj aplikaciji. -->
-        <service
-            android:name=".DnsVpn"
-            android:exported="false"
-            android:permission="android.permission.BIND_VPN_SERVICE">
-            <intent-filter>
-                <action android:name="android.net.VpnService" />
-            </intent-filter>
-        </service>
-
         <activity
             android:name=".AppsActivity"
             android:exported="false"

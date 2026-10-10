@@ -193,7 +193,6 @@ public class MainActivity extends Activity {
                 ? "Uključena · od " + DailyCode.LOCK_HOUR + ":00 do 0" + DailyCode.NIGHT_END_HOUR + ":00 sve iz pravila je zaključano"
                     + (store.nightBlock() ? "" : " · isključuje se od sledećih 06:00")
                 : "Isključena", v -> chooseNight());
-        groupRow(whole, "Blokada sajtova u svim aplikacijama", dnsSummary(), v -> chooseDns());
         groupRow(whole, "Zaštita od isključivanja", store.protectNow()
                 ? "Uključena · Čuvar ne može da se isključi ni obriše"
                     + (store.protectSelf() ? "" : " · isključuje se od sledećih 06:00")
@@ -584,81 +583,6 @@ public class MainActivity extends Activity {
             return true;
         });
         sheet.show();
-    }
-
-    private static final int REQ_VPN = 41;
-
-    private String dnsSummary() {
-        if (!store.dnsBlockNow()) return "Isključena";
-        if (!DnsVpn.running) return "Ne radi · tapni da je ponovo uključiš";
-        String s = "Uključena · blokirani sajtovi se ne otvaraju ni u jednoj aplikaciji";
-        if (DnsVpn.privateDnsStrict(this)) s += " · isključi Privatni DNS u podešavanjima telefona";
-        return s + (store.dnsBlock() ? "" : " · isključuje se od sledećih 06:00");
-    }
-
-    /** Blokada sajtova kroz lokalni VPN samo za DNS: uključivanje odmah, isključivanje tek sutra od 06:00. */
-    private void chooseDns() {
-        boolean on = store.dnsBlock();
-        boolean down = store.dnsBlockNow() && !DnsVpn.running;
-        Sheet sheet = new Sheet(this, "Blokada sajtova u svim aplikacijama").message(
-                "Čuvar pravi lokalni VPN kroz koji ide samo pitanje „koja je adresa ovog sajta“. Sajt koji je uvek blokiran, "
-                + "u režimu ili zaključan noću i posle ukupnog limita tada se ne otvara nigde: ni u drugom pregledaču, "
-                + "ni u pregledaču unutar Instagrama ili Messengera. Ostali internet ide direktno, pa ništa ne usporava "
-                + "i ništa ne izlazi sa telefona.\n\n"
-                + "Dok radi, drugi VPN ne može da se koristi: ako koristiš svoj VPN, ne uključuj ovo. "
-                + "U VPN podešavanjima telefona NE uključuj „Blokiraj veze bez VPN-a“, jer bi tada nestao internet. "
-                + "Ako VPN ne može da radi, Čuvar ga sam gasi. U Chrome-u ostavi „Bezbedni DNS“ na automatski, "
-                + "a u telefonu Privatni DNS na isključeno ili automatski.\n\n"
-                + "Limiti u minutima za sajtove i dalje rade kao do sada.")
-                .secondary("Zatvori", null);
-        if (!on || down) {
-            sheet.primary(down ? "Ponovo uključi" : "Uključi", () -> {
-                store.setDnsBlock(true);
-                startDns();
-                showDashboard();
-                return true;
-            });
-        } else {
-            sheet.primary("Isključi od sutra", () -> {
-                store.setDnsBlock(false);
-                showDashboard();
-                return true;
-            });
-        }
-        if (store.dnsBlockNow()) {
-            sheet.danger("Otvori VPN podešavanja", () -> {
-                GuardService.vpnSetupUntil = android.os.SystemClock.elapsedRealtime() + 2 * 60000L;
-                try {
-                    startActivity(new Intent(android.provider.Settings.ACTION_VPN_SETTINGS));
-                } catch (Throwable t) {
-                    startActivity(new Intent(android.provider.Settings.ACTION_WIRELESS_SETTINGS));
-                }
-                return true;
-            });
-        }
-        sheet.show();
-    }
-
-    private void startDns() {
-        Intent consent = android.net.VpnService.prepare(this);
-        if (consent == null) {
-            DnsVpn.start(this);
-        } else {
-            try {
-                startActivityForResult(consent, REQ_VPN);
-            } catch (Throwable t) {
-                android.widget.Toast.makeText(this, "Telefon ne dozvoljava VPN.", android.widget.Toast.LENGTH_LONG).show();
-            }
-        }
-    }
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == REQ_VPN && resultCode == RESULT_OK) {
-            DnsVpn.start(this);
-            h.postDelayed(this::showDashboard, 800);
-        }
     }
 
     /** Zaštita od isključivanja: uključivanje važi odmah, isključivanje tek sutra od 06:00. */
