@@ -73,8 +73,20 @@ public class DnsVpn extends VpnService {
             stopSelf();
             return START_NOT_STICKY;
         }
+        boolean want;
+        try {
+            want = Store.get(this).dnsBlockNow();
+        } catch (Throwable t) {
+            want = false;
+        }
+        if (!want) {
+            // Sistem ga je pokrenuo (npr. „Uvek uključen VPN“), a blokada je isključena: ne pravi VPN.
+            shutdown();
+            stopSelf();
+            return START_NOT_STICKY;
+        }
         if (loop == null || !loop.isAlive()) open();
-        return START_STICKY;
+        return START_NOT_STICKY;
     }
 
     private synchronized void open() {
@@ -195,7 +207,42 @@ public class DnsVpn extends VpnService {
         return r;
     }
 
+    private int failures; // uzastopni neuspesi da se pita pravi DNS dok mreža ima internet
+
     private byte[] forward(byte[] query) {
+        byte[] r = ask(query);
+        if (r != null) {
+            failures = 0;
+        } else if (networkOnline() && ++failures >= 8) {
+            // Pravi DNS se ne može dobiti (npr. „Blokiraj veze bez VPN-a“): ugasi blokadu da telefon ne ostane bez interneta.
+            GuardDiagnostics.report("dnsGiveUp", new IllegalStateException("upstream DNS unreachable"));
+            try {
+                Store.get(this).disableDnsNow();
+            } catch (Throwable ignored) {
+            }
+            new Thread(() -> {
+                shutdown();
+                stopSelf();
+            }).start();
+        }
+        return r;
+    }
+
+    /** Da li bar jedna prava mreža (ne VPN) ima proveren internet. */
+    private boolean networkOnline() {
+        try {
+            ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+            for (Network n : cm.getAllNetworks()) {
+                NetworkCapabilities nc = cm.getNetworkCapabilities(n);
+                if (nc != null && !nc.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
+                        && nc.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) return true;
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
+    private byte[] ask(byte[] query) {
         for (InetAddress server : upstream()) {
             try (DatagramSocket s = new DatagramSocket()) {
                 protect(s);

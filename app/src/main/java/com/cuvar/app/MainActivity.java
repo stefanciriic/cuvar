@@ -605,8 +605,9 @@ public class MainActivity extends Activity {
                 + "u režimu ili zaključan noću i posle ukupnog limita tada se ne otvara nigde: ni u drugom pregledaču, "
                 + "ni u pregledaču unutar Instagrama ili Messengera. Ostali internet ide direktno, pa ništa ne usporava "
                 + "i ništa ne izlazi sa telefona.\n\n"
-                + "Dok radi, drugi VPN ne može da se koristi. Za najbolju zaštitu: Podešavanja → VPN → Čuvar → uključi "
-                + "samo „Uvek uključen VPN“. „Blokiraj veze bez VPN-a“ NE uključuj, jer bi tada nestao internet. U Chrome-u ostavi „Bezbedni DNS“ na automatski, "
+                + "Dok radi, drugi VPN ne može da se koristi: ako koristiš svoj VPN, ne uključuj ovo. "
+                + "U VPN podešavanjima telefona NE uključuj „Blokiraj veze bez VPN-a“, jer bi tada nestao internet. "
+                + "Ako VPN ne može da radi, Čuvar ga sam gasi. U Chrome-u ostavi „Bezbedni DNS“ na automatski, "
                 + "a u telefonu Privatni DNS na isključeno ili automatski.\n\n"
                 + "Limiti u minutima za sajtove i dalje rade kao do sada.")
                 .secondary("Zatvori", null);

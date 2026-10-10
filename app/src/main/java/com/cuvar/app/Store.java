@@ -95,6 +95,11 @@ final class Store {
         workEveryDay();
         prune();
         loadEnforced();
+        if (!sp.getBoolean("dnsReset1", false)) {
+            // Prva verzija blokade preko VPN-a je mogla da ostavi telefon bez interneta: posle ažuriranja je isključena.
+            disableDnsNow();
+            sp.edit().putBoolean("dnsReset1", true).apply();
+        }
         countOnlyGuarded(c);
         if (sp.contains("pin")) sp.edit().remove("pin").apply(); // PIN više ne postoji, otključava samo dnevna šifra
     }
@@ -907,6 +912,12 @@ final class Store {
     synchronized void setDnsBlock(boolean on) {
         sp.edit().putBoolean("dns", on).apply();
         enforce();
+    }
+
+    /** Isključuje blokadu preko VPN-a odmah (ne od sutra): kad VPN ne može da radi, internet ima prednost. */
+    synchronized void disableDnsNow() {
+        eDns = false;
+        sp.edit().putBoolean("dns", false).putBoolean("eDns", false).apply();
     }
 
     synchronized boolean dnsBlockNow() {

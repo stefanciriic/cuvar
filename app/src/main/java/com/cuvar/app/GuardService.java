@@ -348,8 +348,8 @@ public class GuardService extends AccessibilityService {
                 dnsDownSince = 0;
                 return;
             }
+            // Čuvar sam ne pali VPN ponovo: ako ga je korisnik isključio ili ga je zauzeo drugi VPN, ne bori se za njega.
             if (dnsDownSince == 0) dnsDownSince = now;
-            if (android.net.VpnService.prepare(this) == null) DnsVpn.start(this); // dozvola za VPN još važi
         } catch (Throwable error) {
             GuardDiagnostics.report("keepDns", error);
         }
@@ -1081,7 +1081,7 @@ public class GuardService extends AccessibilityService {
      */
     private boolean quiet(String raw) {
         if (raw.equals(getPackageName()) || BROWSERS.containsKey(raw) || store.focusActive()) return false;
-        if ((settingsLike(raw) || raw.equals("com.android.vpndialogs")) && store.protectNow()) return false;
+        if (settingsLike(raw) && store.protectNow()) return false;
         if (inAppBrowser(raw)) return false;
         String p = cloneOf(raw);
         return p.equals(raw) && !guarded(p);
@@ -1118,11 +1118,9 @@ public class GuardService extends AccessibilityService {
     /** Da li sistemski ekran prikazuje Čuvara (podaci o aplikaciji, Pristupačnost, brisanje). */
     private boolean guardsSelf(AccessibilityNodeInfo root, String p) {
         if (p.equals(getPackageName()) || exempt().contains(p)) return false;
-        if (p.equals("com.android.vpndialogs")) {
-            // Prozorčić za prekid VPN-a (iz obaveštenja) se zatvara; zahtev za uključivanje se ne dira.
-            return DnsVpn.running && store.dnsBlockNow() && mentions(root, getString(R.string.app_name));
-        }
         if (!settingsLike(p)) return false;
+        // VPN podešavanja se nikad ne zatvaraju: tu korisnik mora uvek moći da isključi VPN i vrati internet.
+        if (hasText(root, "VPN")) return false;
         // Korisnik je iz Čuvara otvorio „Pristup korišćenju“ da ga uključi: taj ekran se ne zatvara dva minuta.
         if (SystemClock.elapsedRealtime() < usageSetupUntil && !usageOk) return false;
         // Isto za VPN podešavanja („Uvek uključen VPN“), ali samo ekran o VPN-u, ne Pristupačnost ni podaci o aplikaciji.
