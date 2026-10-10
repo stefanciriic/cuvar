@@ -1237,6 +1237,130 @@ public class GuardService extends AccessibilityService {
 
     // ---------- Ekran za blokadu ----------
 
+    /** Blokada se odnosi na stranicu u pregledaču koji je na ekranu (sajt ili nepotvrđena adresa). */
+    private boolean inBrowserPage(String key, int kind) {
+        return (key.startsWith("site:") || kind == KIND_ADDRESS)
+                && currentPkg != null && BROWSERS.containsKey(currentPkg);
+    }
+
+    /**
+     * Izlaz sa ekrana za blokadu. Blokiran sajt u pregledaču: ostani u pregledaču, samo skloni karticu
+     * sa te stranice (otvori početnu Google stranu). Sve ostalo: početni ekran telefona.
+     */
+    private void leaveBlock(String key, int kind) {
+        if (inBrowserPage(key, kind)) {
+            openStartPage(currentPkg, key);
+        } else {
+            performGlobalAction(GLOBAL_ACTION_HOME);
+        }
+        h.removeCallbacks(recheckSoon);
+        h.postDelayed(recheckSoon, 600);
+    }
+
+    private static final String START_PAGE = "https://www.google.com";
+
+    /** U istoj kartici upiše početnu adresu u traku za adresu; ako to ne uspe, otvori je u tom pregledaču. */
+    private void openStartPage(final String browser, final String key) {
+        final String id = BROWSERS.get(browser);
+        AccessibilityNodeInfo bar = urlBar(browser, id);
+        if (bar == null || Build.VERSION.SDK_INT < 30) {
+            startPageIntent(browser);
+            return;
+        }
+        bar.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+        // Posle dodira traka postaje polje za unos; tek tada se može upisati adresa i potvrditi.
+        h.postDelayed(() -> {
+            try {
+                AccessibilityNodeInfo edit = urlBar(browser, id);
+                boolean ok = edit != null;
+                if (ok) {
+                    android.os.Bundle args = new android.os.Bundle();
+                    args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, START_PAGE);
+                    ok = edit.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+                            && edit.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.getId());
+                }
+                if (!ok) {
+                    startPageIntent(browser);
+                } else {
+                    // Neki pregledači prihvate „Enter“ a ne odu na adresu: ako je stranica i dalje blokirana, otvori je drugim putem.
+                    h.postDelayed(() -> {
+                        if (overlay != null && key.equals(overlayKey)) startPageIntent(browser);
+                    }, 1800);
+                }
+            } catch (Throwable t) {
+                GuardDiagnostics.report("openStartPage", t);
+                startPageIntent(browser);
+            }
+            h.removeCallbacks(recheckSoon);
+            h.postDelayed(recheckSoon, 600);
+        }, 350);
+    }
+
+    private AccessibilityNodeInfo urlBar(String browser, String id) {
+        if (id == null) return null;
+        try {
+            for (AccessibilityWindowInfo w : getWindows()) {
+                AccessibilityNodeInfo root = w.getRoot();
+                if (root == null || root.getPackageName() == null
+                        || !browser.contentEquals(root.getPackageName())) continue;
+                List<AccessibilityNodeInfo> nodes = root.findAccessibilityNodeInfosByViewId(id);
+                if (nodes != null && !nodes.isEmpty() && nodes.get(0) != null) return nodes.get(0);
+            }
+        } catch (Throwable t) {
+            GuardDiagnostics.report("urlBar", t);
+        }
+        return null;
+    }
+
+    private void startPageIntent(String browser) {
+        try {
+            Intent i = new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(START_PAGE))
+                    .setPackage(browser)
+                    .putExtra("com.android.browser.application_id", getPackageName())
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(i);
+        } catch (Throwable t) {
+            performGlobalAction(GLOBAL_ACTION_HOME);
+        }
+    }
+
+    /** Omotač koji sistemsko „nazad“ (taster ili pokret) pretvara u izlaz na početnu stranu pregledača. */
+    private View backCatcher(View inner, final String key, final int kind) {
+        FrameLayout wrap = new FrameLayout(this) {
+            @Override
+            public boolean dispatchKeyEvent(KeyEvent e) {
+                if (e.getKeyCode() == KeyEvent.KEYCODE_BACK) {
+                    if (e.getAction() == KeyEvent.ACTION_UP && !e.isCanceled()) leaveBlock(key, kind);
+                    return true;
+                }
+                return super.dispatchKeyEvent(e);
+            }
+        };
+        wrap.setFocusable(true);
+        wrap.setFocusableInTouchMode(true);
+        wrap.addView(inner, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        if (Build.VERSION.SDK_INT >= 33) {
+            // Android 16 šalje „nazad“ kao povratni poziv, ne kao taster.
+            wrap.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
+                @Override
+                public void onViewAttachedToWindow(View v) {
+                    v.requestFocus();
+                    android.window.OnBackInvokedDispatcher d = v.findOnBackInvokedDispatcher();
+                    if (d != null) {
+                        d.registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+                                () -> leaveBlock(key, kind));
+                    }
+                }
+
+                @Override
+                public void onViewDetachedFromWindow(View v) {
+                }
+            });
+        }
+        return wrap;
+    }
+
     private void showOverlay(String key, int kind, DailySchedule.Rule rule, boolean cooling, boolean code) {
         if (overlay != null && key.equals(overlayKey) && kind == overlayKind && sameRule(rule, overlayRule)
                 && cooling == overlayCooling && code == overlayCode) {
@@ -1246,11 +1370,15 @@ public class GuardService extends AccessibilityService {
         hideOverlay();
         try {
             View v = buildOverlay(key, kind, rule, cooling, code);
+            // Kod sajta u pregledaču naš ekran hvata i sistemsko „nazad“: inače bi ga dobio pregledač,
+            // zatvorio karticu bez istorije i izašao iz aplikacije umesto da te vrati na početnu stranu.
+            boolean catchBack = inBrowserPage(key, kind);
+            if (catchBack) v = backCatcher(v, key, kind);
             WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
                     WindowManager.LayoutParams.MATCH_PARENT,
                     WindowManager.LayoutParams.MATCH_PARENT,
                     WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                    catchBack ? 0 : WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
                     PixelFormat.TRANSLUCENT);
             lp.gravity = Gravity.TOP | Gravity.START;
             wm.addView(v, lp);
@@ -1555,11 +1683,8 @@ public class GuardService extends AccessibilityService {
         TextView close = overlayButton(c, "Zatvori");
         close.setTextSize(17);
         close.setBackground(Ui.pressable(Ui.ACCENT, Ui.ACCENT_DOWN, Ui.dp(c, 14)));
-        close.setOnClickListener(v -> {
-            performGlobalAction(GLOBAL_ACTION_HOME);
-            h.removeCallbacks(recheckSoon);
-            h.postDelayed(recheckSoon, 600);
-        });
+        final int k = kind;
+        close.setOnClickListener(v -> leaveBlock(key, k));
         box.addView(close, Ui.fill(c, 20));
 
         if (cooling) {
@@ -1588,7 +1713,7 @@ public class GuardService extends AccessibilityService {
                 TextView ask = overlayButton(c, "Ipak želim da otključam");
                 ask.setTextColor(Ui.NIGHT_MUTED);
                 ask.setBackground(null);
-                ask.setOnClickListener(v -> showAreYouSure(unlock, key, code));
+                ask.setOnClickListener(v -> showAreYouSure(unlock, key, k, code));
                 unlock.addView(ask);
             }
         }
@@ -1598,9 +1723,13 @@ public class GuardService extends AccessibilityService {
         if (isSite || kind == KIND_INAPP || kind == KIND_ADDRESS) {
             TextView back = overlayButton(c, "Nazad");
             back.setOnClickListener(v -> {
-                performGlobalAction(GLOBAL_ACTION_BACK);
-                h.removeCallbacks(recheckSoon);
-                h.postDelayed(recheckSoon, 600);
+                if (inBrowserPage(key, k)) {
+                    leaveBlock(key, k);
+                } else {
+                    performGlobalAction(GLOBAL_ACTION_BACK);
+                    h.removeCallbacks(recheckSoon);
+                    h.postDelayed(recheckSoon, 600);
+                }
             });
             actions.addView(back, actionParams(c));
         }
@@ -1612,7 +1741,7 @@ public class GuardService extends AccessibilityService {
     }
 
     /** Šaljivo „Jesi li siguran?“ pre unosa PIN-a. */
-    private void showAreYouSure(final LinearLayout area, final String key, final boolean code) {
+    private void showAreYouSure(final LinearLayout area, final String key, final int kind, final boolean code) {
         final Context c = this;
         area.removeAllViews();
         TextView q = Ui.text(c, "Jesi li siguran?", 22, 0xFFFFFFFF, true);
@@ -1625,11 +1754,7 @@ public class GuardService extends AccessibilityService {
 
         TextView no = overlayButton(c, Jokes.pick(Jokes.NO));
         no.setBackground(Ui.pressable(Ui.ACCENT, Ui.ACCENT_DOWN, Ui.dp(c, 14)));
-        no.setOnClickListener(v -> {
-            performGlobalAction(key.startsWith("site:") ? GLOBAL_ACTION_BACK : GLOBAL_ACTION_HOME);
-            h.removeCallbacks(recheckSoon);
-            h.postDelayed(recheckSoon, 600);
-        });
+        no.setOnClickListener(v -> leaveBlock(key, kind));
         area.addView(no, Ui.fill(c, 16));
 
         TextView yes = overlayButton(c, Jokes.pick(Jokes.YES));

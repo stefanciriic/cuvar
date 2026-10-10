@@ -189,3 +189,10 @@ Provera na telefonu:
 
 1. U Chrome-u skroluj dugačku stranicu: skrolovanje je glatko kao bez Čuvara.
 2. Otvori blokiran sajt: blokada se pojavi za oko jednu sekundu.
+
+## Blokiran sajt u pregledaču: izlaz ostaje u pregledaču
+
+1. U Chrome-u otvori blokiran sajt (npr. instagram.com, i tokom noćnog režima).
+2. Na ekranu za blokadu povuci sistemsko „nazad“: Chrome ostaje otvoren, kartica ide na google.com.
+3. Ponovi sa dugmadima „Zatvori“ i „Nazad“ i sa „Ne“ posle „Ipak želim da otključam“: isti ishod.
+4. Zaključana aplikacija (nije sajt): „Zatvori“ i dalje vodi na početni ekran telefona.
