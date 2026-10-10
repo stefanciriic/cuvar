@@ -92,6 +92,9 @@ public class GuardService extends AccessibilityService {
     private static final Map<String, String> BROWSERS = new HashMap<>();
     /** Sistemski prozori koji se pojave preko aplikacije, a ne znače da je korisnik izašao iz nje. */
     private static final Set<String> TRANSPARENT = new HashSet<>();
+    /** Navigacija: Čuvar je nikad ne prati, ne čita i ne blokira, osim ako sama ima pravilo. */
+    private static final Set<String> HANDS_OFF = new HashSet<>(java.util.Arrays.asList(
+            "com.google.android.apps.maps", "com.google.android.apps.mapslite", "com.waze"));
 
     static {
         BROWSERS.put("com.android.chrome", "com.android.chrome:id/url_bar");
@@ -133,6 +136,8 @@ public class GuardService extends AccessibilityService {
     private boolean checkPending;
     private boolean contentEvents = true; // da li stižu i događaji o promeni sadržaja (samo za pregledače)
     private long lastEventCheck;
+    private Set<String> launcherApps;
+    private long launcherAppsAt;
     private long ruledSeenAt;     // kad je poslednji put viđena aplikacija sa pravilom ili pregledač napred (System.currentTimeMillis)
 
     private View overlay;
@@ -164,7 +169,7 @@ public class GuardService extends AccessibilityService {
     private ForegroundApp foreground;
     private boolean usageOk;
     private long usageCheckedAt;
-    private Set<String> watched;     // paketi od kojih Pristupačnost šalje događaje (null = sve)
+    private Set<String> watched;     // paketi od kojih Pristupačnost šalje događaje 
     private boolean currentQuiet;    // napred je aplikacija bez ikakvog pravila (mape, kalkulator...)
     private boolean currentInApp;    // napred je pregledač unutar aplikacije
     private String rawPkg;           // stvarni paket na ekranu (pre prepoznavanja kopije)
@@ -186,7 +191,9 @@ public class GuardService extends AccessibilityService {
         @Override
         public void run() {
             updateWatched();
-            safeCheck();
+            // Dok je navigacija napred bez „Pristupa korišćenju“, njen prozor se ne čita ni povremeno;
+            // prelazak u drugu aplikaciju javlja ta aplikacija.
+            if (usageOk || !(currentQuiet && overlay == null && handsOff(rawPkg))) safeCheck();
             try {
                 store.guardBeat(false);
             } catch (Throwable error) {
@@ -337,22 +344,27 @@ public class GuardService extends AccessibilityService {
             usageOk = ForegroundApp.granted(this);
             usageCheckedAt = now;
         }
-        Set<String> want = null;
-        if (usageOk && !store.focusActive()) {
-            want = new HashSet<>();
-            want.add(getPackageName());
-            want.addAll(exempt()); // početni ekran (i nedavne aplikacije u njemu), telefon, poruke
-            want.addAll(BROWSERS.keySet());
-            want.addAll(webApps());
-            want.addAll(store.guardedApps());
-            if (store.hasSiteRules() || store.focusHasSites()) Collections.addAll(want, IN_APP_APPS);
-            if (store.protectNow()) Collections.addAll(want, SETTINGS_APPS);
+        Set<String> want = new HashSet<>();
+        if (!usageOk || store.focusActive()) {
+            // Bez zapisa o korišćenju (ili tokom fokusa) prate se sve aplikacije sa ikonom i sistemski ekrani, ali ne i navigacija.
+            want.addAll(launcherApps());
+            want.add("android");
+            want.add("com.android.systemui");
+            Collections.addAll(want, SETTINGS_APPS);
         }
-        if (want == null ? watched == null : want.equals(watched)) return;
+        want.add(getPackageName());
+        want.addAll(exempt()); // početni ekran (i nedavne aplikacije u njemu), telefon, poruke
+        want.addAll(BROWSERS.keySet());
+        want.addAll(webApps());
+        want.addAll(store.guardedApps());
+        if (store.hasSiteRules() || store.focusHasSites()) Collections.addAll(want, IN_APP_APPS);
+        if (store.protectNow()) Collections.addAll(want, SETTINGS_APPS);
+        for (String p : HANDS_OFF) if (handsOff(p)) want.remove(p);
+        if (want.equals(watched)) return;
         try {
             AccessibilityServiceInfo info = getServiceInfo();
             if (info == null) return;
-            info.packageNames = want == null ? null : want.toArray(new String[0]);
+            info.packageNames = want.toArray(new String[0]);
             setServiceInfo(info);
             watched = want;
         } catch (Throwable error) {
@@ -380,6 +392,7 @@ public class GuardService extends AccessibilityService {
             // Napred je aplikacija bez pravila. Mape i slične aplikacije šalju ovakve događaje u nizu (pomeranje mape,
             // donji paneli), pa se ništa ne čita dok događaj dolazi iz iste aplikacije; promena aplikacije se proveri odmah.
             CharSequence p = event.getPackageName();
+            if (handsOff(rawPkg) && (p == null || p.toString().equals(rawPkg))) return; // navigacija napred: ništa se ne proverava
             if (p == null || p.toString().equals(rawPkg)) {
                 h.removeCallbacks(recheckLater);
                 h.postDelayed(recheckLater, 1200);
@@ -532,7 +545,7 @@ public class GuardService extends AccessibilityService {
         // pravilom, pregledač, podešavanja pod zaštitom ili kad se ne zna šta je napred.
         AccessibilityNodeInfo root = null;
         String pkg = null;
-        if (usageOk && foreground != null && overlay == null && !store.focusActive()) {
+        if (usageOk && foreground != null && overlay == null) {
             String fg = foreground.current();
             // Android ponekad kasni sa zapisom: ako je posle njega javila aplikacija sa pravilom, čita se prozor.
             if (fg != null && !TRANSPARENT.contains(fg) && quiet(fg) && foreground.since() > ruledSeenAt
@@ -1068,11 +1081,34 @@ public class GuardService extends AccessibilityService {
      * aplikacija za kloniranje, nije ekran podešavanja pod zaštitom i ne traje fokus.
      */
     private boolean quiet(String raw) {
+        if (handsOff(raw)) return true;
         if (raw.equals(getPackageName()) || BROWSERS.containsKey(raw) || store.focusActive()) return false;
         if (settingsLike(raw) && store.protectNow()) return false;
         if (inAppBrowser(raw)) return false;
         String p = cloneOf(raw);
         return p.equals(raw) && !guarded(p);
+    }
+
+    private boolean handsOff(String p) {
+        return p != null && HANDS_OFF.contains(p) && (store == null || !store.appGuarded(p));
+    }
+
+    /** Sve aplikacije sa ikonom, za praćenje bez „Pristupa korišćenju“; osvežava se na 5 minuta. */
+    private Set<String> launcherApps() {
+        long now = SystemClock.elapsedRealtime();
+        if (launcherApps == null || now - launcherAppsAt > 5 * 60000L) {
+            Set<String> out = new HashSet<>();
+            try {
+                Intent i = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER);
+                for (android.content.pm.ResolveInfo r : getPackageManager().queryIntentActivities(i, PackageManager.MATCH_ALL)) {
+                    if (r.activityInfo != null) out.add(r.activityInfo.packageName);
+                }
+            } catch (Throwable ignored) {
+            }
+            launcherApps = out;
+            launcherAppsAt = now;
+        }
+        return launcherApps;
     }
 
     /** Broj prozora aplikacija na ekranu (podeljen ekran, plutajući prozor); ne čita sadržaj aplikacija. */

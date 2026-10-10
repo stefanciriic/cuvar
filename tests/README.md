@@ -203,3 +203,10 @@ Provera na telefonu:
 2. Mape ne zastajkuju; Čuvar ne čita njihov prozor (aplikacija napred se zna iz zapisa o korišćenju).
 3. Iz Mapa pređi u aplikaciju sa pravilom: blokada/brojanje otvaranja rade odmah kao ranije.
 4. Iz aplikacije sa pravilom pređi u Mape: vreme se više ne troši na tu aplikaciju.
+
+## Navigacija (Google mape, Waze) potpuno izuzeta
+
+1. Bez pravila za Mape: otvori Mape, i sa i bez „Pristupa korišćenju“, i u noćnom režimu i tokom fokusa.
+2. Mape nikad ne dobijaju ekran za blokadu i ne zastajkuju; Čuvar od njih ne prima događaje i ne čita im prozor.
+3. Dodaj Mapama pravilo (npr. zaključaj): tada se ponašaju kao svaka aplikacija sa pravilom.
+4. Iz Mapa pređi u aplikaciju sa pravilom: blokada radi odmah.
