@@ -1,9 +1,13 @@
 package com.cuvar.app;
 
+import java.util.Collection;
+import java.util.Map;
+
 /**
- * Ukupni dnevni limit na telefonu. Kad se pređe, aplikacije i sajtovi sa pravilima su zaključani
- * do ponoći bez ikakvog otključavanja. Smanjenje važi odmah, povećanje je moguće jednom dnevno
- * i samo za deo limita (što je limit veći, to manji deo), a isključivanje važi tek od sutra.
+ * Ukupni dnevni limit: zajedničko vreme za sve aplikacije i sajtove sa pravilima. Vreme u ostalim
+ * aplikacijama (mape, pozivi, poruke...) ga ne troši. Kad se pređe, aplikacije i sajtovi sa pravilima
+ * su zaključani do ponoći bez ikakvog otključavanja. Smanjenje važi odmah, povećanje je moguće jednom
+ * dnevno i samo za deo limita (što je limit veći, to manji deo), a isključivanje važi tek od sutra.
  */
 final class DayLimit {
     /** Ponuđene vrednosti u minutima. */
@@ -52,6 +56,22 @@ final class DayLimit {
     /** Da li treba upozoriti da je ostalo malo vremena. */
     static boolean warn(int limitMin, long usedMs) {
         return limitMin > 0 && !reached(limitMin, usedMs) && usedMs >= limitMin * 60000L - WARN_MS;
+    }
+
+    /**
+     * Vreme pod pravilima za dan izmeren dok se ono nije beležilo zasebno: zbir aplikacija sa pravilom
+     * i sajtova sa pravilom (ključ "site:domen"). Poddomen se ne sabira uz roditeljski domen sa pravilom,
+     * jer roditelj već sadrži njegovo vreme.
+     */
+    static long guardedEstimate(Map<String, Long> day, Collection<String> apps, Collection<String> sites) {
+        long total = 0;
+        for (String pkg : apps) total += day.getOrDefault(pkg, 0L);
+        for (String site : sites) {
+            boolean nested = false;
+            for (String parent : sites) nested |= site.endsWith("." + parent);
+            if (!nested) total += day.getOrDefault("site:" + site, 0L);
+        }
+        return total;
     }
 
     /** "3 h", "1 h 30 min" ili "Isključen". */

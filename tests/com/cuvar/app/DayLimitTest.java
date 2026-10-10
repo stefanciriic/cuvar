@@ -1,5 +1,10 @@
 package com.cuvar.app;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+
 /** Pokretanje: javac -d .review/daylimit app/src/main/java/com/cuvar/app/DayLimit.java tests/com/cuvar/app/DayLimitTest.java
  *  java -cp .review/daylimit com.cuvar.app.DayLimitTest */
 public final class DayLimitTest {
@@ -37,6 +42,29 @@ public final class DayLimitTest {
         for (int m = 1; m < 600; m++) {
             check(DayLimit.raisePercent(m + 1) <= DayLimit.raisePercent(m), "Procenat ne raste");
         }
+
+        // Limit troši samo vreme pod pravilima: sat vremena mapa i poruka ne ulazi u zbir.
+        Map<String, Long> day = new HashMap<>();
+        day.put("com.google.android.apps.maps", 60 * min);
+        day.put("com.whatsapp", 20 * min);
+        day.put("com.instagram.android", 25 * min);
+        day.put("com.android.chrome", 40 * min);
+        day.put("site:reddit.com", 15 * min);
+        day.put("site:old.reddit.com", 5 * min);
+        day.put("site:example.org", 9 * min);
+        day.put("web:reddit.com", 15 * min);
+        day.put("web:wikipedia.org", 20 * min);
+        long guarded = DayLimit.guardedEstimate(day, Arrays.asList("com.instagram.android", "com.reddit.frontpage"),
+                Arrays.asList("reddit.com", "old.reddit.com"));
+        check(guarded == 40 * min, "Aplikacija i sajt sa pravilom, bez mapa, pregledača i sajtova bez pravila");
+        check(!DayLimit.reached(99, guarded), "Mape ne troše limit");
+        check(DayLimit.reached(99, 145 * min), "Sve vreme na telefonu bi ga potrošilo");
+        check(DayLimit.guardedEstimate(day, Collections.<String>emptyList(), Arrays.asList("old.reddit.com")) == 5 * min,
+                "Poddomen sa pravilom bez roditelja se računa sam");
+        check(DayLimit.guardedEstimate(day, Collections.<String>emptyList(), Collections.<String>emptyList()) == 0,
+                "Bez pravila nema vremena pod pravilima");
+        check(DayLimit.guardedEstimate(new HashMap<String, Long>(), Arrays.asList("com.instagram.android"),
+                Arrays.asList("reddit.com")) == 0, "Dan bez merenja");
 
         check("3 h".equals(DayLimit.label(180)), "Natpis 3 h");
         check("1 h 30 min".equals(DayLimit.label(90)), "Natpis 1 h 30 min");

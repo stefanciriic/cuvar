@@ -32,7 +32,8 @@ treba dodatno proveriti na telefonu:
    Proveri dijaloge sa tastaturom/velikim fontom i stanje kvačice uz TalkBack.
 7. U podeljenom ekranu promeni sajt u nefokusiranom pregledaču: njegova pravila
    i vreme sajta i dalje važe. Ukupno vreme telefona računa fokusiranu aplikaciju,
-   tako da istovremeno prikazane aplikacije ne dupliraju ukupan zbir.
+   tako da istovremeno prikazane aplikacije ne dupliraju ukupan zbir. Ukupni dnevni
+   limit se troši jednom, i kad su aplikacija i sajt sa pravilom vidljivi istovremeno.
 8. Podržan pregledač bez prethodno pročitane adrese prikazuje objašnjenje blokade
    kada postoje pravila za sajtove. Sakrivena traka tokom skrolovanja dugačke strane
    ili videa zadržava poslednji potvrđen domen istog prozora (čitanje članka duže od
@@ -99,7 +100,9 @@ Provera na Android telefonu:
 
 # Ukupni dnevni limit
 
-Automatska provera pravila (strožiji limit odmah, blaži ili isključen tek od sutra, potrošen limit, upozorenje 15 min ranije):
+Limit troši samo vreme u aplikacijama i na sajtovima koji imaju pravilo; mape, pozivi, poruke i ostalo bez pravila ga ne troše.
+
+Automatska provera pravila (strožiji limit odmah, blaži ili isključen tek od sutra, potrošen limit, upozorenje 15 min ranije, vreme pod pravilima bez aplikacija bez pravila):
 
 ```powershell
 javac -encoding UTF-8 -d .review/daylimit app/src/main/java/com/cuvar/app/DayLimit.java tests/com/cuvar/app/DayLimitTest.java
@@ -108,10 +111,12 @@ java -cp .review/daylimit com.cuvar.app.DayLimitTest
 
 Provera na telefonu:
 
-1. Na početnom ekranu otvori „Ukupni dnevni limit“ i izaberi vrednost manju od današnjeg vremena: zaključane i ograničene aplikacije i sajtovi odmah prikazuju „Dnevni limit je potrošen“, bez PIN-a, šifre i hitnog otključavanja. Aplikacije bez pravila, pozivi i poruke rade.
-2. Povećaj limit: dodaje se najviše 30 % (do 1 h), 20 % (2 h) ili 10 % (od 4 h), i drugi put istog dana dugme je sivo. Isključivanje piše da važi od sutra.
-3. Postavi limit 15 min iznad današnjeg vremena: stiže upozorenje (jednom dnevno).
-4. Posle ponoći (po pouzdanom vremenu) blokada nestaje, a zakazana vrednost važi.
+1. Koristi aplikaciju bez pravila (npr. mape) nekoliko minuta: na kartici Danas ukupno vreme raste, a red „Dnevni limit: … od …“ ostaje isti. Zatim koristi aplikaciju sa pravilom, pa sajt sa pravilom u pregledaču bez pravila: red raste za to vreme. Vreme na ekranu blokade se ne računa.
+2. U „Ukupni dnevni limit“ izaberi vrednost manju od vremena iz tog reda: zaključane i ograničene aplikacije i sajtovi odmah prikazuju „Dnevni limit je potrošen“, bez PIN-a, šifre i hitnog otključavanja. Aplikacije bez pravila, pozivi i poruke rade.
+3. Povećaj limit: dodaje se najviše 30 % (do 1 h), 20 % (2 h) ili 10 % (od 4 h), i drugi put istog dana dugme je sivo. Isključivanje piše da važi od sutra.
+4. Postavi limit 15 min iznad vremena iz tog reda: stiže upozorenje (jednom dnevno).
+5. Posle ponoći (po pouzdanom vremenu) blokada nestaje, a zakazana vrednost važi.
+6. Nadogradnja sa verzije koja je brojala sve vreme na telefonu, na dan kad je limit potrošen uglavnom aplikacijama bez pravila: posle instalacije red pokazuje samo vreme aplikacija i sajtova sa pravilom, blokada nestaje i povećanje je opet moguće. Ako je i to vreme preko limita, blokada ostaje.
 
 # Broj otvaranja i dugme „Zatvori“
 

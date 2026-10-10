@@ -438,8 +438,8 @@ public class MainActivity extends Activity {
 
     private String dayLimitSummary() {
         int limit = store.dayLimit();
-        if (limit <= 0) return "Zaključaj sve do ponoći kad pređeš ukupno vreme";
-        String s = DayLimit.label(limit) + " na telefonu, posle toga ništa ne otključava";
+        if (limit <= 0) return "Zajedničko vreme za sve iz tvojih pravila; kad ga potrošiš, zaključano je do ponoći";
+        String s = DayLimit.label(limit) + " za sve iz tvojih pravila, posle toga ništa ne otključava";
         if (store.dayLimitNext() == 0) s += " · isključuje se od sutra";
         return s;
     }
@@ -449,7 +449,8 @@ public class MainActivity extends Activity {
         final int limit = store.dayLimit();
         boolean offTomorrow = store.dayLimitNext() == 0;
         LinearLayout box = Ui.column(this);
-        String intro = "Računa se sve vreme na telefonu osim poziva, poruka, početnog ekrana i Čuvara. "
+        String intro = "Računa se samo vreme u aplikacijama i na sajtovima koji imaju pravilo "
+                + "(zaključani, ograničeni ili u režimu). Mape, pozivi, poruke i sve ostalo bez pravila ne troši limit. "
                 + "Kad se limit potroši, sve zaključane i ograničene aplikacije i sajtovi ostaju zaključani "
                 + "do ponoći: bez dnevne šifre i hitnog otključavanja. Upozorenje stiže "
                 + DayLimit.WARN_MS / 60000L + " min ranije.\n\n";
@@ -679,11 +680,12 @@ public class MainActivity extends Activity {
         card.addView(Ui.text(this, Ui.fmt(total), 38, Ui.INK, true), Ui.fill(this, 2));
         int limit = store.dayLimit();
         if (limit > 0) {
-            long counted = store.phoneToday(GuardService.exemptApps(this));
+            // Limit troši samo vreme pod pravilima, pa je manje od ukupnog vremena iznad.
+            long counted = store.guardedToday();
             String line = DayLimit.reached(limit, counted)
                     ? "Dnevni limit od " + DayLimit.label(limit).toLowerCase(Locale.ROOT) + " je potrošen. Zaključano je do ponoći."
-                    : "Do dnevnog limita od " + DayLimit.label(limit).toLowerCase(Locale.ROOT) + " ostalo je "
-                    + Ui.fmt(limit * 60000L - counted) + ".";
+                    : "Dnevni limit: " + Ui.fmt(counted) + " od " + DayLimit.label(limit).toLowerCase(Locale.ROOT)
+                    + " u aplikacijama i sajtovima sa pravilom. Ostalo je " + Ui.fmt(limit * 60000L - counted) + ".";
             card.addView(Ui.text(this, line, 14, DayLimit.reached(limit, counted) ? Ui.ACCENT : Ui.MUTED, true),
                     Ui.fill(this, 4));
         }
