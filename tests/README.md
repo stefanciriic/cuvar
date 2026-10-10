@@ -168,3 +168,10 @@ Provera na telefonu:
 1. Aplikaciji A postavi 1 otvaranje dnevno, otvori je i izađi, pa je otvori ponovo: blokada „Otvaranja su potrošena“.
 2. Pređi u drugu aplikaciju i za manje od 15 s vrati se u A: blokada ostaje.
 3. Otvori aplikaciju sa pravilom, na pauzi od 6 s pređi u drugu aplikaciju i brzo se vrati: pauza se ponovo pojavljuje, a otvaranje se broji tek posle „Nastavi“.
+
+## Aplikacije bez pravila se ne čitaju
+
+1. Otvori Google mape (ili kalkulator, kalendar) bez pravila i pomeraj mapu, otvaraj donje panele: mape rade glatko.
+2. Vreme u mapama se i dalje vidi u statistici i ne troši ukupni dnevni limit.
+3. Iz mapa pređi u aplikaciju sa pravilom: blokada ili pauza se pojavi odmah.
+4. Podeljen ekran mape + aplikacija sa pravilom: blokada se i dalje pojavljuje.

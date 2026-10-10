@@ -148,6 +148,7 @@ public class GuardService extends AccessibilityService {
             return size() > 128;
         }
     }; // paket -> poslednji prikazan ekran (aktivnost)
+    private boolean currentQuiet;    // napred je aplikacija bez ikakvog pravila (mape, kalkulator...)
     private boolean currentInApp;    // napred je pregledač unutar aplikacije
     private String rawPkg;           // stvarni paket na ekranu (pre prepoznavanja kopije)
     private Map<String, String> clones;
@@ -301,6 +302,17 @@ public class GuardService extends AccessibilityService {
                 if (c.contains(".") && !c.startsWith("android.") && !c.startsWith("androidx.")) activityOf.put(p.toString(), c);
             }
         }
+        if ((type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED || type == AccessibilityEvent.TYPE_WINDOWS_CHANGED)
+                && currentQuiet && overlay == null) {
+            // Napred je aplikacija bez pravila. Mape i slične aplikacije šalju ovakve događaje u nizu (pomeranje mape,
+            // donji paneli), pa se ništa ne čita dok događaj dolazi iz iste aplikacije; promena aplikacije se proveri odmah.
+            CharSequence p = event.getPackageName();
+            if (p == null || p.toString().equals(rawPkg)) {
+                h.removeCallbacks(recheckLater);
+                h.postDelayed(recheckLater, 1200);
+                return;
+            }
+        }
         if (type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
                 || type == AccessibilityEvent.TYPE_WINDOWS_CHANGED) {
             // Otvoren je novi prozor: proveri odmah, pa još dva puta jer sistem ponekad kasni.
@@ -442,7 +454,8 @@ public class GuardService extends AccessibilityService {
             return;
         }
 
-        AccessibilityNodeInfo root = getRootInActiveWindow();
+        // Prvo se uzme samo vrh ekrana, bez ostatka sadržaja: za aplikacije bez pravila to je sve što treba.
+        AccessibilityNodeInfo root = Build.VERSION.SDK_INT >= 33 ? getRootInActiveWindow(0) : getRootInActiveWindow();
         if (root == null || root.getPackageName() == null) {
             return;
         }
@@ -450,6 +463,12 @@ public class GuardService extends AccessibilityService {
         if (TRANSPARENT.contains(pkg)) {
             return;
         }
+        boolean quiet = overlay == null && quiet(pkg) && appWindowCount() < 2;
+        if (!quiet && Build.VERSION.SDK_INT >= 33) {
+            AccessibilityNodeInfo full = getRootInActiveWindow();
+            if (full != null && full.getPackageName() != null && pkg.equals(full.getPackageName().toString())) root = full;
+        }
+        currentQuiet = quiet;
         observationValid = true;
         visibleHosts.clear();
         secondaryContentPackages.clear();
@@ -495,6 +514,16 @@ public class GuardService extends AccessibilityService {
                 pendingOpen = opensBlocked == null && max > 0 ? pkg : null;
                 pausePkg = store.appGuarded(pkg) && !exempt().contains(pkg) ? pkg : null;
             }
+        }
+
+        if (quiet) {
+            // Aplikacija bez pravila: samo se beleži da je napred (za merenje), bez čitanja ekrana i drugih prozora.
+            currentInApp = false;
+            currentHost = null;
+            currentAddress = null;
+            setContentEvents(false);
+            hideOverlay();
+            return;
         }
 
         if (store.protectNow() && guardsSelf(root, pkg)) {
@@ -937,6 +966,30 @@ public class GuardService extends AccessibilityService {
     }
 
     /** Promene sadržaja trebaju za adresu u pregledaču i, dok je zaštita uključena, za ekrane podešavanja. */
+    /**
+     * Aplikacija na koju se ne odnosi nijedno pravilo ni provera: nije pregledač, nema pravilo, nije kopija ni
+     * aplikacija za kloniranje, nije ekran podešavanja pod zaštitom i ne traje fokus.
+     */
+    private boolean quiet(String raw) {
+        if (raw.equals(getPackageName()) || BROWSERS.containsKey(raw) || store.focusActive()) return false;
+        if (settingsLike(raw) && store.protectNow()) return false;
+        if (inAppBrowser(raw)) return false;
+        String p = cloneOf(raw);
+        return p.equals(raw) && !guarded(p);
+    }
+
+    /** Broj prozora aplikacija na ekranu (podeljen ekran, plutajući prozor); ne čita sadržaj aplikacija. */
+    private int appWindowCount() {
+        int n = 0;
+        try {
+            for (AccessibilityWindowInfo w : getWindows()) {
+                if (w != null && w.getType() == AccessibilityWindowInfo.TYPE_APPLICATION) n++;
+            }
+        } catch (Throwable ignored) {
+        }
+        return n;
+    }
+
     private boolean wantsContent(String p) {
         return (BROWSERS.containsKey(p) && (store == null || store.hasSiteRules() || store.focusHasSites()))
                 || (settingsLike(p) && store != null && store.protectNow());
