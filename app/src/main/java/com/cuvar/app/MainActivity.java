@@ -807,7 +807,7 @@ public class MainActivity extends Activity {
         // Android 13+: odmah Čuvarov prekidač u Pristupačnosti, bez traženja po listi.
         if (android.os.Build.VERSION.SDK_INT >= 33) {
             try {
-                startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_DETAILS_SETTINGS)
+                startActivity(new Intent("android.settings.ACCESSIBILITY_DETAILS_SETTINGS")
                         .putExtra(Intent.EXTRA_COMPONENT_NAME,
                                 new android.content.ComponentName(this, GuardService.class).flattenToString()));
                 return;
