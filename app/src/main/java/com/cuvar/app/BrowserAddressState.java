@@ -1,6 +1,10 @@
 package com.cuvar.app;
 
-/** Address confidence for one browser window. Unknown navigation fails closed after a short grace period. */
+/**
+ * Address confidence for one browser window. A toolbar hidden by scrolling or fullscreen keeps the host
+ * last verified in that window, because the browser shows the toolbar again when another page loads.
+ * A window whose address was never read fails closed after a short grace period.
+ */
 final class BrowserAddressState {
     static final long UNKNOWN_GRACE_MS = 3000L;
     private String host;
@@ -28,11 +32,6 @@ final class BrowserAddressState {
     }
 
     boolean unresolved(long elapsedMs) {
-        return missing && missingSince >= 0 && elapsedMs - missingSince >= UNKNOWN_GRACE_MS;
-    }
-
-    /** Clears a previously trusted host once the address stays unavailable long enough. */
-    void clearIfUnresolved(long elapsedMs) {
-        if (unresolved(elapsedMs)) host = null;
+        return missing && host == null && missingSince >= 0 && elapsedMs - missingSince >= UNKNOWN_GRACE_MS;
     }
 }

@@ -34,8 +34,9 @@ treba dodatno proveriti na telefonu:
    i vreme sajta i dalje važe. Ukupno vreme telefona računa fokusiranu aplikaciju,
    tako da istovremeno prikazane aplikacije ne dupliraju ukupan zbir.
 8. Podržan pregledač bez prethodno pročitane adrese prikazuje objašnjenje blokade
-   kada postoje pravila za sajtove. Sakrivena traka tokom videa zadržava poslednji
-   potvrđen domen istog prozora; ovo je heuristika, ne prepoznavanje sadržaja videa.
+   kada postoje pravila za sajtove. Sakrivena traka tokom skrolovanja dugačke strane
+   ili videa zadržava poslednji potvrđen domen istog prozora (čitanje članka duže od
+   3 sekunde ne sme da zaključa); ovo je heuristika, ne prepoznavanje sadržaja.
 9. Potroši otvaranja A, pređi u B pa brzo nazad u A: blokada ostaje. Ponovi sa
    nedovršenom pauzom pre otvaranja i sa već dozvoljenom sesijom.
 

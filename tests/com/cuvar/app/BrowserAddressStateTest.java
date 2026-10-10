@@ -13,12 +13,17 @@ public final class BrowserAddressStateTest {
         s.readable("example.com");
         s.missing(11000);
         check(!s.unresolved(13000) && "example.com".equals(s.host()), "briefly missing toolbar keeps verified host");
-        s.clearIfUnresolved(14000);
-        check(s.unresolved(14000) && s.host() == null, "stale fullscreen host is cleared after the grace period");
+        check(!s.unresolved(600000) && "example.com".equals(s.host()),
+                "toolbar hidden while reading a long page keeps the verified host and does not lock");
+        s.readable("other.org");
+        check("other.org".equals(s.host()) && !s.unresolved(600000), "toolbar shown again replaces the host");
+        s.missing(700000);
+        check(!s.unresolved(900000) && "other.org".equals(s.host()), "hiding again keeps the new host");
         s.readable(null);
-        check(s.host() == null && !s.unresolved(15000), "empty new tab clears old host");
-        s.missing(32000);
-        check(s.unresolved(35000), "unverified next document does not inherit old host");
+        check(s.host() == null && !s.unresolved(900000), "empty new tab clears old host");
+        s.missing(910000);
+        check(!s.unresolved(912999), "unverified window waits for the toolbar");
+        check(s.unresolved(913000), "unverified window does not inherit old host and fails closed");
         System.out.println("Prošlo: " + checks + " provera BrowserAddressState.");
     }
 

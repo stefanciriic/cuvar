@@ -1056,16 +1056,12 @@ public class GuardService extends AccessibilityService {
         }
         List<AccessibilityNodeInfo> nodes = root.findAccessibilityNodeInfosByViewId(id);
         if (nodes == null || nodes.isEmpty()) {
-            long now = SystemClock.elapsedRealtime();
-            state.missing(now);
-            state.clearIfUnresolved(now);
+            state.missing(SystemClock.elapsedRealtime());
             return state;
         }
         AccessibilityNodeInfo n = nodes.get(0);
         if (n == null) {
-            long now = SystemClock.elapsedRealtime();
-            state.missing(now);
-            state.clearIfUnresolved(now);
+            state.missing(SystemClock.elapsedRealtime());
         } else if (n.isFocused()) {
             state.editing();
         } else {
