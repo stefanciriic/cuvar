@@ -148,6 +148,22 @@ public class GuardService extends AccessibilityService {
             return size() > 128;
         }
     }; // paket -> poslednji prikazan ekran (aktivnost)
+    /** Do kada sme da se otvori ekran „Pristup korišćenju“ iako je zaštita uključena (korisnik je tapnuo dugme u Čuvaru). */
+    static volatile long usageSetupUntil;
+    /** Aplikacije koje otvaraju linkove u svom pregledaču. */
+    private static final String[] IN_APP_APPS = {"com.instagram.android", "com.instagram.lite", "com.facebook.katana",
+            "com.facebook.lite", "com.facebook.orca", "com.facebook.mlite", "com.zhiliaoapp.musically", "com.ss.android.ugc.trill",
+            "com.twitter.android", "com.snapchat.android", "com.linkedin.android", "com.reddit.frontpage",
+            "com.google.android.googlequicksearchbox", "com.google.android.gm", "org.telegram.messenger", "com.pinterest"};
+    /** Sistemski ekrani koje zaštita od isključivanja mora da vidi. */
+    private static final String[] SETTINGS_APPS = {"com.android.settings", "com.google.android.packageinstaller",
+            "com.android.packageinstaller", "com.google.android.permissioncontroller", "com.android.permissioncontroller",
+            "com.android.vending", "com.miui.securitycenter", "com.samsung.android.lool", "com.samsung.accessibility",
+            "com.google.android.marvin.talkback", "com.huawei.systemmanager", "com.coloros.safecenter", "com.oplus.safecenter"};
+    private ForegroundApp foreground;
+    private boolean usageOk;
+    private long usageCheckedAt;
+    private Set<String> watched;     // paketi od kojih Pristupačnost šalje događaje (null = sve)
     private boolean currentQuiet;    // napred je aplikacija bez ikakvog pravila (mape, kalkulator...)
     private boolean currentInApp;    // napred je pregledač unutar aplikacije
     private String rawPkg;           // stvarni paket na ekranu (pre prepoznavanja kopije)
@@ -168,6 +184,7 @@ public class GuardService extends AccessibilityService {
     private final Runnable tick = new Runnable() {
         @Override
         public void run() {
+            updateWatched();
             safeCheck();
             try {
                 store.guardBeat(false);
@@ -175,6 +192,22 @@ public class GuardService extends AccessibilityService {
                 GuardDiagnostics.report("heartbeat", error);
             }
             h.postDelayed(this, TICK_MS);
+        }
+    };
+
+    /** Dok je ekran upaljen, na 1,5 s se od Androida pita koja je aplikacija napred (aplikacije bez pravila ne šalju događaje). */
+    private final Runnable foregroundPoll = new Runnable() {
+        @Override
+        public void run() {
+            try {
+                if (usageOk && foreground != null && power != null && power.isInteractive()) {
+                    String fg = foreground.current();
+                    if (fg != null && !fg.equals(rawPkg) && !TRANSPARENT.contains(fg)) safeCheck();
+                }
+            } catch (Throwable error) {
+                GuardDiagnostics.report("foregroundPoll", error);
+            }
+            h.postDelayed(this, 1500L);
         }
     };
 
@@ -283,9 +316,47 @@ public class GuardService extends AccessibilityService {
         } catch (Throwable error) {
             GuardDiagnostics.report("guardStarted", error);
         }
+        foreground = new ForegroundApp(this);
+        updateWatched();
         h.removeCallbacks(tick);
         h.postDelayed(tick, TICK_MS);
+        h.removeCallbacks(foregroundPoll);
+        h.postDelayed(foregroundPoll, 1500L);
         safeCheck();
+    }
+
+    /**
+     * Sa dozvolom „Pristup korišćenju“ Pristupačnost šalje događaje samo iz aplikacija sa pravilom, pregledača,
+     * početnog ekrana i (dok je zaštita uključena) podešavanja. Mape, pozivi i sve ostalo tada Čuvaru ništa ne šalju,
+     * a da su napred, Čuvar saznaje od Androida. Bez dozvole se prate sve aplikacije, kao ranije.
+     */
+    private void updateWatched() {
+        long now = SystemClock.elapsedRealtime();
+        if (now - usageCheckedAt > 30000L || usageCheckedAt == 0) {
+            usageOk = ForegroundApp.granted(this);
+            usageCheckedAt = now;
+        }
+        Set<String> want = null;
+        if (usageOk && !store.focusActive()) {
+            want = new HashSet<>();
+            want.add(getPackageName());
+            want.addAll(exempt()); // početni ekran (i nedavne aplikacije u njemu), telefon, poruke
+            want.addAll(BROWSERS.keySet());
+            want.addAll(webApps());
+            want.addAll(store.guardedApps());
+            if (store.hasSiteRules() || store.focusHasSites()) Collections.addAll(want, IN_APP_APPS);
+            if (store.protectNow()) Collections.addAll(want, SETTINGS_APPS);
+        }
+        if (want == null ? watched == null : want.equals(watched)) return;
+        try {
+            AccessibilityServiceInfo info = getServiceInfo();
+            if (info == null) return;
+            info.packageNames = want == null ? null : want.toArray(new String[0]);
+            setServiceInfo(info);
+            watched = want;
+        } catch (Throwable error) {
+            GuardDiagnostics.report("watched", error);
+        }
     }
 
     @Override
@@ -456,14 +527,20 @@ public class GuardService extends AccessibilityService {
 
         // Prvo se uzme samo vrh ekrana, bez ostatka sadržaja: za aplikacije bez pravila to je sve što treba.
         AccessibilityNodeInfo root = Build.VERSION.SDK_INT >= 33 ? getRootInActiveWindow(0) : getRootInActiveWindow();
-        if (root == null || root.getPackageName() == null) {
+        String pkg = root == null || root.getPackageName() == null ? null : root.getPackageName().toString();
+        if (pkg == null && usageOk && foreground != null && overlay == null) {
+            // Prozor se ne može pročitati: koju je aplikaciju Android poslednju pokrenuo.
+            String fg = foreground.current();
+            if (fg != null && quiet(fg)) pkg = fg;
+        }
+        if (pkg == null) {
             return;
         }
-        String pkg = root.getPackageName().toString();
         if (TRANSPARENT.contains(pkg)) {
             return;
         }
         boolean quiet = overlay == null && quiet(pkg) && appWindowCount() < 2;
+        if (!quiet && root == null) return;
         if (!quiet && Build.VERSION.SDK_INT >= 33) {
             AccessibilityNodeInfo full = getRootInActiveWindow();
             if (full != null && full.getPackageName() != null && pkg.equals(full.getPackageName().toString())) root = full;
@@ -1009,6 +1086,8 @@ public class GuardService extends AccessibilityService {
     /** Da li sistemski ekran prikazuje Čuvara (podaci o aplikaciji, Pristupačnost, brisanje). */
     private boolean guardsSelf(AccessibilityNodeInfo root, String p) {
         if (p.equals(getPackageName()) || !settingsLike(p) || exempt().contains(p)) return false;
+        // Korisnik je iz Čuvara otvorio „Pristup korišćenju“ da ga uključi: taj ekran se ne zatvara dva minuta.
+        if (SystemClock.elapsedRealtime() < usageSetupUntil && !usageOk) return false;
         boolean installer = p.contains("packageinstaller") || p.equals("com.android.vending");
         try {
             String label = getString(R.string.app_name);

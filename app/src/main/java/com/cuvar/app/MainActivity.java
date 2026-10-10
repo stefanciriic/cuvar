@@ -152,6 +152,13 @@ public class MainActivity extends Activity {
                     "Opcija je siva ili piše da je ograničena?", v -> showRestrictedHelp()), Ui.fill(this, 14));
         }
 
+        if (enabled && !ForegroundApp.granted(this)) {
+            col.addView(setupCard("Dozvoli pristup korišćenju",
+                    "Tako Čuvar od samog telefona saznaje koja je aplikacija otvorena, pa ne opterećuje aplikacije "
+                            + "bez pravila (mape, pozive, kameru). Pronađi „Čuvar“ na listi i uključi dozvolu.",
+                    "Otvori podešavanje", v -> openUsageAccess(), null, null), Ui.fill(this, 14));
+        }
+
         col.addView(Ui.section(this, "Sada"), Ui.fill(this, 24));
         col.addView(nowCard(), Ui.fill(this, 8));
 
@@ -384,6 +391,15 @@ public class MainActivity extends Activity {
             box.addView(b, Ui.fill(this, i == 0 ? 0 : 10));
         }
         sheet.show();
+    }
+
+    private void openUsageAccess() {
+        GuardService.usageSetupUntil = android.os.SystemClock.elapsedRealtime() + 2 * 60000L;
+        try {
+            startActivity(new Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS));
+        } catch (Throwable t) {
+            startActivity(new Intent(android.provider.Settings.ACTION_SETTINGS));
+        }
     }
 
     private View setupCard(String title, String body, String action, View.OnClickListener onAction,

@@ -175,3 +175,12 @@ Provera na telefonu:
 2. Vreme u mapama se i dalje vidi u statistici i ne troši ukupni dnevni limit.
 3. Iz mapa pređi u aplikaciju sa pravilom: blokada ili pauza se pojavi odmah.
 4. Podeljen ekran mape + aplikacija sa pravilom: blokada se i dalje pojavljuje.
+
+## Pristup korišćenju (koja je aplikacija napred, od Androida)
+
+1. Na kartici Danas pojavi se „Dozvoli pristup korišćenju“; tapni „Otvori podešavanje“ i uključi Čuvar (radi i dok je zaštita od isključivanja uključena, dva minuta posle tapa).
+2. Posle dozvole kartica nestaje. Mape, kamera i pozivi rade glatko; vreme u njima se i dalje vidi u statistici.
+3. Iz mapa pređi u aplikaciju sa pravilom: blokada ili pauza se pojavi odmah.
+4. Sa blokade pređi preko nedavnih aplikacija u mape: blokada nestane za najviše 2 s.
+5. Novo pravilo za aplikaciju počne da važi za najviše 5 s.
+6. Fokus režim: sve aplikacije se prate kao ranije.
