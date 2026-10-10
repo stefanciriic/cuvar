@@ -196,3 +196,10 @@ Provera na telefonu:
 2. Na ekranu za blokadu povuci sistemsko „nazad“: Chrome ostaje otvoren, kartica ide na google.com.
 3. Ponovi sa dugmadima „Zatvori“ i „Nazad“ i sa „Ne“ posle „Ipak želim da otključam“: isti ishod.
 4. Zaključana aplikacija (nije sajt): „Zatvori“ i dalje vodi na početni ekran telefona.
+
+## Aplikacija bez pravila se uopšte ne čita (Mape)
+
+1. Sa dozvolom „Pristup korišćenju“ otvori Google mape i koristi ih (pretraga, putanja, pomeranje) 5 min, i tokom noćnog režima.
+2. Mape ne zastajkuju; Čuvar ne čita njihov prozor (aplikacija napred se zna iz zapisa o korišćenju).
+3. Iz Mapa pređi u aplikaciju sa pravilom: blokada/brojanje otvaranja rade odmah kao ranije.
+4. Iz aplikacije sa pravilom pređi u Mape: vreme se više ne troši na tu aplikaciju.

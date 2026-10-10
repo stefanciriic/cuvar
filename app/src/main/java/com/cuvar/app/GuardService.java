@@ -133,6 +133,7 @@ public class GuardService extends AccessibilityService {
     private boolean checkPending;
     private boolean contentEvents = true; // da li stižu i događaji o promeni sadržaja (samo za pregledače)
     private long lastEventCheck;
+    private long ruledSeenAt;     // kad je poslednji put viđena aplikacija sa pravilom ili pregledač napred (System.currentTimeMillis)
 
     private View overlay;
     private String overlayKey;
@@ -367,6 +368,7 @@ public class GuardService extends AccessibilityService {
         int type = event.getEventType();
         if (type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             CharSequence p = event.getPackageName(), cls = event.getClassName();
+            if (p != null && store != null && !quiet(p.toString())) ruledSeenAt = System.currentTimeMillis();
             if (p != null && cls != null) {
                 String c = cls.toString();
                 // Pamti se samo ekran aplikacije, ne sistemski dijalozi i delovi ekrana.
@@ -525,9 +527,25 @@ public class GuardService extends AccessibilityService {
             return;
         }
 
-        // Prvo se uzme samo vrh ekrana, bez ostatka sadržaja: za aplikacije bez pravila to je sve što treba.
-        AccessibilityNodeInfo root = Build.VERSION.SDK_INT >= 33 ? getRootInActiveWindow(0) : getRootInActiveWindow();
-        String pkg = root == null || root.getPackageName() == null ? null : root.getPackageName().toString();
+        // Aplikacija bez pravila (Mape, kalkulator...) se uopšte ne dira: koja je napred zna se od Androida
+        // („Pristup korišćenju“), pa se njen prozor ne čita. Prozor se čita samo kad je napred aplikacija sa
+        // pravilom, pregledač, podešavanja pod zaštitom ili kad se ne zna šta je napred.
+        AccessibilityNodeInfo root = null;
+        String pkg = null;
+        if (usageOk && foreground != null && overlay == null && !store.focusActive()) {
+            String fg = foreground.current();
+            // Android ponekad kasni sa zapisom: ako je posle njega javila aplikacija sa pravilom, čita se prozor.
+            if (fg != null && !TRANSPARENT.contains(fg) && quiet(fg) && foreground.since() > ruledSeenAt
+                    && appWindowCount() < 2) {
+                pkg = fg;
+            }
+        }
+        if (pkg == null) {
+            // Prvo se uzme samo vrh ekrana, bez ostatka sadržaja: za aplikacije bez pravila to je sve što treba.
+            root = Build.VERSION.SDK_INT >= 33 ? getRootInActiveWindow(0) : getRootInActiveWindow();
+            pkg = root == null || root.getPackageName() == null ? null : root.getPackageName().toString();
+            if (pkg != null && !pkg.equals(getPackageName())) ruledSeenAt = quiet(pkg) ? 0L : System.currentTimeMillis();
+        }
         if (pkg == null && usageOk && foreground != null && overlay == null) {
             // Prozor se ne može pročitati: koju je aplikaciju Android poslednju pokrenuo.
             String fg = foreground.current();

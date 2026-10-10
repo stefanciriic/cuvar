@@ -17,6 +17,7 @@ final class ForegroundApp {
     private final UsageStatsManager usm;
     private long lastQuery;
     private String last;
+    private long lastAt;
 
     ForegroundApp(Context c) {
         context = c.getApplicationContext();
@@ -36,6 +37,11 @@ final class ForegroundApp {
         }
     }
 
+    /** Kada je aplikacija iz current() došla napred (System.currentTimeMillis), ili 0. */
+    long since() {
+        return lastAt;
+    }
+
     /** Poslednja aplikacija koja je došla napred, ili null ako nije poznata. */
     String current() {
         if (usm == null) return null;
@@ -48,6 +54,7 @@ final class ForegroundApp {
                 events.getNextEvent(e);
                 if (e.getEventType() == UsageEvents.Event.MOVE_TO_FOREGROUND && e.getPackageName() != null) {
                     last = e.getPackageName();
+                    lastAt = e.getTimeStamp();
                 }
             }
             lastQuery = now;
