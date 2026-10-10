@@ -103,15 +103,17 @@ public final class DailyScheduleTest {
         byte[] other = new byte[32];
         other[0] = 1;
         java.util.Set<String> seen = new java.util.HashSet<>();
+        int differs = 0;
         for (int d = 1; d <= 28; d++) {
             String day = String.format("202602%02d", d);
             String code = DailyCode.code(key, day);
-            check(code.matches("[0-9]{6}"), "Šest cifara", d);
+            check(code.matches("[0-9]{4}"), "Četiri cifre", d);
             check(code.equals(DailyCode.code(key, day)), "Ista šifra za isti dan", d);
-            check(!code.equals(DailyCode.code(other, day)), "Drugi ključ, druga šifra", d);
+            if (!code.equals(DailyCode.code(other, day))) differs++;
             seen.add(code);
         }
-        check(seen.size() == 28, "Svaki dan nova šifra", 0);
+        check(seen.size() >= 24, "Šifra se menja iz dana u dan", 0);
+        check(differs >= 25, "Drugi ključ, druga šifra", 0);
     }
 
     private static void tightening() {

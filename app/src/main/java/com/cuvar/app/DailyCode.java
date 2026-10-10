@@ -9,7 +9,7 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
 /**
- * Dnevna šifra od 6 cifara. Računa se iz tajnog ključa (nasumičnog, samo na ovom telefonu) i dana,
+ * Dnevna šifra od 4 cifre. Računa se iz tajnog ključa (nasumičnog, samo na ovom telefonu) i dana,
  * bez interneta. Nova šifra kreće svakog dana u 17:00 i važi do 17:00 sledećeg dana.
  */
 final class DailyCode {
@@ -38,7 +38,7 @@ final class DailyCode {
             byte[] h = mac.doFinal(("cuvar-dan:" + dayKey).getBytes(StandardCharsets.UTF_8));
             int o = h[h.length - 1] & 0x0f;
             int n = ((h[o] & 0x7f) << 24) | ((h[o + 1] & 0xff) << 16) | ((h[o + 2] & 0xff) << 8) | (h[o + 3] & 0xff);
-            return String.format(Locale.US, "%06d", n % 1000000);
+            return String.format(Locale.US, "%04d", n % 10000);
         } catch (Exception e) {
             throw new IllegalStateException(e);
         }

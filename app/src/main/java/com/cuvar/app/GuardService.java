@@ -1781,7 +1781,7 @@ public class GuardService extends AccessibilityService {
     }
 
     private static TextView codeNote(Context c) {
-        TextView t = Ui.text(c, "Unesi dnevnu šifru (6 cifara) iz Čuvara.", 15, 0xFFFFFFFF, true);
+        TextView t = Ui.text(c, "Unesi dnevnu šifru (4 cifre) iz Čuvara.", 15, 0xFFFFFFFF, true);
         t.setGravity(Gravity.CENTER);
         return t;
     }
