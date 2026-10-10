@@ -606,7 +606,7 @@ public class MainActivity extends Activity {
                 + "ni u pregledaču unutar Instagrama ili Messengera. Ostali internet ide direktno, pa ništa ne usporava "
                 + "i ništa ne izlazi sa telefona.\n\n"
                 + "Dok radi, drugi VPN ne može da se koristi. Za najbolju zaštitu: Podešavanja → VPN → Čuvar → uključi "
-                + "„Uvek uključen VPN“ i „Blokiraj veze bez VPN-a“. U Chrome-u ostavi „Bezbedni DNS“ na automatski, "
+                + "samo „Uvek uključen VPN“. „Blokiraj veze bez VPN-a“ NE uključuj, jer bi tada nestao internet. U Chrome-u ostavi „Bezbedni DNS“ na automatski, "
                 + "a u telefonu Privatni DNS na isključeno ili automatski.\n\n"
                 + "Limiti u minutima za sajtove i dalje rade kao do sada.")
                 .secondary("Zatvori", null);
