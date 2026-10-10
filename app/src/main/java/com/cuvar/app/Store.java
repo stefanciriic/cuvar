@@ -1580,17 +1580,60 @@ final class Store {
         return eApps == null ? new HashSet<>(linkPairs()) : eLinks;
     }
 
-    /** Zaključana i kad je njen povezan sajt uvek blokiran. */
+    /** Zaključana i kad je njen povezan sajt (ili poddomen) uvek blokiran. */
     synchronized boolean appLockNow(String pkg) {
-        if (rawLock(pkg)) return true;
-        for (String d : Links.domainsOf(linksNow(), pkg)) if (rawSite(d) == 0) return true;
+        return groupLock(pkg, true);
+    }
+
+    /** Najmanji limit aplikacije i njenog povezanog sajta (sa poddomenima). */
+    synchronized int appLimitNow(String pkg) {
+        return groupLimit(pkg, true);
+    }
+
+    private JSONObject appsOf(boolean now) {
+        return now ? enforcedApps() : apps;
+    }
+
+    private JSONObject sitesOf(boolean now) {
+        return now ? enforcedSites() : sites;
+    }
+
+    private Collection<String> pairsOf(boolean now) {
+        return now ? linksNow() : linkPairs();
+    }
+
+    /** Sajtovi sa pravilom koje pokriva povezan sajt aplikacije (npr. youtube.com i m.youtube.com). */
+    private List<String> coveredSites(String pkg, boolean now) {
+        List<String> out = new ArrayList<>();
+        List<String> bases = Links.domainsOf(pairsOf(now), pkg);
+        if (bases.isEmpty()) return out;
+        for (String k : keysOf(sitesOf(now))) for (String base : bases) if (Links.covers(base, k)) { out.add(k); break; }
+        return out;
+    }
+
+    private boolean groupLock(String pkg, boolean now) {
+        JSONObject o = appsOf(now).optJSONObject(pkg);
+        if (o != null && o.optBoolean("lock", false)) return true;
+        for (String k : coveredSites(pkg, now)) if (sitesOf(now).optJSONObject(k).optInt("limit", 0) == 0) return true;
         return false;
     }
 
-    /** Manji od limita aplikacije i njenog povezanog sajta. */
-    synchronized int appLimitNow(String pkg) {
-        int limit = rawLimit(pkg);
-        for (String d : Links.domainsOf(linksNow(), pkg)) limit = minLimit(limit, Math.max(0, rawSite(d)));
+    private int groupLimit(String pkg, boolean now) {
+        JSONObject o = appsOf(now).optJSONObject(pkg);
+        int limit = o == null ? 0 : o.optInt("limit", 0);
+        for (String k : coveredSites(pkg, now)) limit = minLimit(limit, sitesOf(now).optJSONObject(k).optInt("limit", 0));
+        return limit;
+    }
+
+    /** Sajt dobija i pravilo cele stavke: aplikacije, njenog sajta i poddomena. */
+    private int groupSite(String domain, boolean now) {
+        JSONObject o = sitesOf(now).optJSONObject(domain);
+        int limit = o == null ? -1 : o.optInt("limit", 0);
+        for (String pkg : Links.appsOf(pairsOf(now), domain)) {
+            if (groupLock(pkg, now)) return 0;
+            int a = groupLimit(pkg, now);
+            if (a > 0) limit = limit == 0 ? 0 : limit < 0 ? a : Math.min(limit, a);
+        }
         return limit;
     }
 
@@ -1606,42 +1649,47 @@ final class Store {
 
     /** Sajt nasleđuje zaključavanje (kao stalnu blokadu sa šifrom) i limit povezane aplikacije. */
     synchronized int siteLimitNow(String domain) {
-        int limit = rawSite(domain);
-        for (String pkg : Links.appsOf(linksNow(), domain)) {
-            if (rawLock(pkg)) return 0;
-            int a = rawLimit(pkg);
-            if (a > 0) limit = limit == 0 ? 0 : limit < 0 ? a : Math.min(limit, a);
-        }
-        return limit;
+        return groupSite(domain, true);
     }
 
-    /** Sajtovi sa sopstvenim pravilom i sajtovi povezani sa zaključanom ili ograničenom aplikacijom. */
+    /** Sajtovi sa sopstvenim pravilom i povezani sajtovi stavki koje imaju pravilo. */
     private Set<String> siteKeysNow() {
         Set<String> out = new HashSet<>(keysOf(enforcedSites()));
         for (String p : linksNow()) {
             String pkg = Links.pkgOf(p);
-            if (rawLock(pkg) || rawLimit(pkg) > 0) out.add(Links.domainOf(p));
+            if (groupLock(pkg, true) || groupLimit(pkg, true) > 0) out.add(Links.domainOf(p));
         }
         return out;
     }
 
-    /** Aplikacije sa sopstvenim pravilom i aplikacije čiji sajt ima pravilo. */
+    /** Aplikacije sa sopstvenim pravilom i aplikacije čiji sajt (ili poddomen) ima pravilo. */
     private Set<String> appKeysNow() {
         Set<String> out = new HashSet<>(keysOf(enforcedApps()));
-        for (String p : linksNow()) if (enforcedSites().has(Links.domainOf(p))) out.add(Links.pkgOf(p));
+        for (String p : linksNow()) {
+            String pkg = Links.pkgOf(p);
+            if (!coveredSites(pkg, true).isEmpty()) out.add(pkg);
+        }
         return out;
     }
 
-    /** Vreme danas, zajedno za aplikaciju i njen povezan sajt ("paket" ili "site:domen"). */
+    /**
+     * Vreme danas, zajedno za celu stavku ("paket" ili "site:domen"): aplikacija i povezan sajt.
+     * Povezan sajt beleži i vreme na poddomenima, pa se poddomeni ne sabiraju posebno.
+     */
     synchronized long usedShared(String key) {
-        long ms = usedToday(key);
         Set<String> pairs = linksNow();
+        String pkg = key;
         if (key.startsWith("site:")) {
-            for (String pkg : Links.appsOf(pairs, key.substring(5))) ms += usedToday(pkg);
-        } else {
-            for (String d : Links.domainsOf(pairs, key)) ms += usedToday("site:" + d);
+            List<String> owners = Links.appsOf(pairs, key.substring(5));
+            if (owners.isEmpty()) return usedToday(key);
+            pkg = owners.get(0);
         }
-        return ms;
+        List<String> bases = Links.domainsOf(pairs, pkg);
+        if (bases.isEmpty()) return usedToday(pkg);
+        long site = 0;
+        for (String d : bases) site = Math.max(site, usedToday("site:" + d));
+        for (String d : coveredSites(pkg, true)) site = Math.max(site, usedToday("site:" + d));
+        return usedToday(pkg) + site;
     }
 
     synchronized String matchSiteNow(String host) {
@@ -1680,27 +1728,22 @@ final class Store {
         return Links.appsOf(linkPairs(), domain);
     }
 
-    /** Podešeno zaključavanje, zajedno sa povezanim sajtom (važi od sledećih 06:00). */
+    /** Podešeno zaključavanje cele stavke (važi od sledećih 06:00). */
     synchronized boolean appLockLinked(String pkg) {
-        if (appLock(pkg)) return true;
-        for (String d : Links.domainsOf(linkPairs(), pkg)) if (siteLimit(d) == 0) return true;
-        return false;
+        return groupLock(pkg, false);
     }
 
     synchronized int appLimitLinked(String pkg) {
-        int limit = appLimit(pkg);
-        for (String d : Links.domainsOf(linkPairs(), pkg)) limit = minLimit(limit, Math.max(0, siteLimit(d)));
-        return limit;
+        return groupLimit(pkg, false);
     }
 
     synchronized int siteLimitLinked(String domain) {
-        int limit = siteLimit(domain);
-        for (String pkg : Links.appsOf(linkPairs(), domain)) {
-            if (appLock(pkg)) return 0;
-            int a = appLimit(pkg);
-            if (a > 0) limit = limit == 0 ? 0 : limit < 0 ? a : Math.min(limit, a);
-        }
-        return limit;
+        return groupSite(domain, false);
+    }
+
+    /** Podešeni sajtovi sa pravilom koje pokriva povezan sajt aplikacije. */
+    synchronized List<String> linkedSiteRules(String pkg) {
+        return coveredSites(pkg, false);
     }
 
     /** Povezivanje važi odmah, a razdvajanje tek sutra od 06:00. */

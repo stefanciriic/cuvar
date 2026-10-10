@@ -49,10 +49,15 @@ final class Links {
         return out;
     }
 
+    /** Aplikacije čiji povezan sajt pokriva domen (i poddomen, npr. m.youtube.com). */
     static List<String> appsOf(Collection<String> pairs, String domain) {
         List<String> out = new ArrayList<>();
-        for (String p : pairs) if (domainOf(p).equals(domain)) out.add(pkgOf(p));
+        for (String p : pairs) if (covers(domainOf(p), domain) && !out.contains(pkgOf(p))) out.add(pkgOf(p));
         return out;
+    }
+
+    static boolean covers(String base, String domain) {
+        return domain.equals(base) || domain.endsWith("." + base);
     }
 
     /** Režimi u kojima je uz aplikaciju i njen sajt, i obrnuto. */
@@ -63,7 +68,7 @@ final class Links {
             for (String p : pairs) {
                 String pkg = pkgOf(p), dom = domainOf(p);
                 if (r.apps.contains(pkg)) c.sites.add(dom);
-                if (r.sites.contains(dom)) c.apps.add(pkg);
+                for (String site : r.sites) if (covers(dom, site)) c.apps.add(pkg);
             }
             out.add(c);
         }
