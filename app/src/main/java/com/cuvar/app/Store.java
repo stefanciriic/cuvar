@@ -94,6 +94,7 @@ final class Store {
         workEveryDay();
         prune();
         loadEnforced();
+        countOnlyGuarded(c);
         if (sp.contains("pin")) sp.edit().remove("pin").apply(); // PIN više ne postoji, otključava samo dnevna šifra
     }
 
@@ -1246,7 +1247,7 @@ final class Store {
         JSONObject d = usage.optJSONObject(day());
         if (d != null) {
             for (String k : keysOf(d)) {
-                out.put(k, d.optLong(k, 0L));
+                if (!k.equals(GUARDED_KEY)) out.put(k, d.optLong(k, 0L));
             }
         }
         return out;
@@ -1285,7 +1286,7 @@ final class Store {
         JSONObject d = usage.optJSONObject(dayKey);
         if (d != null) {
             for (String k : keysOf(d)) {
-                out.put(k, d.optLong(k, 0L));
+                if (!k.equals(GUARDED_KEY)) out.put(k, d.optLong(k, 0L));
             }
         }
         return out;
@@ -1304,17 +1305,39 @@ final class Store {
 
     // ---------- Ukupni dnevni limit ----------
 
-    /** Danas ukupno na telefonu: sve aplikacije osim onih u skip (početni ekran, Čuvar, pozivi, poruke). */
-    synchronized long phoneToday(Set<String> skip) {
-        JSONObject d = usage.optJSONObject(day());
-        long total = 0;
-        if (d != null) {
-            for (String k : keysOf(d)) {
-                if (k.startsWith("site:") || k.startsWith("web:") || skip.contains(k)) continue;
-                total += d.optLong(k, 0L);
+    /**
+     * Ključ u izmerenom vremenu pod kojim servis beleži vreme pod pravilima: dok je napred aplikacija
+     * sa pravilom ili se vidi sajt sa pravilom. Nije aplikacija, pa se ne prikazuje u vremenu ni statistici.
+     */
+    static final String GUARDED_KEY = "limit:guarded";
+
+    /** Danas pod pravilima. Samo ovo troši ukupni dnevni limit; mape, pozivi i ostalo bez pravila ne. */
+    synchronized long guardedToday() {
+        return usedToday(GUARDED_KEY);
+    }
+
+    /**
+     * Ranije je limit trošilo sve vreme na telefonu. Pri prvom pokretanju ove verzije današnje vreme
+     * pod pravilima se procenjuje iz već izmerenog, a ako po tome limit nije potrošen, današnja
+     * blokada i upozorenje se poništavaju.
+     */
+    private void countOnlyGuarded(Context c) {
+        if (sp.getBoolean("dayLimitGuarded", false)) return;
+        String today = day();
+        JSONObject d = usage.optJSONObject(today);
+        if (d != null && !d.has(GUARDED_KEY)) {
+            Set<String> guarded = guardedApps();
+            guarded.removeAll(GuardService.exemptApps(c));
+            try {
+                d.put(GUARDED_KEY, DayLimit.guardedEstimate(dayMap(today), guarded, siteKeysNow()));
+                dirty = true;
+            } catch (JSONException ignored) {
             }
         }
-        return total;
+        SharedPreferences.Editor e = sp.edit().putBoolean("dayLimitGuarded", true);
+        if (!DayLimit.reached(dayLimit(), guardedToday())) e.remove("dayLimitHit").remove("dayLimitWarned");
+        e.apply();
+        flush();
     }
 
     /** Ukupni dnevni limit u minutima koji danas važi (0 = isključen); zakazana promena stupa na snagu u ponoć. */

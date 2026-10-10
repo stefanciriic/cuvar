@@ -140,7 +140,7 @@ public class GuardService extends AccessibilityService {
     private boolean overlayCooling;   // prikazana je pauza posle otključavanja
     private boolean overlayCode;      // otključava se dnevnom šifrom umesto PIN-om
     private TextView cooldownLabel;  // odbrojavanje do sledećeg mogućeg otključavanja
-    private Set<String> exempt;      // aplikacije koje se ne računaju u ukupni limit i ne blokiraju se zbog njega
+    private Set<String> exempt;      // aplikacije koje ne troše ukupni limit i ne blokiraju se zbog njega, ni uz pravilo
     private String pendingOpen;      // aplikacija upravo otvorena; broji se kad se zaista prikaže, bez blokade
     private String opensBlocked;     // aplikacija otvorena posle potrošenih otvaranja; blokirana dok se ne izađe
     private final Map<String, String> activityOf = new LinkedHashMap<String, String>() {
@@ -389,7 +389,19 @@ public class GuardService extends AccessibilityService {
             String web = Store.mainDomain(host);
             if (web != null) keys.add("web:" + web);
         }
+        if (countsForDayLimit()) keys.add(Store.GUARDED_KEY);
         return keys;
+    }
+
+    /**
+     * Ukupni dnevni limit troši samo ono što on i zaključa: aplikacija sa pravilom ili sajt sa pravilom.
+     * Mape, pozivi i sve ostalo bez pravila ga ne troše.
+     */
+    private boolean countsForDayLimit() {
+        if (exempt().contains(currentPkg)) return false;
+        if (guarded(currentPkg)) return true;
+        for (String host : visibleHosts) if (store.siteGuarded(host) != null) return true;
+        return false;
     }
 
     private void accountUntilNow(Set<String> nextKeys) {
@@ -403,7 +415,7 @@ public class GuardService extends AccessibilityService {
             long dt = interval.toMs - interval.fromMs;
             for (String key : interval.keys) {
                 store.addUsageBetween(key, interval.fromMs, interval.toMs);
-                if (key.startsWith("site:") || key.startsWith("web:")) continue;
+                if (key.startsWith("site:") || key.startsWith("web:") || key.equals(Store.GUARDED_KEY)) continue;
                 long left = store.addSession(key, dt);
                 if (left > 0 && left <= 60000L && left + dt > 60000L) {
                     Toast.makeText(this, "Čuvar: još minut u komadu, pa pauza od "
@@ -517,23 +529,22 @@ public class GuardService extends AccessibilityService {
         boolean browsing = urlBarId != null || inApp;
         if (browsing && currentHost != null) visibleHosts.add(currentHost);
 
-        // Sva pravila koja sada važe, od najstrožeg: ukupni dnevni limit, noć, ručni fokus,
-        // vremenski režim, pa aplikacija i sajt.
+        // Sva pravila koja sada važe, od najstrožeg: ukupni dnevni limit (zajedničko vreme pod pravilima),
+        // noć, ručni fokus, vremenski režim, pa aplikacija i sajt.
         // Otključavanje jedne stavke ne otvara ostale (otključan pregledač ne otvara blokiran sajt).
         List<Block> blocks = new ArrayList<>();
         String appKey = "app:" + pkg;
         boolean web = browsing && currentHost != null;
         int dayLimit = store.dayLimit();
         if (dayLimit > 0) {
-            Set<String> skip = exempt();
-            long phone = store.phoneToday(skip);
-            if (DayLimit.warn(dayLimit, phone) && store.firstDayLimitWarning()) {
-                long left = dayLimit * 60000L - phone;
+            long used = store.guardedToday();
+            if (DayLimit.warn(dayLimit, used) && store.firstDayLimitWarning()) {
+                long left = dayLimit * 60000L - used;
                 Toast.makeText(this, "Čuvar: do dnevnog limita ostalo je " + Ui.fmt(left) + ".",
                         Toast.LENGTH_LONG).show();
             }
-            if (DayLimit.reached(dayLimit, phone)) store.markDayLimitHit();
-            if (DayLimit.reached(dayLimit, phone) && !skip.contains(pkg)) {
+            if (DayLimit.reached(dayLimit, used)) store.markDayLimitHit();
+            if (DayLimit.reached(dayLimit, used) && !exempt().contains(pkg)) {
                 String site = web ? store.siteGuarded(currentHost) : null;
                 if (guarded(pkg)) {
                     blocks.add(new Block(appKey, KIND_DAY, null, false));
@@ -744,7 +755,7 @@ public class GuardService extends AccessibilityService {
     private void addSecondarySiteBlocks(List<Block> blocks, String pkg, String host) {
         String guardedSite = store.siteGuarded(host);
         if (guardedSite != null && !exempt().contains(pkg)) {
-            if (DayLimit.reached(store.dayLimit(), store.phoneToday(exempt()))) {
+            if (DayLimit.reached(store.dayLimit(), store.guardedToday())) {
                 blocks.add(new Block("site:" + guardedSite, KIND_DAY, null, false));
             }
             if (store.nightActive()) blocks.add(new Block("site:" + guardedSite, KIND_NIGHT, null, false));
@@ -773,7 +784,7 @@ public class GuardService extends AccessibilityService {
         String k = "app:" + p;
         Block b = null;
         int dayLimit = store.dayLimit();
-        if (guarded(p) && DayLimit.reached(dayLimit, store.phoneToday(exempt()))) {
+        if (guarded(p) && DayLimit.reached(dayLimit, store.guardedToday())) {
             b = new Block(k, KIND_DAY, null, false);
         } else if (guarded(p) && store.nightActive()) {
             b = new Block(k, KIND_NIGHT, null, false);
@@ -993,7 +1004,7 @@ public class GuardService extends AccessibilityService {
         return t;
     }
 
-    /** Početni ekran, Čuvar, pozivi i poruke: ne računaju se u ukupni limit i nikad se zbog njega ne blokiraju. */
+    /** Početni ekran, Čuvar, pozivi i poruke: ne troše ukupni limit i nikad se zbog njega ne blokiraju, ni uz pravilo. */
     private Set<String> exempt() {
         long now = SystemClock.elapsedRealtime();
         if (exempt == null || now - exemptAt > 60000L) {
@@ -1287,8 +1298,8 @@ public class GuardService extends AccessibilityService {
             joke = Jokes.pick(Jokes.SCHEDULE);
         } else if (kind == KIND_DAY) {
             title = "Dnevni limit je potrošen";
-            sub = "Danas si na telefonu proveo " + Ui.fmt(store.phoneToday(exempt())) + ", a limit je "
-                    + DayLimit.label(store.dayLimit()) + ". " + name
+            sub = "Danas si u aplikacijama i na sajtovima iz svojih pravila proveo "
+                    + Ui.fmt(store.guardedToday()) + ", a limit je " + DayLimit.label(store.dayLimit()) + ". " + name
                     + " je zaključan do ponoći i ne može da se otključa, ni šifrom.";
             joke = Jokes.pick(Jokes.TIME_UP);
         } else if (kind == KIND_OPENS) {

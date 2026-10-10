@@ -56,7 +56,7 @@ public class RulesActivity extends SubActivity {
         how.setOnClickListener(v -> new Sheet(this, "Kako se pravila slažu").message(
                 "1. Režim je najjači: u svom periodu blokira i ne može da se otključa.\n"
                 + "2. Ostatak dana: zaključano se otvara samo dnevnom šifrom (17:00 do 22:00), a potrošen limit se ne otvara do ponoći.\n"
-                + "3. Ukupni dnevni limit, kad se potroši, zaključava sve ovo do ponoći.\n"
+                + "3. Ukupni dnevni limit broji samo vreme u ovim stavkama; kad se potroši, zaključava ih sve do ponoći.\n"
                 + "4. Strože pravilo važi odmah, a blaže tek sutra od 06:00.\n"
                 + "5. Od 22:00 do 06:00 sve ovo je zaključano (noćna blokada).\n"
                 + "6. Ručni Fokus je zaseban: dok traje, dozvoljene su samo izabrane aplikacije i sajtovi.")
