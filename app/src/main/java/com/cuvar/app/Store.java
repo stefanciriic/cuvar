@@ -51,6 +51,9 @@ final class Store {
     private JSONObject eApps;
     private JSONObject eSites;
     private final List<DailySchedule.Rule> eSchedules = new ArrayList<>();
+    private final JSONObject links;   // paket -> domen njegovog sajta; "" = razdvojen poznat par (vidi Links)
+    private final Set<String> eLinks = new HashSet<>(); // parovi "paket|domen" koji sada važe
+    private List<DailySchedule.Rule> expanded;           // važeći režimi sa povezanim stavkama
     private String eDay;
     private boolean eNight;
     private boolean eProtect;
@@ -82,6 +85,7 @@ final class Store {
         loadCodeLockout();
         apps = parse(sp.getString("apps", "{}"));
         sites = parse(sp.getString("sites", "{}"));
+        links = parse(sp.getString("links", "{}"));
         usage = parse(sp.getString("usage", "{}"));
         opens = parse(sp.getString("opens", "{}"));
         sessions = parse(sp.getString("sessions", "{}"));
@@ -504,10 +508,10 @@ final class Store {
     /** Aplikacije kojima je danas potrošen dnevni limit. */
     synchronized List<String> appsOverLimit() {
         List<String> out = new ArrayList<>();
-        for (String pkg : keysOf(enforcedApps())) {
+        for (String pkg : appKeysNow()) {
             int limit = appLimitNow(pkg);
             int max = appOpensNow(pkg);
-            if ((limit > 0 && usedToday(pkg) >= limit * 60000L) || (max > 0 && opensToday("app:" + pkg) >= max)) out.add(pkg);
+            if ((limit > 0 && usedShared(pkg) >= limit * 60000L) || (max > 0 && opensToday("app:" + pkg) >= max)) out.add(pkg);
         }
         return out;
     }
@@ -515,9 +519,9 @@ final class Store {
     /** Sajtovi sa liste kojima je danas potrošen dnevni limit (bez onih koji su uvek blokirani). */
     synchronized List<String> sitesOverLimit() {
         List<String> out = new ArrayList<>();
-        for (String d : keysOf(enforcedSites())) {
+        for (String d : siteKeysNow()) {
             int limit = siteLimitNow(d);
-            if (limit > 0 && usedToday("site:" + d) >= limit * 60000L) out.add(d);
+            if (limit > 0 && usedShared("site:" + d) >= limit * 60000L) out.add(d);
         }
         return out;
     }
@@ -671,7 +675,7 @@ final class Store {
     /** Važeći periodi; jedan izmenjen režim do jutra može imati više segmenata sa istim id-em. */
     synchronized List<DailySchedule.Rule> schedulesNow() {
         List<DailySchedule.Rule> out = new ArrayList<>();
-        for (DailySchedule.Rule r : enforced()) out.add(copy(r));
+        for (DailySchedule.Rule r : enforcedRaw()) out.add(copy(r));
         return out;
     }
 
@@ -848,7 +852,7 @@ final class Store {
     synchronized List<DailySchedule.Rule> activeSchedules() {
         Calendar now = calendarNow();
         List<DailySchedule.Rule> out = new ArrayList<>();
-        for (DailySchedule.Rule r : enforced()) {
+        for (DailySchedule.Rule r : enforcedRaw()) {
             if (r.active(minuteOf(now), dayOf(now))) out.add(copy(r));
         }
         return out;
@@ -899,13 +903,13 @@ final class Store {
     /** Da li postoji ijedno pravilo za sajtove (lista ili uključen režim sa sajtovima). */
     /** Sve aplikacije koje sada imaju neko pravilo (zaključavanje, limit ili vremenski režim). */
     synchronized Set<String> guardedApps() {
-        Set<String> out = new HashSet<>(keysOf(enforcedApps()));
+        Set<String> out = appKeysNow();
         for (DailySchedule.Rule r : enforced()) if (r.enabled) out.addAll(r.apps);
         return out;
     }
 
     synchronized boolean hasSiteRules() {
-        if (enforcedSites().length() > 0) return true;
+        if (!siteKeysNow().isEmpty()) return true;
         for (DailySchedule.Rule r : enforced()) if (r.enabled && !r.sites.isEmpty()) return true;
         return false;
     }
@@ -1402,7 +1406,7 @@ final class Store {
 
     /** Da li je aplikacija u nekom pravilu: zaključana, sa limitom ili u uključenom režimu. */
     synchronized boolean appGuarded(String pkg) {
-        if (enforcedApps().has(pkg)) return true;
+        if (appKeysNow().contains(pkg)) return true;
         for (DailySchedule.Rule r : enforced()) if (r.enabled && r.apps.contains(pkg)) return true;
         return false;
     }
@@ -1432,6 +1436,10 @@ final class Store {
         eNight = sp.getBoolean("eNight", true);
         eProtect = sp.getBoolean("eProtect", false);
         parseSchedules(sp.getString("eSchedules", "[]"), eSchedules);
+        eLinks.clear();
+        JSONArray el = parseArray(sp.getString("eLinks", null));
+        if (el == null) eLinks.addAll(linkPairs());
+        for (int i = 0; el != null && i < el.length(); i++) eLinks.add(el.optString(i));
         enforce();
     }
 
@@ -1442,6 +1450,8 @@ final class Store {
         for (DailySchedule.Rule r : schedules) eSchedules.add(copy(r));
         eNight = nightBlock();
         eProtect = protectSelf();
+        eLinks.clear();
+        eLinks.addAll(linkPairs());
         eDay = rulesDay();
         saveEnforced();
     }
@@ -1449,7 +1459,18 @@ final class Store {
     private void saveEnforced() {
         sp.edit().putString("eApps", eApps.toString()).putString("eSites", eSites.toString())
                 .putString("eSchedules", schedulesJson(eSchedules)).putString("eDay", eDay)
-                .putBoolean("eNight", eNight).putBoolean("eProtect", eProtect).apply();
+                .putBoolean("eNight", eNight).putBoolean("eProtect", eProtect)
+                .putString("eLinks", new JSONArray(eLinks).toString()).apply();
+        expanded = null;
+    }
+
+    private static JSONArray parseArray(String s) {
+        if (s == null) return null;
+        try {
+            return new JSONArray(s);
+        } catch (JSONException e) {
+            return null;
+        }
     }
 
     /** Dan za odložena popuštanja: menja se u 06:00, kad se završi noćna blokada, a ne u ponoć dok ona traje. */
@@ -1472,6 +1493,7 @@ final class Store {
         }
         eNight = eNight || nightBlock();
         eProtect = eProtect || protectSelf();
+        eLinks.addAll(linkPairs());
         JSONObject na = new JSONObject();
         Set<String> keys = new HashSet<>(keysOf(eApps));
         keys.addAll(keysOf(apps));
@@ -1514,7 +1536,16 @@ final class Store {
         return Math.min(a, b);
     }
 
+    /** Važeći režimi, uz aplikaciju i njen povezan sajt (i obrnuto). */
     private List<DailySchedule.Rule> enforced() {
+        roll();
+        if (eApps == null) return schedules;
+        if (expanded == null) expanded = Links.expand(eSchedules, eLinks);
+        return expanded;
+    }
+
+    /** Važeći režimi tačno kako su podešeni, za prikaz. */
+    private List<DailySchedule.Rule> enforcedRaw() {
         roll();
         return eApps == null ? schedules : eSchedules;
     }
@@ -1529,14 +1560,38 @@ final class Store {
         return eSites == null ? sites : eSites;
     }
 
-    synchronized boolean appLockNow(String pkg) {
+    private boolean rawLock(String pkg) {
         JSONObject o = enforcedApps().optJSONObject(pkg);
         return o != null && o.optBoolean("lock", false);
     }
 
-    synchronized int appLimitNow(String pkg) {
+    private int rawLimit(String pkg) {
         JSONObject o = enforcedApps().optJSONObject(pkg);
         return o == null ? 0 : o.optInt("limit", 0);
+    }
+
+    private int rawSite(String domain) {
+        JSONObject o = enforcedSites().optJSONObject(domain);
+        return o == null ? -1 : o.optInt("limit", 0);
+    }
+
+    private Set<String> linksNow() {
+        roll();
+        return eApps == null ? new HashSet<>(linkPairs()) : eLinks;
+    }
+
+    /** Zaključana i kad je njen povezan sajt uvek blokiran. */
+    synchronized boolean appLockNow(String pkg) {
+        if (rawLock(pkg)) return true;
+        for (String d : Links.domainsOf(linksNow(), pkg)) if (rawSite(d) == 0) return true;
+        return false;
+    }
+
+    /** Manji od limita aplikacije i njenog povezanog sajta. */
+    synchronized int appLimitNow(String pkg) {
+        int limit = rawLimit(pkg);
+        for (String d : Links.domainsOf(linksNow(), pkg)) limit = minLimit(limit, Math.max(0, rawSite(d)));
+        return limit;
     }
 
     synchronized int appOpensNow(String pkg) {
@@ -1549,9 +1604,44 @@ final class Store {
         return o == null ? 0 : o.optInt("session", 0);
     }
 
+    /** Sajt nasleđuje zaključavanje (kao stalnu blokadu sa šifrom) i limit povezane aplikacije. */
     synchronized int siteLimitNow(String domain) {
-        JSONObject o = enforcedSites().optJSONObject(domain);
-        return o == null ? -1 : o.optInt("limit", 0);
+        int limit = rawSite(domain);
+        for (String pkg : Links.appsOf(linksNow(), domain)) {
+            if (rawLock(pkg)) return 0;
+            int a = rawLimit(pkg);
+            if (a > 0) limit = limit == 0 ? 0 : limit < 0 ? a : Math.min(limit, a);
+        }
+        return limit;
+    }
+
+    /** Sajtovi sa sopstvenim pravilom i sajtovi povezani sa zaključanom ili ograničenom aplikacijom. */
+    private Set<String> siteKeysNow() {
+        Set<String> out = new HashSet<>(keysOf(enforcedSites()));
+        for (String p : linksNow()) {
+            String pkg = Links.pkgOf(p);
+            if (rawLock(pkg) || rawLimit(pkg) > 0) out.add(Links.domainOf(p));
+        }
+        return out;
+    }
+
+    /** Aplikacije sa sopstvenim pravilom i aplikacije čiji sajt ima pravilo. */
+    private Set<String> appKeysNow() {
+        Set<String> out = new HashSet<>(keysOf(enforcedApps()));
+        for (String p : linksNow()) if (enforcedSites().has(Links.domainOf(p))) out.add(Links.pkgOf(p));
+        return out;
+    }
+
+    /** Vreme danas, zajedno za aplikaciju i njen povezan sajt ("paket" ili "site:domen"). */
+    synchronized long usedShared(String key) {
+        long ms = usedToday(key);
+        Set<String> pairs = linksNow();
+        if (key.startsWith("site:")) {
+            for (String pkg : Links.appsOf(pairs, key.substring(5))) ms += usedToday(pkg);
+        } else {
+            for (String d : Links.domainsOf(pairs, key)) ms += usedToday("site:" + d);
+        }
+        return ms;
     }
 
     synchronized String matchSiteNow(String host) {
@@ -1561,7 +1651,66 @@ final class Store {
 
     /** Svaki roditeljski limit mora da se proveri i dobije vreme, i uz posebno pravilo poddomena. */
     synchronized List<String> matchingSitesNow(String host) {
-        return DomainRules.matching(host, keysOf(enforcedSites()));
+        return DomainRules.matching(host, siteKeysNow());
+    }
+
+    // ---------- Aplikacija i sajt kao jedna stavka ----------
+
+    /** Podešeni parovi "paket|domen": poznati parovi, osim razdvojenih, i oni koje je korisnik povezao. */
+    private List<String> linkPairs() {
+        List<String> out = new ArrayList<>();
+        for (Map.Entry<String, String> e : Links.KNOWN.entrySet()) {
+            if (!links.has(e.getKey())) out.add(Links.pair(e.getKey(), e.getValue()));
+        }
+        for (String pkg : keysOf(links)) {
+            String d = links.optString(pkg, "");
+            if (!d.isEmpty()) out.add(Links.pair(pkg, d));
+        }
+        return out;
+    }
+
+    /** Sajt povezan sa aplikacijom (podešeno), ili null. */
+    synchronized String linkedSite(String pkg) {
+        List<String> d = Links.domainsOf(linkPairs(), pkg);
+        return d.isEmpty() ? null : d.get(0);
+    }
+
+    /** Aplikacije povezane sa sajtom (podešeno). */
+    synchronized List<String> linkedApps(String domain) {
+        return Links.appsOf(linkPairs(), domain);
+    }
+
+    /** Podešeno zaključavanje, zajedno sa povezanim sajtom (važi od sledećih 06:00). */
+    synchronized boolean appLockLinked(String pkg) {
+        if (appLock(pkg)) return true;
+        for (String d : Links.domainsOf(linkPairs(), pkg)) if (siteLimit(d) == 0) return true;
+        return false;
+    }
+
+    synchronized int appLimitLinked(String pkg) {
+        int limit = appLimit(pkg);
+        for (String d : Links.domainsOf(linkPairs(), pkg)) limit = minLimit(limit, Math.max(0, siteLimit(d)));
+        return limit;
+    }
+
+    synchronized int siteLimitLinked(String domain) {
+        int limit = siteLimit(domain);
+        for (String pkg : Links.appsOf(linkPairs(), domain)) {
+            if (appLock(pkg)) return 0;
+            int a = appLimit(pkg);
+            if (a > 0) limit = limit == 0 ? 0 : limit < 0 ? a : Math.min(limit, a);
+        }
+        return limit;
+    }
+
+    /** Povezivanje važi odmah, a razdvajanje tek sutra od 06:00. */
+    synchronized void setLink(String pkg, String domain) {
+        try {
+            links.put(pkg, domain == null ? "" : domain);
+        } catch (JSONException ignored) {
+        }
+        sp.edit().putString("links", links.toString()).apply();
+        enforce();
     }
 
     /** Popuštanja koja čekaju sutra, opisana rečima; prazno ako ih nema. */
@@ -1571,11 +1720,18 @@ final class Store {
         if (eApps == null) return out;
         if (eNight && !nightBlock()) out.add("Noćna blokada se isključuje");
         if (eProtect && !protectSelf()) out.add("Zaštita Čuvara od isključivanja se isključuje");
+        List<String> want = linkPairs();
+        for (String p : eLinks) {
+            if (want.contains(p)) continue;
+            String name = Links.pkgOf(p);
+            try { name = pm.getApplicationLabel(pm.getApplicationInfo(name, 0)).toString(); } catch (Exception ignored) { }
+            out.add(name + " i " + Links.domainOf(p) + " se razdvajaju");
+        }
         for (String pkg : keysOf(eApps)) {
             String name = pkg;
             try { name = pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString(); } catch (Exception ignored) { }
-            boolean el = appLockNow(pkg), dl = appLock(pkg);
-            int ei = appLimitNow(pkg), di = appLimit(pkg);
+            boolean el = rawLock(pkg), dl = appLock(pkg);
+            int ei = rawLimit(pkg), di = appLimit(pkg);
             if (el && !dl) out.add(name + ": bez zaključavanja");
             if (ei != di) out.add(name + ": " + (di <= 0 ? "bez dnevnog limita" : "limit " + di + " min umesto " + ei));
             int eo = appOpensNow(pkg), dop = appOpens(pkg);
@@ -1584,7 +1740,7 @@ final class Store {
             if (es != ds) out.add(name + ": " + (ds <= 0 ? "bez ograničenja u komadu" : "najviše " + ds + " min u komadu umesto " + es));
         }
         for (String dom : keysOf(eSites)) {
-            int ei = siteLimitNow(dom), di = siteLimit(dom);
+            int ei = rawSite(dom), di = siteLimit(dom);
             if (ei == di) continue;
             out.add(dom + ": " + (di < 0 ? "skida se sa liste" : di == 0 ? "uvek blokiran" : "limit " + di + " min"
                     + (ei == 0 ? " umesto stalne blokade" : " umesto " + ei)));
@@ -1641,7 +1797,12 @@ final class Store {
             while (!ids.add(id)) id = newScheduleId();
             schedules.add(DailySchedule.copy(r, id));
         }
-        sp.edit().putString("apps", apps.toString()).putString("sites", sites.toString())
+        List<String> want = linkPairs();
+        try {
+            for (String p : eLinks) if (!want.contains(p)) links.put(Links.pkgOf(p), Links.domainOf(p));
+        } catch (JSONException ignored) {
+        }
+        sp.edit().putString("apps", apps.toString()).putString("sites", sites.toString()).putString("links", links.toString())
                 .putString("schedules", schedulesJson()).putBoolean("night", eNight).putBoolean("protect", eProtect).apply();
         copyToEnforced();
     }

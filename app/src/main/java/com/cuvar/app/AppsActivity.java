@@ -244,8 +244,8 @@ public class AppsActivity extends SubActivity {
     }
 
     private String summary(String pkg, boolean effective) {
-        boolean lock = effective ? store.appLockNow(pkg) : store.appLock(pkg);
-        int limit = effective ? store.appLimitNow(pkg) : store.appLimit(pkg);
+        boolean lock = effective ? store.appLockNow(pkg) : store.appLockLinked(pkg);
+        int limit = effective ? store.appLimitNow(pkg) : store.appLimitLinked(pkg);
         int opens = effective ? store.appOpensNow(pkg) : store.appOpens(pkg);
         int session = effective ? store.appSessionNow(pkg) : store.appSession(pkg);
         if (!lock && limit <= 0 && opens <= 0 && session <= 0) {
@@ -259,7 +259,7 @@ public class AppsActivity extends SubActivity {
             if (sb.length() > 0) {
                 sb.append(" · ");
             }
-            sb.append("Limit ").append(limit).append(" min, danas ").append(Ui.fmt(store.usedToday(pkg)));
+            sb.append("Limit ").append(limit).append(" min, danas ").append(Ui.fmt(store.usedShared(pkg)));
         }
         if (opens > 0) {
             if (sb.length() > 0) {
@@ -312,13 +312,17 @@ public class AppsActivity extends SubActivity {
         session.setText(String.valueOf(store.appSession(it.pkg)));
         box.addView(session, Ui.fill(this, 6));
 
-        box.addView(Ui.text(this, "Danas korišćeno: " + Ui.fmt(store.usedToday(it.pkg)) + ", otvoreno "
+        box.addView(Ui.text(this, "Danas korišćeno: " + Ui.fmt(store.usedShared(it.pkg)) + ", otvoreno "
                 + Ui.count(store.opensToday("app:" + it.pkg), "put", "puta", "puta"), 13, Ui.MUTED, false),
                 Ui.fill(this, 8));
 
         Sheet sheet = new Sheet(this, it.label);
-        if (!store.hasAppRule(it.pkg) && summary(it.pkg, true) != null) {
+        if (!store.hasAppRule(it.pkg) && summary(it.pkg, true) != null && summary(it.pkg, false) == null) {
             sheet.message("Ograničenja su uklonjena i prestaju sutra u 06:00.");
+        }
+        String site = store.linkedSite(it.pkg);
+        if (site != null) {
+            sheet.message("Uz nju ide sajt " + site + ": pravila i vreme su zajednički. Sajt se menja na ekranu Sva pravila.");
         }
         sheet.view(box)
                 .secondary("Otkaži", null)

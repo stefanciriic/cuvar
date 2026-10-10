@@ -87,7 +87,7 @@ public class RulesActivity extends SubActivity {
             any = true;
         }
         for (DailySchedule.Rule r : store.activeSchedules()) {
-            int n = r.apps.size() + r.sites.size();
+            int n = items(r, pm, null).size();
             if (n == 0) continue;
             now.addView(Ui.text(this, "⛔ " + r.name + " do " + hm(r.end) + ": blokirano "
                     + Ui.count(n, "stavka", "stavke", "stavki"), 15, Ui.ACCENT, true), Ui.fill(this, any ? 6 : 0));
@@ -119,6 +119,15 @@ public class RulesActivity extends SubActivity {
         for (DailySchedule.Rule r : rules) {
             if (r.enabled && r.code) { apps.addAll(r.apps); sites.addAll(r.sites); }
         }
+        // Sajt povezan sa instaliranom aplikacijom ide u isti red kao aplikacija.
+        for (String dom : new ArrayList<>(sites)) {
+            String pkg = installedApp(pm, dom);
+            if (pkg != null) { apps.add(pkg); sites.remove(dom); }
+        }
+        for (String pkg : apps) {
+            String dom = store.linkedSite(pkg);
+            if (dom != null) sites.remove(dom);
+        }
         if (apps.isEmpty() && sites.isEmpty()) empty("Van režima ništa nije zaključano ni ograničeno.");
         LinearLayout group = null;
         List<String[]> sorted = new ArrayList<>();
@@ -127,10 +136,12 @@ public class RulesActivity extends SubActivity {
         for (String[] x : sorted) {
             Drawable icon = null;
             try { icon = pm.getApplicationIcon(x[0]); } catch (Exception ignored) { }
-            Has has = r -> r.apps.contains(x[0]);
+            String dom = store.linkedSite(x[0]);
+            Has has = r -> r.apps.contains(x[0]) || (dom != null && r.sites.contains(dom));
             List<String> cur = appChips(x[0], true, hasCode(rules, has));
             List<String> nxt = appChips(x[0], false, hasCode(next, has));
-            group = addRow(group, x[1], icon, cur, nxt, v -> editApp(x[0], x[1]));
+            String title = dom == null ? x[1] : x[1] + "  +  " + dom;
+            group = addRow(group, title, icon, cur, nxt, v -> editApp(x[0], x[1]));
         }
         List<String> siteSorted = new ArrayList<>(sites);
         siteSorted.sort(String::compareTo);
@@ -159,8 +170,8 @@ public class RulesActivity extends SubActivity {
             card.addView(Ui.text(this, "Od sutra: " + shortTime(d), 13, Ui.ACCENT, false), Ui.fill(this, 4));
         }
         List<String> keep = new ArrayList<>(), going = new ArrayList<>();
-        for (String pkg : r.apps) (d != null && d.apps.contains(pkg) ? keep : going).add(appLabel(pm, pkg));
-        for (String s : r.sites) (d != null && d.sites.contains(s) ? keep : going).add(s);
+        Set<String> kept = items(d != null && d.enabled ? d : null, pm, null);
+        for (String item : items(r, pm, null)) (kept.contains(item) ? keep : going).add(item);
         keep.sort(String::compareToIgnoreCase);
         String items = keep.isEmpty() ? "Još ništa ne blokira" : android.text.TextUtils.join(", ", keep);
         card.addView(Ui.text(this, items, 14, Ui.MUTED, false), Ui.fill(this, 6));
@@ -222,6 +233,42 @@ public class RulesActivity extends SubActivity {
         return false;
     }
 
+    /** Nazivi stavki režima; aplikacija i njen povezan sajt su jedna stavka. */
+    private Set<String> items(DailySchedule.Rule r, PackageManager pm, Set<String> out) {
+        if (out == null) out = new LinkedHashSet<>();
+        if (r == null) return out;
+        Set<String> covered = new HashSet<>();
+        for (String pkg : r.apps) {
+            out.add(appLabel(pm, pkg));
+            String dom = store.linkedSite(pkg);
+            if (dom != null) covered.add(dom);
+        }
+        for (String s : r.sites) {
+            if (covered.contains(s)) continue;
+            String pkg = installedApp(pm, s);
+            out.add(pkg == null ? s : appLabel(pm, pkg));
+        }
+        return out;
+    }
+
+    /** Instalirana aplikacija povezana sa sajtom, ili null. */
+    private String installedApp(PackageManager pm, String domain) {
+        for (String pkg : store.linkedApps(domain)) {
+            try {
+                pm.getApplicationInfo(pkg, 0);
+                return pkg;
+            } catch (Exception ignored) {
+            }
+        }
+        return null;
+    }
+
+    private static int minLimit(int a, int b) {
+        if (a <= 0) return Math.max(0, b);
+        if (b <= 0) return a;
+        return Math.min(a, b);
+    }
+
     /** "09–17" ili "22:30–06" i dani samo kad nisu svi. */
     private static String shortTime(DailySchedule.Rule r) {
         String t = hm(r.start) + "–" + hm(r.end);
@@ -245,9 +292,9 @@ public class RulesActivity extends SubActivity {
 
     private List<String> appChips(String pkg, boolean effective, boolean code) {
         List<String> parts = new ArrayList<>();
-        if (code || (effective ? store.appLockNow(pkg) : store.appLock(pkg))) parts.add("🔒 šifrom");
-        int limit = effective ? store.appLimitNow(pkg) : store.appLimit(pkg);
-        if (limit > 0) parts.add(limit + " min/dan" + used(store.usedToday(pkg), effective));
+        if (code || (effective ? store.appLockNow(pkg) : store.appLockLinked(pkg))) parts.add("🔒 šifrom");
+        int limit = effective ? store.appLimitNow(pkg) : store.appLimitLinked(pkg);
+        if (limit > 0) parts.add(limit + " min/dan" + used(store.usedShared(pkg), effective));
         int opens = effective ? store.appOpensNow(pkg) : store.appOpens(pkg);
         if (opens > 0) parts.add(opens + "× dnevno");
         int session = effective ? store.appSessionNow(pkg) : store.appSession(pkg);
@@ -257,10 +304,10 @@ public class RulesActivity extends SubActivity {
 
     private List<String> siteChips(String domain, boolean effective, boolean code) {
         List<String> parts = new ArrayList<>();
-        int limit = effective ? store.siteLimitNow(domain) : store.siteLimit(domain);
+        int limit = effective ? store.siteLimitNow(domain) : store.siteLimitLinked(domain);
         if (limit == 0) parts.add("🔒 uvek, šifrom");
         else if (code) parts.add("🔒 šifrom");
-        if (limit > 0) parts.add(limit + " min/dan" + used(store.usedToday("site:" + domain), effective));
+        if (limit > 0) parts.add(limit + " min/dan" + used(store.usedShared("site:" + domain), effective));
         return parts;
     }
 
@@ -348,20 +395,28 @@ public class RulesActivity extends SubActivity {
 
     private void editApp(String pkg, String label) {
         List<DailySchedule.Rule> rules = store.schedules();
+        String dom = store.linkedSite(pkg);
+        int site = dom == null ? -1 : store.siteLimit(dom);
         Set<String> in = new HashSet<>();
-        for (DailySchedule.Rule r : rules) if (r.apps.contains(pkg)) in.add(r.id);
+        for (DailySchedule.Rule r : rules) if (r.apps.contains(pkg) || (dom != null && r.sites.contains(dom))) in.add(r.id);
         Set<String> now = new HashSet<>();
-        for (DailySchedule.Rule r : store.schedulesNow()) if (r.enabled && r.apps.contains(pkg)) now.add(r.id);
+        for (DailySchedule.Rule r : store.schedulesNow()) {
+            if (r.enabled && (r.apps.contains(pkg) || (dom != null && r.sites.contains(dom)))) now.add(r.id);
+        }
 
         LinearLayout box = Ui.column(this);
+        box.addView(Sheet.label(this, "Sajt ove aplikacije (pravila i vreme su zajednički)"));
+        EditText siteBox = Sheet.input(this, "npr. linkedin.com, prazno = bez sajta", false);
+        if (dom != null) siteBox.setText(dom);
+        box.addView(siteBox, Ui.fill(this, 6));
         List<CheckRow> rows = ruleChecks(box, rules, in, now);
         box.addView(Sheet.label(this, "Ostatak dana"), Ui.fill(this, 18));
         CheckRow lock = new CheckRow(this, null, "Zaključaj", "Otvara se samo dnevnom šifrom, od 17:00 do 22:00");
-        lock.setChecked(store.appLock(pkg));
+        lock.setChecked(store.appLock(pkg) || site == 0);
         box.addView(lock, Ui.fill(this, 6));
         box.addView(Sheet.label(this, "Dnevni limit u minutima (0 = bez limita)"), Ui.fill(this, 14));
         EditText limit = Sheet.input(this, "0", true);
-        limit.setText(String.valueOf(store.appLimit(pkg)));
+        limit.setText(String.valueOf(minLimit(store.appLimit(pkg), Math.max(0, site))));
         box.addView(limit, Ui.fill(this, 6));
         box.addView(Sheet.label(this, "Najviše otvaranja dnevno (0 = bez ograničenja)"), Ui.fill(this, 14));
         EditText opens = Sheet.input(this, "0", true);
@@ -372,7 +427,7 @@ public class RulesActivity extends SubActivity {
         EditText session = Sheet.input(this, "0", true);
         session.setText(String.valueOf(store.appSession(pkg)));
         box.addView(session, Ui.fill(this, 6));
-        box.addView(Ui.text(this, "Danas korišćeno: " + Ui.fmt(store.usedToday(pkg)) + ", otvoreno "
+        box.addView(Ui.text(this, "Danas korišćeno: " + Ui.fmt(store.usedShared(pkg)) + ", otvoreno "
                 + Ui.count(store.opensToday("app:" + pkg), "put", "puta", "puta"), 13, Ui.MUTED, false),
                 Ui.fill(this, 8));
 
@@ -386,23 +441,47 @@ public class RulesActivity extends SubActivity {
                     if (wantOpens == null) return false;
                     Integer wantSession = Ui.nonNegativeNumber(session);
                     if (wantSession == null) return false;
+                    String typed = siteBox.getText().toString().trim();
+                    String wantSite = typed.isEmpty() ? null : Store.hostOf(typed);
+                    if (!typed.isEmpty() && (wantSite == null || !wantSite.contains("."))) {
+                        siteBox.setError("Unesi adresu sajta, npr. linkedin.com");
+                        return false;
+                    }
                     boolean adding = wantLock || wantLimit > 0 || wantOpens > 0 || wantSession > 0;
                     for (CheckRow r : rows) adding |= r.isChecked();
                     saveGuarding(pkg, label, adding, () -> {
+                        if (!java.util.Objects.equals(wantSite, dom)) store.setLink(pkg, wantSite);
                         saveRules(rules, rows, pkg, false);
+                        // Odštiklan režim skida i sajt, ako je bio u njemu.
+                        if (dom != null && dom.equals(wantSite)) {
+                            for (int i = 0; i < rules.size(); i++) {
+                                if (!rows.get(i).isChecked() && rules.get(i).sites.contains(dom)
+                                        && !store.setScheduleSite(rules.get(i).id, dom, false)) busy();
+                            }
+                        }
                         if (wantLock != store.appLock(pkg) || wantLimit != store.appLimit(pkg) || wantOpens != store.appOpens(pkg)
                                 || wantSession != store.appSession(pkg)) {
                             store.setApp(pkg, wantLock, wantLimit, wantOpens, wantSession);
+                        }
+                        // Sopstveno pravilo sajta prati aplikaciju, da i ekran Sajtovi pokazuje isto.
+                        if (dom != null && dom.equals(wantSite) && site >= 0) {
+                            if (wantLock) store.setSite(dom, 0);
+                            else if (wantLimit > 0) store.setSite(dom, wantLimit);
+                            else store.removeSite(dom);
                         }
                         pendingToast();
                         render();
                     });
                     return true;
                 });
-        if (store.hasAppRule(pkg) || !in.isEmpty()) {
+        if (store.hasAppRule(pkg) || !in.isEmpty() || site >= 0) {
             sheet.danger("Ukloni iz pravila", () -> {
-                for (DailySchedule.Rule r : rules) if (in.contains(r.id) && !store.setScheduleApp(r.id, pkg, false)) busy();
+                for (DailySchedule.Rule r : rules) {
+                    if (r.apps.contains(pkg) && !store.setScheduleApp(r.id, pkg, false)) busy();
+                    if (dom != null && r.sites.contains(dom) && !store.setScheduleSite(r.id, dom, false)) busy();
+                }
                 store.setApp(pkg, false, 0, 0, 0);
+                if (site >= 0) store.removeSite(dom);
                 pendingToast();
                 render();
                 return true;
@@ -416,6 +495,11 @@ public class RulesActivity extends SubActivity {
     }
 
     private void editSite(String domain) {
+        String app = installedApp(getPackageManager(), domain);
+        if (app != null) {
+            editApp(app, appLabel(getPackageManager(), app));
+            return;
+        }
         List<DailySchedule.Rule> rules = store.schedules();
         Set<String> in = new HashSet<>();
         for (DailySchedule.Rule r : rules) if (r.sites.contains(domain)) in.add(r.id);
@@ -435,7 +519,7 @@ public class RulesActivity extends SubActivity {
         limit.setText(String.valueOf(Math.max(0, current)));
         box.addView(limit, Ui.fill(this, 6));
         if (current > 0) {
-            box.addView(Ui.text(this, "Danas: " + Ui.fmt(store.usedToday("site:" + domain)), 13, Ui.MUTED, false),
+            box.addView(Ui.text(this, "Danas: " + Ui.fmt(store.usedShared("site:" + domain)), 13, Ui.MUTED, false),
                     Ui.fill(this, 8));
         }
 

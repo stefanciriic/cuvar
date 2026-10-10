@@ -573,7 +573,7 @@ public class GuardService extends AccessibilityService {
         if (rule == null) {
             boolean lock = store.appLockNow(pkg);
             int limit = store.appLimitNow(pkg);
-            boolean timeUp = limit > 0 && store.usedToday(pkg) >= limit * 60000L;
+            boolean timeUp = limit > 0 && store.usedShared(pkg) >= limit * 60000L;
             // Van perioda režim sa dnevnom šifrom drži svoje aplikacije zaključane, a umesto PIN-a traži šifru.
             DailySchedule.Rule codeRule = store.codeRuleForApp(pkg);
             if (lock || timeUp || codeRule != null) {
@@ -605,7 +605,7 @@ public class GuardService extends AccessibilityService {
             int siteLimit = store.siteLimitNow(domain);
             if (siteLimit == 0) {
                 blocks.add(new Block("site:" + domain, KIND_SITE, null, true));
-            } else if (siteLimit > 0 && store.usedToday("site:" + domain) >= siteLimit * 60000L) {
+            } else if (siteLimit > 0 && store.usedShared("site:" + domain) >= siteLimit * 60000L) {
                 blocks.add(new Block("site:" + domain, KIND_SITE_TIME, null, true));
             }
         }
@@ -761,7 +761,7 @@ public class GuardService extends AccessibilityService {
         for (String domain : store.matchingSitesNow(host)) {
             int limit = store.siteLimitNow(domain);
             if (limit == 0) blocks.add(new Block("site:" + domain, KIND_SITE, null, true));
-            else if (limit > 0 && store.usedToday("site:" + domain) >= limit * 60000L) {
+            else if (limit > 0 && store.usedShared("site:" + domain) >= limit * 60000L) {
                 blocks.add(new Block("site:" + domain, KIND_SITE_TIME, null, true));
             }
         }
@@ -785,7 +785,7 @@ public class GuardService extends AccessibilityService {
                 b = new Block(k, KIND_SCHEDULE, rule, false);
             } else {
                 int limit = store.appLimitNow(p);
-                boolean timeUp = limit > 0 && store.usedToday(p) >= limit * 60000L;
+                boolean timeUp = limit > 0 && store.usedShared(p) >= limit * 60000L;
                 DailySchedule.Rule codeRule = store.codeRuleForApp(p);
                 if (store.appLockNow(p) || timeUp || codeRule != null) {
                     b = new Block(k, timeUp ? KIND_TIME : codeRule != null ? KIND_CODE : KIND_LOCK, null, true);
@@ -1218,7 +1218,7 @@ public class GuardService extends AccessibilityService {
         box.addView(t, Ui.fill(c, 10));
 
         StringBuilder sb = new StringBuilder("Otvaraš ").append(name).append(". Danas si ga koristio ")
-                .append(Ui.fmt(store.usedToday(pkg)));
+                .append(Ui.fmt(store.usedShared(pkg)));
         int limit = store.appLimitNow(pkg);
         if (limit > 0) sb.append(" od ").append(limit).append(" min");
         int opens = store.appOpensNow(pkg);
@@ -1359,7 +1359,7 @@ public class GuardService extends AccessibilityService {
             joke = Jokes.pick(Jokes.SITE);
         } else {
             title = "Vreme je isteklo";
-            long used = store.usedToday(isSite ? key : key.substring(4));
+            long used = store.usedShared(isSite ? key : key.substring(4));
             sub = "Danas si na " + name + " proveo " + Ui.fmt(used) + ". Dnevni limit je potrošen i "
                     + name + " je zaključan do ponoći, ni šifrom se ne otvara.";
             joke = Jokes.pick(Jokes.TIME_UP);

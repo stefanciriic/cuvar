@@ -47,8 +47,8 @@ public class SitesActivity extends SubActivity {
             row.addView(Ui.text(SitesActivity.this, domain, 17, Ui.INK, true));
             int limit = store.siteLimitNow(domain);
             String s = siteSummary(limit);
-            if (limit > 0) s += ", danas " + Ui.fmt(store.usedToday("site:" + domain));
-            int next = store.siteLimit(domain);
+            if (limit > 0) s += ", danas " + Ui.fmt(store.usedShared("site:" + domain));
+            int next = store.siteLimitLinked(domain);
             if (next != limit) s += "\nOd sledećih 06:00: " + siteSummary(next);
             row.addView(Ui.text(SitesActivity.this, s, 13, Ui.ACCENT, false));
             return row;
@@ -143,7 +143,7 @@ public class SitesActivity extends SubActivity {
         listed.setListener(limit::setEnabled);
         box.addView(limit, Ui.fill(this, 6));
         if (domain != null && store.siteLimit(domain) > 0) {
-            box.addView(Ui.text(this, "Danas: " + Ui.fmt(store.usedToday("site:" + domain)), 13, Ui.MUTED, false),
+            box.addView(Ui.text(this, "Danas: " + Ui.fmt(store.usedShared("site:" + domain)), 13, Ui.MUTED, false),
                     Ui.fill(this, 8));
         }
 
