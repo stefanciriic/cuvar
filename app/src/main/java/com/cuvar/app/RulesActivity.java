@@ -43,7 +43,7 @@ public class RulesActivity extends SubActivity {
         ScrollView scroll = new ScrollView(this);
         scroll.setBackgroundColor(Ui.BG);
         LinearLayout root = Ui.column(this);
-        root.addView(header("Sva pravila", "Narandžasto: režim koji blokira. Ispod: šta važi ostatak dana."));
+        root.addView(header("Aplikacije i sajtovi", "Sve na jednom mestu. Aplikacija i njen sajt su jedna stavka."));
         content = Ui.column(this);
         int p = Ui.dp(this, 20);
         content.setPadding(p, 0, p, p);
@@ -63,17 +63,9 @@ public class RulesActivity extends SubActivity {
                 .secondary("Zatvori", null).show());
         content.addView(how, Ui.fill(this, 4));
 
-        LinearLayout adds = Ui.row(this);
-        TextView addApp = Ui.button(this, "+ Aplikacija", true);
-        addApp.setOnClickListener(v -> pickApp());
-        TextView addSite = Ui.button(this, "+ Sajt", true);
-        addSite.setOnClickListener(v -> addSite());
-        LinearLayout.LayoutParams half = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-        adds.addView(addApp, half);
-        LinearLayout.LayoutParams half2 = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-        half2.leftMargin = Ui.dp(this, 10);
-        adds.addView(addSite, half2);
-        content.addView(adds, Ui.fill(this, 14));
+        TextView add = Ui.button(this, "+ Dodaj aplikaciju ili sajt", true);
+        add.setOnClickListener(v -> addItem());
+        content.addView(add, Ui.fill(this, 14));
 
         List<DailySchedule.Rule> rules = store.schedulesNow();
         List<DailySchedule.Rule> next = store.schedules();
@@ -566,21 +558,32 @@ public class RulesActivity extends SubActivity {
         sheet.show();
     }
 
-    private void addSite() {
+    /** Jedno dugme za dodavanje: aplikacija sa liste ili upisan sajt; sajt poznate aplikacije ide uz nju. */
+    private void addItem() {
+        LinearLayout box = Ui.column(this);
+        TextView app = Ui.button(this, "Izaberi aplikaciju", false);
+        box.addView(app, Ui.fill(this, 0));
+        box.addView(Sheet.label(this, "ili upiši sajt"), Ui.fill(this, 18));
         EditText address = Sheet.input(this, "npr. youtube.com", false);
-        new Sheet(this, "Dodaj sajt")
-                .message("Blokada obuhvata i poddomene. Zatim biraš režime i limit.")
-                .view(address)
+        box.addView(address, Ui.fill(this, 6));
+        Sheet sheet = new Sheet(this, "Dodaj")
+                .message("Sajt poznate aplikacije (YouTube, Instagram…) ide uz nju kao jedna stavka.")
+                .view(box)
                 .secondary("Otkaži", null)
                 .primary("Dalje", () -> {
                     String host = Store.hostOf(address.getText().toString());
                     if (host == null || !host.contains(".") || !host.matches("[a-z0-9\\p{L}.-]+")) {
-                        address.setError("Unesi adresu sajta, npr. youtube.com");
+                        address.setError("Unesi adresu sajta, npr. youtube.com, ili izaberi aplikaciju");
                         return false;
                     }
                     editSite(host);
                     return true;
-                }).show();
+                });
+        app.setOnClickListener(v -> {
+            sheet.dismiss();
+            pickApp();
+        });
+        sheet.show();
     }
 
     private void pickApp() {

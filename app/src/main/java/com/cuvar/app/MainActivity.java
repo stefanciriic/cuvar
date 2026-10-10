@@ -192,19 +192,12 @@ public class MainActivity extends Activity {
                 : "Isključena", v -> chooseProtect());
         col.addView(whole, Ui.fill(this, 8));
 
-        int appRules = store.appListNow().size();
-        int siteRules = store.siteListNow().size();
+        int items = store.appListNow().size() + store.siteListNow().size();
         col.addView(Ui.section(this, "Po aplikaciji i sajtu"), Ui.fill(this, 24));
         LinearLayout rules = group();
-        groupRow(rules, "Sva pravila na jednom mestu",
-                "Šta je kad blokirano, po aplikaciji i sajtu",
+        groupRow(rules, "Aplikacije i sajtovi",
+                items == 0 ? "Zaključaj, postavi dnevni limit ili blokiraj u režimu" : "Šta je kad blokirano · pravila: " + items,
                 v -> startActivity(new Intent(this, RulesActivity.class)));
-        groupRow(rules, "Aplikacije",
-                appRules == 0 ? "Zaključaj, postavi dnevni limit ili broj otvaranja" : "Pravila: " + appRules,
-                v -> startActivity(new Intent(this, AppsActivity.class)));
-        groupRow(rules, "Sajtovi",
-                siteRules == 0 ? "Blokiraj sajtove ili im postavi dnevni limit" : "Na listi: " + siteRules,
-                v -> startActivity(new Intent(this, SitesActivity.class)));
         groupRow(rules, "Vremenski režimi", scheduleSummary(),
                 v -> startActivity(new Intent(this, ScheduleActivity.class)));
         col.addView(rules, Ui.fill(this, 8));
