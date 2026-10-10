@@ -79,7 +79,12 @@ public class DnsVpn extends VpnService {
         } catch (Throwable t) {
             want = false;
         }
-        if (!want) {
+        if (!want || lockdown()) {
+            if (lockdown()) {
+                // Lockdown bez punog VPN tunela prekida sav ostali saobraćaj. Ovaj servis je
+                // samo DNS filter i zato nikada ne sme da radi u tom režimu.
+                disableBecauseUnsafe("dnsLockdown");
+            }
             // Sistem ga je pokrenuo (npr. „Uvek uključen VPN“), a blokada je isključena: ne pravi VPN.
             shutdown();
             stopSelf();
@@ -90,6 +95,9 @@ public class DnsVpn extends VpnService {
     }
 
     private synchronized void open() {
+        unsafeStopStarted = false;
+        failures = 0;
+        firstFailureAt = 0L;
         try {
             Builder b = new Builder()
                     .setSession(getString(R.string.app_name))
@@ -208,44 +216,66 @@ public class DnsVpn extends VpnService {
     }
 
     private int failures; // uzastopni neuspesi da se pita pravi DNS dok mreža ima internet
+    private long firstFailureAt;
+    private boolean unsafeStopStarted;
 
     private byte[] forward(byte[] query) {
         byte[] r = ask(query);
         if (r != null) {
             failures = 0;
-        } else if (networkOnline() && ++failures >= 8) {
-            // Pravi DNS se ne može dobiti (npr. „Blokiraj veze bez VPN-a“): ugasi blokadu da telefon ne ostane bez interneta.
-            GuardDiagnostics.report("dnsGiveUp", new IllegalStateException("upstream DNS unreachable"));
-            try {
-                Store.get(this).disableDnsNow();
-            } catch (Throwable ignored) {
+            firstFailureAt = 0L;
+        } else {
+            long now = SystemClock.elapsedRealtime();
+            if (firstFailureAt == 0L) firstFailureAt = now;
+            if (lockdown() || (networkOnline() && (++failures >= 3 || now - firstFailureAt >= 15000L))) {
+                disableBecauseUnsafe(lockdown() ? "dnsLockdown" : "dnsGiveUp");
             }
-            new Thread(() -> {
-                shutdown();
-                stopSelf();
-            }).start();
         }
         return r;
     }
 
-    /** Da li bar jedna prava mreža (ne VPN) ima proveren internet. */
+    /** Da li je dostupna prava mreža (ne VPN). Validacija može pasti baš zbog VPN DNS-a. */
     private boolean networkOnline() {
         try {
             ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
             for (Network n : cm.getAllNetworks()) {
                 NetworkCapabilities nc = cm.getNetworkCapabilities(n);
                 if (nc != null && !nc.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
-                        && nc.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) return true;
+                        && nc.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) return true;
             }
         } catch (Throwable ignored) {
         }
         return false;
     }
 
+    private boolean lockdown() {
+        try {
+            return isLockdownEnabled();
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    private void disableBecauseUnsafe(String diagnostic) {
+        synchronized (this) {
+            if (unsafeStopStarted) return;
+            unsafeStopStarted = true;
+        }
+        GuardDiagnostics.report(diagnostic, new IllegalStateException("DNS VPN cannot safely forward traffic"));
+        try {
+            Store.get(this).disableDnsNow();
+        } catch (Throwable ignored) {
+        }
+        new Thread(() -> {
+            shutdown();
+            stopSelf();
+        }, "cuvar-dns-stop").start();
+    }
+
     private byte[] ask(byte[] query) {
         for (InetAddress server : upstream()) {
             try (DatagramSocket s = new DatagramSocket()) {
-                protect(s);
+                if (!protect(s)) continue;
                 s.setSoTimeout(3000);
                 s.send(new DatagramPacket(query, query.length, server, 53));
                 byte[] buf = new byte[4096];

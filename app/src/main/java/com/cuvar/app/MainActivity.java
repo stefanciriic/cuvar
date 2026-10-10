@@ -698,12 +698,21 @@ public class MainActivity extends Activity {
         List<String> items = store.pendingChanges(a.getPackageManager());
         if (items.isEmpty()) return null;
         LinearLayout card = Ui.card(a);
-        card.addView(Ui.text(a, "Od sutra", 16, Ui.ACCENT, true));
-        card.addView(Ui.text(a, "Blaža pravila važe tek sutra od 0" + DailyCode.NIGHT_END_HOUR + ":00. Do tada važi strožije.", 13, Ui.MUTED, false),
+        card.addView(Ui.text(a, "Zakazane promene", 16, Ui.ACCENT, true));
+        card.addView(Ui.text(a, (items.size() == 1 ? "1 promena" : items.size() + " promena")
+                        + " čeka primenu sutra u 0" + DailyCode.NIGHT_END_HOUR + ":00. Do tada ostaje strožije pravilo.",
+                13, Ui.MUTED, false),
                 Ui.fill(a, 4));
-        StringBuilder sb = new StringBuilder();
-        for (String it : items) sb.append(sb.length() == 0 ? "" : "\n").append("•  ").append(it);
-        card.addView(Ui.text(a, sb.toString(), 14, Ui.INK, false), Ui.fill(a, 8));
+        TextView details = Ui.button(a, "Prikaži promene", false);
+        details.setOnClickListener(v -> {
+            StringBuilder sb = new StringBuilder();
+            for (String it : items) sb.append(sb.length() == 0 ? "" : "\n\n").append(it);
+            new Sheet(a, "Promene od sutra")
+                    .message("Ove izmene će početi u 0" + DailyCode.NIGHT_END_HOUR + ":00:\n\n" + sb)
+                    .secondary("Zatvori", null)
+                    .show();
+        });
+        card.addView(details, Ui.fill(a, 10));
         TextView cancel = Ui.button(a, "Odustani od ovih promena", false);
         cancel.setOnClickListener(v -> {
             store.cancelPending();
