@@ -143,7 +143,7 @@ public class MainActivity extends Activity {
         boolean enabled = GuardService.isEnabled(this);
         if (!enabled) {
             col.addView(setupCard("Uključi Čuvara",
-                    "U Pristupačnosti pronađi „Čuvar“ (pod Preuzete ili Instalirane aplikacije) i uključi ga. "
+                    "U Pristupačnosti pronađi „Čuvar“ (na Samsungu pod Instalirane aplikacije, na drugim telefonima pod Preuzete aplikacije) i uključi ga. "
                             + "Bez toga merenje vremena i blokiranje ne rade. "
                             + "Čuvar tako vidi samo koja je aplikacija i koji sajt otvoren; ništa ne šalje sa telefona.\n\n"
                             + "Ako je prekidač siv ili piše „Ograničeno podešavanje“: Podešavanja → Aplikacije → Čuvar → "
@@ -804,6 +804,16 @@ public class MainActivity extends Activity {
     }
 
     private void openAccessibilitySettings() {
+        // Android 13+: odmah Čuvarov prekidač u Pristupačnosti, bez traženja po listi.
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            try {
+                startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_DETAILS_SETTINGS)
+                        .putExtra(Intent.EXTRA_COMPONENT_NAME,
+                                new android.content.ComponentName(this, GuardService.class).flattenToString()));
+                return;
+            } catch (Throwable ignored) {
+            }
+        }
         try {
             startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
         } catch (Throwable t) {
