@@ -403,7 +403,7 @@ public class GuardService extends AccessibilityService {
             if (p != null && (wantsContent(p.toString()) || secondaryContentPackages.contains(p.toString())
                     || (currentInApp && p.toString().equals(currentPkg))) && !checkPending) {
                 checkPending = true;
-                h.postDelayed(throttled, 200);
+                h.postDelayed(throttled, 700); // pri skrolovanju stranice događaji stižu stalno: adresa se čita najviše ~1,4 puta u sekundi
             }
         }
     }
@@ -541,7 +541,9 @@ public class GuardService extends AccessibilityService {
         }
         boolean quiet = overlay == null && quiet(pkg) && appWindowCount() < 2;
         if (!quiet && root == null) return;
-        if (!quiet && Build.VERSION.SDK_INT >= 33) {
+        // Ceo vrh ekrana (sa delom sadržaja) treba samo za pregledač unutar aplikacije, gde se adresa traži po ekranu.
+        // U pregledačima se adresa čita direktno po polju za adresu, bez čitanja stranice.
+        if (!quiet && Build.VERSION.SDK_INT >= 33 && inAppBrowser(pkg)) {
             AccessibilityNodeInfo full = getRootInActiveWindow();
             if (full != null && full.getPackageName() != null && pkg.equals(full.getPackageName().toString())) root = full;
         }

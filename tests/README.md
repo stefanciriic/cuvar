@@ -184,3 +184,8 @@ Provera na telefonu:
 4. Sa blokade pređi preko nedavnih aplikacija u mape: blokada nestane za najviše 2 s.
 5. Novo pravilo za aplikaciju počne da važi za najviše 5 s.
 6. Fokus režim: sve aplikacije se prate kao ranije.
+
+## Pregledač ne zastaje
+
+1. U Chrome-u skroluj dugačku stranicu: skrolovanje je glatko kao bez Čuvara.
+2. Otvori blokiran sajt: blokada se pojavi za oko jednu sekundu.
