@@ -57,6 +57,7 @@ final class Store {
     private String eDay;
     private boolean eNight;
     private boolean eProtect;
+    private boolean eDns;
     private boolean dirty;
     private long lastSave;
     private int fails;
@@ -895,6 +896,43 @@ final class Store {
         enforce();
     }
 
+    // ---------- Blokada sajtova u svim aplikacijama (lokalni VPN samo za DNS) ----------
+
+    /** Podešeno: blokirani sajtovi se ne otvaraju ni u jednoj aplikaciji (DnsVpn). */
+    synchronized boolean dnsBlock() {
+        return sp.getBoolean("dns", false);
+    }
+
+    /** Uključivanje važi odmah, isključivanje tek sledećeg jutra u 06:00. */
+    synchronized void setDnsBlock(boolean on) {
+        sp.edit().putBoolean("dns", on).apply();
+        enforce();
+    }
+
+    synchronized boolean dnsBlockNow() {
+        roll();
+        return eApps == null ? dnsBlock() : eDns;
+    }
+
+    /** Zabeleži da blokada sajtova u svim aplikacijama nije radila (VPN isključen ili ga je zauzeo drugi VPN). */
+    synchronized void dnsGap(long from, long to) {
+        if (to - from >= 60000L) logGap(from, to, "Blokada sajtova (VPN) nije radila");
+    }
+
+    /**
+     * Da li DNS treba da odbije ime: sajt uvek blokiran (osim dok je otključan šifrom), u režimu,
+     * ili sajt sa pravilom dok traje noćna blokada ili je potrošen ukupni limit. Limiti u minutima ostaju čitanju adrese.
+     */
+    synchronized boolean dnsBlocked(String host) {
+        if (host == null || host.isEmpty()) return false;
+        for (String d : matchingSitesNow(host)) {
+            if (siteLimitNow(d) == 0 && unlockLeft("site:" + d) <= 0 && emergencyLeft("site:" + d) <= 0) return true;
+        }
+        if (scheduleBlockingSite(host) != null) return true;
+        if (siteGuarded(host) != null && (nightActive() || DayLimit.reached(dayLimit(), guardedToday()))) return true;
+        return false;
+    }
+
     /** Da li zaštita sada važi. */
     synchronized boolean protectNow() {
         roll();
@@ -1458,6 +1496,7 @@ final class Store {
         eSites = parse(sp.getString("eSites", "{}"));
         eNight = sp.getBoolean("eNight", true);
         eProtect = sp.getBoolean("eProtect", false);
+        eDns = sp.getBoolean("eDns", false);
         parseSchedules(sp.getString("eSchedules", "[]"), eSchedules);
         eLinks.clear();
         JSONArray el = parseArray(sp.getString("eLinks", null));
@@ -1473,6 +1512,7 @@ final class Store {
         for (DailySchedule.Rule r : schedules) eSchedules.add(copy(r));
         eNight = nightBlock();
         eProtect = protectSelf();
+        eDns = dnsBlock();
         eLinks.clear();
         eLinks.addAll(linkPairs());
         eDay = rulesDay();
@@ -1482,7 +1522,7 @@ final class Store {
     private void saveEnforced() {
         sp.edit().putString("eApps", eApps.toString()).putString("eSites", eSites.toString())
                 .putString("eSchedules", schedulesJson(eSchedules)).putString("eDay", eDay)
-                .putBoolean("eNight", eNight).putBoolean("eProtect", eProtect)
+                .putBoolean("eNight", eNight).putBoolean("eProtect", eProtect).putBoolean("eDns", eDns)
                 .putString("eLinks", new JSONArray(eLinks).toString()).apply();
         expanded = null;
     }
@@ -1516,6 +1556,7 @@ final class Store {
         }
         eNight = eNight || nightBlock();
         eProtect = eProtect || protectSelf();
+        eDns = eDns || dnsBlock();
         eLinks.addAll(linkPairs());
         JSONObject na = new JSONObject();
         Set<String> keys = new HashSet<>(keysOf(eApps));
@@ -1786,6 +1827,7 @@ final class Store {
         if (eApps == null) return out;
         if (eNight && !nightBlock()) out.add("Noćna blokada se isključuje");
         if (eProtect && !protectSelf()) out.add("Zaštita Čuvara od isključivanja se isključuje");
+        if (eDns && !dnsBlock()) out.add("Blokada sajtova u svim aplikacijama se isključuje");
         List<String> want = linkPairs();
         for (String p : eLinks) {
             if (want.contains(p)) continue;
@@ -1869,7 +1911,8 @@ final class Store {
         } catch (JSONException ignored) {
         }
         sp.edit().putString("apps", apps.toString()).putString("sites", sites.toString()).putString("links", links.toString())
-                .putString("schedules", schedulesJson()).putBoolean("night", eNight).putBoolean("protect", eProtect).apply();
+                .putString("schedules", schedulesJson()).putBoolean("night", eNight).putBoolean("protect", eProtect)
+                .putBoolean("dns", eDns).apply();
         copyToEnforced();
     }
 

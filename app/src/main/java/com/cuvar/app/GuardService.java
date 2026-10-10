@@ -150,6 +150,9 @@ public class GuardService extends AccessibilityService {
     }; // paket -> poslednji prikazan ekran (aktivnost)
     /** Do kada sme da se otvori ekran „Pristup korišćenju“ iako je zaštita uključena (korisnik je tapnuo dugme u Čuvaru). */
     static volatile long usageSetupUntil;
+    /** Do kada sme da se otvori ekran VPN podešavanja (korisnik iz Čuvara uključuje „Uvek uključen VPN“). */
+    static volatile long vpnSetupUntil;
+    private long dnsDownSince;       // od kada blokada sajtova (VPN) ne radi iako treba
     /** Aplikacije koje otvaraju linkove u svom pregledaču. */
     private static final String[] IN_APP_APPS = {"com.instagram.android", "com.instagram.lite", "com.facebook.katana",
             "com.facebook.lite", "com.facebook.orca", "com.facebook.mlite", "com.zhiliaoapp.musically", "com.ss.android.ugc.trill",
@@ -159,7 +162,8 @@ public class GuardService extends AccessibilityService {
     private static final String[] SETTINGS_APPS = {"com.android.settings", "com.google.android.packageinstaller",
             "com.android.packageinstaller", "com.google.android.permissioncontroller", "com.android.permissioncontroller",
             "com.android.vending", "com.miui.securitycenter", "com.samsung.android.lool", "com.samsung.accessibility",
-            "com.google.android.marvin.talkback", "com.huawei.systemmanager", "com.coloros.safecenter", "com.oplus.safecenter"};
+            "com.google.android.marvin.talkback", "com.huawei.systemmanager", "com.coloros.safecenter", "com.oplus.safecenter",
+            "com.android.vpndialogs"};
     private ForegroundApp foreground;
     private boolean usageOk;
     private long usageCheckedAt;
@@ -185,6 +189,7 @@ public class GuardService extends AccessibilityService {
         @Override
         public void run() {
             updateWatched();
+            keepDns();
             safeCheck();
             try {
                 store.guardBeat(false);
@@ -323,6 +328,31 @@ public class GuardService extends AccessibilityService {
         h.removeCallbacks(foregroundPoll);
         h.postDelayed(foregroundPoll, 1500L);
         safeCheck();
+    }
+
+    /**
+     * Blokada sajtova kroz lokalni VPN: drži ga upaljenim dok je uključena, a vreme kad nije radio (isključen u
+     * podešavanjima ili ga je zauzeo drugi VPN) beleži u „Čuvar nije radio“. Čitanje adrese u pregledačima radi i tada.
+     */
+    private void keepDns() {
+        try {
+            boolean want = store.dnsBlockNow();
+            if (!want) {
+                if (DnsVpn.running) DnsVpn.stop(this);
+                dnsDownSince = 0;
+                return;
+            }
+            long now = store.now();
+            if (DnsVpn.running) {
+                if (dnsDownSince > 0) store.dnsGap(dnsDownSince, now);
+                dnsDownSince = 0;
+                return;
+            }
+            if (dnsDownSince == 0) dnsDownSince = now;
+            if (android.net.VpnService.prepare(this) == null) DnsVpn.start(this); // dozvola za VPN još važi
+        } catch (Throwable error) {
+            GuardDiagnostics.report("keepDns", error);
+        }
     }
 
     /**
@@ -1051,7 +1081,7 @@ public class GuardService extends AccessibilityService {
      */
     private boolean quiet(String raw) {
         if (raw.equals(getPackageName()) || BROWSERS.containsKey(raw) || store.focusActive()) return false;
-        if (settingsLike(raw) && store.protectNow()) return false;
+        if ((settingsLike(raw) || raw.equals("com.android.vpndialogs")) && store.protectNow()) return false;
         if (inAppBrowser(raw)) return false;
         String p = cloneOf(raw);
         return p.equals(raw) && !guarded(p);
@@ -1087,9 +1117,18 @@ public class GuardService extends AccessibilityService {
 
     /** Da li sistemski ekran prikazuje Čuvara (podaci o aplikaciji, Pristupačnost, brisanje). */
     private boolean guardsSelf(AccessibilityNodeInfo root, String p) {
-        if (p.equals(getPackageName()) || !settingsLike(p) || exempt().contains(p)) return false;
+        if (p.equals(getPackageName()) || exempt().contains(p)) return false;
+        if (p.equals("com.android.vpndialogs")) {
+            // Prozorčić za prekid VPN-a (iz obaveštenja) se zatvara; zahtev za uključivanje se ne dira.
+            return DnsVpn.running && store.dnsBlockNow() && mentions(root, getString(R.string.app_name));
+        }
+        if (!settingsLike(p)) return false;
         // Korisnik je iz Čuvara otvorio „Pristup korišćenju“ da ga uključi: taj ekran se ne zatvara dva minuta.
         if (SystemClock.elapsedRealtime() < usageSetupUntil && !usageOk) return false;
+        // Isto za VPN podešavanja („Uvek uključen VPN“), ali samo ekran o VPN-u, ne Pristupačnost ni podaci o aplikaciji.
+        if (SystemClock.elapsedRealtime() < vpnSetupUntil && hasText(root, "VPN")
+                && !hasText(root, "Pristupačnost") && !hasText(root, "Accessibility") && !hasText(root, "Prinudno")
+                && !hasText(root, "Force stop") && !hasText(root, "Deinstal") && !hasText(root, "Uninstall")) return false;
         boolean installer = p.contains("packageinstaller") || p.equals("com.android.vending");
         try {
             String label = getString(R.string.app_name);
@@ -1102,6 +1141,15 @@ public class GuardService extends AccessibilityService {
         } catch (Throwable ignored) {
         }
         return false;
+    }
+
+    private static boolean hasText(AccessibilityNodeInfo root, String t) {
+        try {
+            List<AccessibilityNodeInfo> n = root.findAccessibilityNodeInfosByText(t);
+            return n != null && !n.isEmpty();
+        } catch (Throwable e) {
+            return false;
+        }
     }
 
     /** Da li se na ekranu pominje naziv (ali ne „čuvar ekrana“, koji je podešavanje ekrana). */

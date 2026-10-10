@@ -189,3 +189,13 @@ Provera na telefonu:
 
 1. U Chrome-u skroluj dugačku stranicu: skrolovanje je glatko kao bez Čuvara.
 2. Otvori blokiran sajt: blokada se pojavi za oko jednu sekundu.
+
+## Blokada sajtova u svim aplikacijama (lokalni VPN samo za DNS)
+
+1. Pravila → Za ceo telefon → „Blokada sajtova u svim aplikacijama“ → Uključi; prihvati zahtev za VPN. Gore se pojavi ključić.
+2. Uvek blokiran sajt: ne otvara se ni u Chrome-u, ni u Firefox-u, ni preko linka u Instagramu/Messengeru („sajt nije dostupan“ ili Čuvarova blokada).
+3. Ostali sajtovi, mape, video i pozivi rade normalnom brzinom.
+4. Sajt sa limitom u minutima radi kao do sada (meri se i blokira posle limita).
+5. Uz zaštitu od isključivanja: prozorčić „Prekini vezu“ iz obaveštenja o VPN-u se zatvara; „Otvori VPN podešavanja“ iz Čuvara dozvoljava ekran VPN-a dva minuta.
+6. Uključi drugi VPN: u kartici Sada se pojavi „Čuvar nije radio · Blokada sajtova (VPN) nije radila“, a red u Pravilima kaže „Ne radi“.
+7. Isključivanje važi tek od sledećih 06:00.
