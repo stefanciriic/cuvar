@@ -316,8 +316,11 @@ public class AppsActivity extends SubActivity {
                 + Ui.count(store.opensToday("app:" + it.pkg), "put", "puta", "puta"), 13, Ui.MUTED, false),
                 Ui.fill(this, 8));
 
-        Sheet sheet = new Sheet(this, it.label)
-                .view(box)
+        Sheet sheet = new Sheet(this, it.label);
+        if (!store.hasAppRule(it.pkg) && summary(it.pkg, true) != null) {
+            sheet.message("Ograničenja su uklonjena i prestaju sutra u 06:00.");
+        }
+        sheet.view(box)
                 .secondary("Otkaži", null)
                 .primary("Sačuvaj", () -> {
                     boolean wantLock = lock.isChecked();

@@ -376,7 +376,7 @@ public class RulesActivity extends SubActivity {
                 + Ui.count(store.opensToday("app:" + pkg), "put", "puta", "puta"), 13, Ui.MUTED, false),
                 Ui.fill(this, 8));
 
-        new Sheet(this, label).view(box)
+        Sheet sheet = new Sheet(this, label).view(box)
                 .secondary("Otkaži", null)
                 .primary("Sačuvaj", () -> {
                     boolean wantLock = lock.isChecked();
@@ -398,7 +398,21 @@ public class RulesActivity extends SubActivity {
                         render();
                     });
                     return true;
-                }).show();
+                });
+        if (store.hasAppRule(pkg) || !in.isEmpty()) {
+            sheet.danger("Ukloni iz pravila", () -> {
+                for (DailySchedule.Rule r : rules) if (in.contains(r.id) && !store.setScheduleApp(r.id, pkg, false)) busy();
+                store.setApp(pkg, false, 0, 0, 0);
+                pendingToast();
+                render();
+                return true;
+            });
+        }
+        sheet.show();
+    }
+
+    private void busy() {
+        Toast.makeText(this, "Režim koji sada traje ne može da izgubi stavku dok traje", Toast.LENGTH_LONG).show();
     }
 
     private void editSite(String domain) {
@@ -425,7 +439,7 @@ public class RulesActivity extends SubActivity {
                     Ui.fill(this, 8));
         }
 
-        new Sheet(this, domain).view(box)
+        Sheet sheet = new Sheet(this, domain).view(box)
                 .secondary("Otkaži", null)
                 .primary("Sačuvaj", () -> {
                     Integer want = -1;
@@ -438,7 +452,17 @@ public class RulesActivity extends SubActivity {
                     pendingToast();
                     render();
                     return true;
-                }).show();
+                });
+        if (current >= 0 || !in.isEmpty()) {
+            sheet.danger("Ukloni iz pravila", () -> {
+                for (DailySchedule.Rule r : rules) if (in.contains(r.id) && !store.setScheduleSite(r.id, domain, false)) busy();
+                if (current >= 0) store.removeSite(domain);
+                pendingToast();
+                render();
+                return true;
+            });
+        }
+        sheet.show();
     }
 
     private void addSite() {
