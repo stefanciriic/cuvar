@@ -813,17 +813,23 @@ public class GuardService extends AccessibilityService {
         blocks.addAll(secondary);
         setContentEvents(wantsContent(pkg) || inApp || !secondaryContentPackages.isEmpty());
 
-        // Back dismisses the current blocked URL while Chrome navigates. Ignore only that exact block key,
-        // briefly; another blocked site or an app-level rule still takes effect immediately.
+        // Back dismisses the current blocked URL while the browser opens a neutral page. Ignore that site
+        // and its temporary unknown-address state briefly; app rules still take effect immediately.
         if (leavingSiteKey != null) {
-            if (SystemClock.elapsedRealtime() >= leavingSiteUntil || !pkg.equals(leavingSiteBrowser)) {
+            boolean sameBrowser = pkg.equals(leavingSiteBrowser)
+                    || (rawPkg != null && rawPkg.equals(leavingSiteBrowser));
+            if (SystemClock.elapsedRealtime() >= leavingSiteUntil || !sameBrowser) {
                 h.removeCallbacks(finishSiteExit);
                 leavingSiteKey = null;
                 leavingSiteBrowser = null;
                 leavingSiteUntil = 0L;
             } else {
                 String exitingKey = leavingSiteKey;
-                blocks.removeIf(b -> exitingKey.equals(b.key));
+                String exitingBrowser = leavingSiteBrowser;
+                blocks.removeIf(b -> exitingKey.equals(b.key)
+                        // U adresnoj traci se kratko pojavi i „nepoznata adresa”; ne prikazuj drugi overlay
+                        // dok isti browser otvara neutralnu stranicu.
+                        || (b.kind == KIND_ADDRESS && ("app:" + exitingBrowser).equals(b.key)));
             }
         }
 
@@ -1324,8 +1330,12 @@ public class GuardService extends AccessibilityService {
 
     /** Blokada se odnosi na stranicu u pregledaču koji je na ekranu (sajt ili nepotvrđena adresa). */
     private boolean inBrowserPage(String key, int kind) {
-        return (key.startsWith("site:") || kind == KIND_ADDRESS)
-                && currentPkg != null && BROWSERS.containsKey(currentPkg);
+        return (key.startsWith("site:") || kind == KIND_ADDRESS) && browserForCurrentBlock() != null;
+    }
+
+    private String browserForCurrentBlock() {
+        if (currentPkg != null && BROWSERS.containsKey(currentPkg)) return currentPkg;
+        return rawPkg != null && BROWSERS.containsKey(rawPkg) ? rawPkg : null;
     }
 
     /**
@@ -1334,9 +1344,10 @@ public class GuardService extends AccessibilityService {
      */
     private void leaveBlock(String key, int kind) {
         boolean sitePage = inBrowserPage(key, kind);
+        String browser = sitePage ? browserForCurrentBlock() : null;
         if (sitePage) {
             leavingSiteKey = key;
-            leavingSiteBrowser = currentPkg;
+            leavingSiteBrowser = browser;
             leavingSiteUntil = SystemClock.elapsedRealtime() + 2500L;
             h.removeCallbacks(finishSiteExit);
             h.postDelayed(finishSiteExit, 2500L);
@@ -1345,7 +1356,7 @@ public class GuardService extends AccessibilityService {
         // the browser can receive focus while we set its neutral URL.
         hideOverlay();
         if (sitePage) {
-            openStartPage(currentPkg, key);
+            openStartPage(browser);
         } else {
             performGlobalAction(GLOBAL_ACTION_HOME);
         }
@@ -1355,58 +1366,11 @@ public class GuardService extends AccessibilityService {
 
     private static final String START_PAGE = "https://www.google.com";
 
-    /** U istoj kartici upiše početnu adresu u traku za adresu; ako to ne uspe, otvori je u tom pregledaču. */
-    private void openStartPage(final String browser, final String key) {
-        final String id = BROWSERS.get(browser);
-        final String blockedHost = currentHost;
-        AccessibilityNodeInfo bar = urlBar(browser, id);
-        if (bar == null || Build.VERSION.SDK_INT < 30) {
-            startPageIntent(browser);
-            return;
-        }
-        bar.performAction(AccessibilityNodeInfo.ACTION_CLICK);
-        // Posle dodira traka postaje polje za unos; tek tada se može upisati adresa i potvrditi.
-        h.postDelayed(() -> {
-            try {
-                AccessibilityNodeInfo edit = urlBar(browser, id);
-                boolean ok = edit != null;
-                if (ok) {
-                    android.os.Bundle args = new android.os.Bundle();
-                    args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, START_PAGE);
-                    ok = edit.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
-                            && edit.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.getId());
-                }
-                if (!ok) {
-                    startPageIntent(browser);
-                } else {
-                    // Neki pregledači prihvate „Enter“ a ne odu na adresu: ako je host ostao isti, probaj direktan intent.
-                    h.postDelayed(() -> {
-                        if (blockedHost != null && blockedHost.equals(currentHost)) startPageIntent(browser);
-                    }, 1800);
-                }
-            } catch (Throwable t) {
-                GuardDiagnostics.report("openStartPage", t);
-                startPageIntent(browser);
-            }
-            h.removeCallbacks(recheckSoon);
-            h.postDelayed(recheckSoon, 600);
-        }, 350);
-    }
-
-    private AccessibilityNodeInfo urlBar(String browser, String id) {
-        if (id == null) return null;
-        try {
-            for (AccessibilityWindowInfo w : getWindows()) {
-                AccessibilityNodeInfo root = w.getRoot();
-                if (root == null || root.getPackageName() == null
-                        || !browser.contentEquals(root.getPackageName())) continue;
-                List<AccessibilityNodeInfo> nodes = root.findAccessibilityNodeInfosByViewId(id);
-                if (nodes != null && !nodes.isEmpty() && nodes.get(0) != null) return nodes.get(0);
-            }
-        } catch (Throwable t) {
-            GuardDiagnostics.report("urlBar", t);
-        }
-        return null;
+    /** Otvara neutralnu stranicu direktnim browser intent-om; ne menja fokus dok je accessibility overlay aktivan. */
+    private void openStartPage(String browser) {
+        startPageIntent(browser);
+        h.removeCallbacks(recheckSoon);
+        h.postDelayed(recheckSoon, 600);
     }
 
     private void startPageIntent(String browser) {
@@ -1829,7 +1793,7 @@ public class GuardService extends AccessibilityService {
         if (isSite || kind == KIND_INAPP || kind == KIND_ADDRESS) {
             TextView back = overlayButton(c, "Nazad");
             back.setOnClickListener(v -> {
-                if (inBrowserPage(key, k)) {
+                if ((key.startsWith("site:") || k == KIND_ADDRESS) && browserForCurrentBlock() != null) {
                     leaveBlock(key, k);
                 } else {
                     performGlobalAction(GLOBAL_ACTION_BACK);
