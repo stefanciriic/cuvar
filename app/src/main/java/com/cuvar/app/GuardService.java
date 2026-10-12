@@ -146,6 +146,9 @@ public class GuardService extends AccessibilityService {
     private boolean overlayCooling;   // prikazana je pauza posle otključavanja
     private boolean overlayCode;      // otključava se dnevnom šifrom umesto PIN-om
     private TextView cooldownLabel;  // odbrojavanje do sledećeg mogućeg otključavanja
+    private String leavingSiteKey;
+    private String leavingSiteBrowser;
+    private long leavingSiteUntil;
     private Set<String> exempt;      // aplikacije koje ne troše ukupni limit i ne blokiraju se zbog njega, ni uz pravilo
     private String pendingOpen;      // aplikacija upravo otvorena; broji se kad se zaista prikaže, bez blokade
     private String opensBlocked;     // aplikacija otvorena posle potrošenih otvaranja; blokirana dok se ne izađe
@@ -239,6 +242,17 @@ public class GuardService extends AccessibilityService {
     private final Runnable recheckLater = new Runnable() {
         @Override
         public void run() {
+            safeCheck();
+        }
+    };
+
+    /** Keep the just-dismissed site block from flashing back while the browser navigates to the neutral page. */
+    private final Runnable finishSiteExit = new Runnable() {
+        @Override
+        public void run() {
+            leavingSiteKey = null;
+            leavingSiteBrowser = null;
+            leavingSiteUntil = 0L;
             safeCheck();
         }
     };
@@ -799,6 +813,20 @@ public class GuardService extends AccessibilityService {
         blocks.addAll(secondary);
         setContentEvents(wantsContent(pkg) || inApp || !secondaryContentPackages.isEmpty());
 
+        // Back dismisses the current blocked URL while Chrome navigates. Ignore only that exact block key,
+        // briefly; another blocked site or an app-level rule still takes effect immediately.
+        if (leavingSiteKey != null) {
+            if (SystemClock.elapsedRealtime() >= leavingSiteUntil || !pkg.equals(leavingSiteBrowser)) {
+                h.removeCallbacks(finishSiteExit);
+                leavingSiteKey = null;
+                leavingSiteBrowser = null;
+                leavingSiteUntil = 0L;
+            } else {
+                String exitingKey = leavingSiteKey;
+                blocks.removeIf(b -> exitingKey.equals(b.key));
+            }
+        }
+
         // Otključavanje dnevnom šifrom važi 5 minuta, a zatim sat vremena nema otključavanja (vidi Store),
         // osim jednog hitnog otključavanja dnevno. Režim i potrošen limit se nikad ne otključavaju.
         Block show = null;
@@ -1305,10 +1333,18 @@ public class GuardService extends AccessibilityService {
      * sa te stranice (otvori početnu Google stranu). Sve ostalo: početni ekran telefona.
      */
     private void leaveBlock(String key, int kind) {
+        boolean sitePage = inBrowserPage(key, kind);
+        if (sitePage) {
+            leavingSiteKey = key;
+            leavingSiteBrowser = currentPkg;
+            leavingSiteUntil = SystemClock.elapsedRealtime() + 2500L;
+            h.removeCallbacks(finishSiteExit);
+            h.postDelayed(finishSiteExit, 2500L);
+        }
         // Remove the accessibility window before starting browser navigation so Back feels immediate and
         // the browser can receive focus while we set its neutral URL.
         hideOverlay();
-        if (inBrowserPage(key, kind)) {
+        if (sitePage) {
             openStartPage(currentPkg, key);
         } else {
             performGlobalAction(GLOBAL_ACTION_HOME);
