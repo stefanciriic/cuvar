@@ -9,11 +9,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
-import android.graphics.PixelFormat;
 import android.graphics.Typeface;
-import android.media.AudioAttributes;
-import android.media.AudioFocusRequest;
-import android.media.AudioManager;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
@@ -22,10 +18,9 @@ import android.os.SystemClock;
 import android.provider.Settings;
 import android.provider.Telephony;
 import android.telecom.TelecomManager;
-import android.view.Gravity;
 import android.view.KeyEvent;
+import android.view.Gravity;
 import android.view.View;
-import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.view.accessibility.AccessibilityWindowInfo;
@@ -81,15 +76,7 @@ public class GuardService extends AccessibilityService {
             "com.trendmicro.dualapps", "do.multiple.cloner", "com.cloneapp", "com.waxmoon.ma.gp", "com.oasisfeng.island",
             "com.lody.virtual", "io.va.exposed", "com.vmos"};
 
-    /** Ekran pregledača unutar aplikacije, po imenu ekrana (npr. BrowserLiteActivity kod Instagrama i Facebooka). */
-    private static final java.util.regex.Pattern IN_APP_BROWSER = java.util.regex.Pattern.compile(
-            "(?i).*(browserlite|inappbrowser|browseractivity|webviewactivity|webbrowser|customtab).*");
-    private static final java.util.regex.Pattern DOMAIN = java.util.regex.Pattern.compile(
-            "(?i)^(https?://)?([a-z0-9-]+\\.)+[a-z]{2,}(:[0-9]+)?([/?#]\\S*)?$");
     private static final int KIND_BROWSER = 10;   // pregledač u kome Čuvar ne vidi adresu, dok postoje pravila za sajtove
-
-    /** Pregledači i ID polja sa adresom u svakom od njih. */
-    private static final Map<String, String> BROWSERS = new HashMap<>();
     /** Sistemski prozori koji se pojave preko aplikacije, a ne znače da je korisnik izašao iz nje. */
     private static final Set<String> TRANSPARENT = new HashSet<>();
     /** Navigacija: Čuvar je nikad ne prati, ne čita i ne blokira, osim ako sama ima pravilo. */
@@ -97,27 +84,15 @@ public class GuardService extends AccessibilityService {
             "com.google.android.apps.maps", "com.google.android.apps.mapslite", "com.waze"));
 
     static {
-        BROWSERS.put("com.android.chrome", "com.android.chrome:id/url_bar");
-        BROWSERS.put("com.chrome.beta", "com.chrome.beta:id/url_bar");
-        BROWSERS.put("com.brave.browser", "com.brave.browser:id/url_bar");
-        BROWSERS.put("com.microsoft.emmx", "com.microsoft.emmx:id/url_bar");
-        BROWSERS.put("com.vivaldi.browser", "com.vivaldi.browser:id/url_bar");
-        BROWSERS.put("com.sec.android.app.sbrowser", "com.sec.android.app.sbrowser:id/location_bar_edit_text");
-        BROWSERS.put("org.mozilla.firefox", "org.mozilla.firefox:id/mozac_browser_toolbar_url_view");
-        BROWSERS.put("com.chrome.dev", "com.chrome.dev:id/url_bar");
-        BROWSERS.put("com.chrome.canary", "com.chrome.canary:id/url_bar");
-        BROWSERS.put("com.kiwibrowser.browser", "com.kiwibrowser.browser:id/url_bar");
         TRANSPARENT.add("com.android.systemui");
         TRANSPARENT.add("android");
     }
 
     private final Handler h = new Handler(Looper.getMainLooper());
     private Store store;
-    private WindowManager wm;
+    private GuardOverlayWindow overlayWindow;
     private PowerManager power;
     private KeyguardManager keyguard;
-    private AudioManager audio;
-    private AudioFocusRequest silence; // drži zvuk utišanim dok je ekran za blokadu prikazan
     private boolean receiverOn;
 
     private String currentPkg;    // aplikacija koja je trenutno na ekranu
@@ -126,11 +101,7 @@ public class GuardService extends AccessibilityService {
     private final UsageTracker usageTracker = new UsageTracker(3 * TICK_MS);
     private final Set<String> visibleHosts = new HashSet<>();
     private final Set<String> secondaryContentPackages = new HashSet<>();
-    private final Map<String, BrowserAddressState> browserAddresses = new LinkedHashMap<String, BrowserAddressState>() {
-        @Override protected boolean removeEldestEntry(Map.Entry<String, BrowserAddressState> entry) {
-            return size() > 32;
-        }
-    };
+    private BrowserMonitor browserMonitor;
     private BrowserAddressState currentAddress;
     private boolean observationValid;
     private boolean checkPending;
@@ -184,8 +155,6 @@ public class GuardService extends AccessibilityService {
     private long lastLeftAt;
     private boolean leftBlocked, leftPending, leftPause;
     private long exemptAt;
-    private Set<String> webApps;     // sve aplikacije koje otvaraju veb adrese (pregledači)
-    private long webAppsAt;
     private long protectToastAt;
     private int overlayFailures;
     private long overlayRetryAt;
@@ -299,10 +268,10 @@ public class GuardService extends AccessibilityService {
     protected void onServiceConnected() {
         super.onServiceConnected();
         store = Store.get(this);
-        wm = (WindowManager) getSystemService(Context.WINDOW_SERVICE);
+        browserMonitor = new BrowserMonitor(this);
+        overlayWindow = new GuardOverlayWindow(this);
         power = (PowerManager) getSystemService(Context.POWER_SERVICE);
         keyguard = (KeyguardManager) getSystemService(Context.KEYGUARD_SERVICE);
-        audio = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
 
         try {
             AccessibilityServiceInfo info = getServiceInfo();
@@ -371,8 +340,8 @@ public class GuardService extends AccessibilityService {
         }
         want.add(getPackageName());
         want.addAll(exempt()); // početni ekran (i nedavne aplikacije u njemu), telefon, poruke
-        want.addAll(BROWSERS.keySet());
-        want.addAll(webApps());
+        want.addAll(BrowserMonitor.BROWSER_PACKAGES);
+        want.addAll(browserMonitor.webApps());
         want.addAll(store.guardedApps());
         if (store.hasSiteRules() || store.focusHasSites()) Collections.addAll(want, IN_APP_APPS);
         if (store.protectNow()) Collections.addAll(want, SETTINGS_APPS);
@@ -667,7 +636,7 @@ public class GuardService extends AccessibilityService {
             return;
         }
 
-        String urlBarId = BROWSERS.get(pkg);
+        String urlBarId = BrowserMonitor.addressViewId(pkg);
         boolean inApp = urlBarId == null && inAppBrowser(raw);
         if (inApp != currentInApp) {
             currentInApp = inApp;
@@ -676,10 +645,10 @@ public class GuardService extends AccessibilityService {
             setContentEvents(inApp || wantsContent(pkg));
         }
         if (urlBarId != null && !root.getPackageName().toString().equals(getPackageName())) {
-            currentAddress = readAddress(root, urlBarId);
+            currentAddress = browserMonitor.readAddress(root, urlBarId);
             currentHost = currentAddress.host();
         } else if (inApp && !root.getPackageName().toString().equals(getPackageName())) {
-            String host = inAppHost(root);
+            String host = browserMonitor.inAppHost(root);
             currentHost = host;
         }
         boolean browsing = urlBarId != null || inApp;
@@ -782,18 +751,18 @@ public class GuardService extends AccessibilityService {
         for (AppWindow other : otherAppWindows()) {
             Block b = appOnlyBlock(other.pkg);
             if (b != null) secondary.add(b);
-            String id = BROWSERS.get(other.pkg);
+            String id = BrowserMonitor.addressViewId(other.pkg);
             boolean embedded = id == null && inAppBrowser(other.rawPkg);
             if (id != null || embedded) secondaryContentPackages.add(other.rawPkg);
             String host = null;
             if (id != null) {
-                BrowserAddressState address = readAddress(other.root, id);
+                BrowserAddressState address = browserMonitor.readAddress(other.root, id);
                 host = address.host();
                 if (address.unresolved(SystemClock.elapsedRealtime()) && store.hasSiteRules()) {
                     secondary.add(new Block("app:" + other.pkg, KIND_ADDRESS, null, true));
                 }
             } else if (embedded) {
-                host = inAppHost(other.root);
+                host = browserMonitor.inAppHost(other.root);
                 if (host == null && store.hasSiteRules()) {
                     secondary.add(new Block("app:" + other.pkg, KIND_INAPP, null, true));
                 }
@@ -1019,7 +988,7 @@ public class GuardService extends AccessibilityService {
         if (known != null) return known;
         String out = p;
         Set<String> guarded = store.guardedApps();
-        if (!guarded.contains(p) && !exempt().contains(p) && !BROWSERS.containsKey(p)) {
+        if (!guarded.contains(p) && !exempt().contains(p) && !BrowserMonitor.isBrowser(p)) {
             String label = appLabel(p).toLowerCase(Locale.ROOT).trim();
             for (String g : guarded) {
                 if (p.startsWith(g) && p.length() > g.length()) {
@@ -1040,47 +1009,9 @@ public class GuardService extends AccessibilityService {
 
     /** Da li je napred pregledač unutar aplikacije (link otvoren iz Instagrama, Facebooka, Messengera...). */
     private boolean inAppBrowser(String p) {
-        if (BROWSERS.containsKey(p) || p.equals(getPackageName())) return false;
+        if (BrowserMonitor.isBrowser(p) || p.equals(getPackageName())) return false;
         String a = activityOf.get(p);
-        return a != null && IN_APP_BROWSER.matcher(a).matches();
-    }
-
-    /**
-     * Adresa u gornjem delu ekrana pregledača unutar aplikacije (ispod naslova strane piše domen).
-     * Sadržaj same strane se ne čita, da se ne opterećuje telefon.
-     */
-    private String inAppHost(AccessibilityNodeInfo root) {
-        android.graphics.Rect r = new android.graphics.Rect();
-        root.getBoundsInScreen(r);
-        int limitY = r.top + Math.max(r.height() / 4, Ui.dp(this, 160));
-        java.util.ArrayDeque<AccessibilityNodeInfo> q = new java.util.ArrayDeque<>();
-        q.add(root);
-        int seen = 0;
-        try {
-            while (!q.isEmpty() && seen++ < 300) {
-                AccessibilityNodeInfo n = q.poll();
-                if (n == null) continue;
-                n.getBoundsInScreen(r);
-                if (r.top > limitY) continue;
-                CharSequence cls = n.getClassName();
-                if (cls != null && cls.toString().contains("WebView")) continue;
-                for (CharSequence t : new CharSequence[]{n.getText(), n.getContentDescription()}) {
-                    if (t == null || t.length() > 200) continue;
-                    String s = t.toString().trim();
-                    if (DOMAIN.matcher(s).matches()) {
-                        String host = Store.hostOf(s);
-                        if (host != null) return host;
-                    }
-                }
-                for (int i = 0; i < n.getChildCount(); i++) {
-                    AccessibilityNodeInfo child = n.getChild(i);
-                    if (child != null) q.add(child);
-                }
-            }
-        } catch (Throwable error) {
-            GuardDiagnostics.report("inAppAddress", error);
-        }
-        return null;
+        return BrowserMonitor.isInAppBrowserActivity(a);
     }
 
     /**
@@ -1088,28 +1019,7 @@ public class GuardService extends AccessibilityService {
      * on je zaključan kao aplikacija, inače bi se blokirani sajtovi samo otvorili u njemu.
      */
     private boolean unknownBrowser(String p) {
-        if (BROWSERS.containsKey(p) || p.equals(getPackageName()) || !webApps().contains(p)) return false;
-        return store.hasSiteRules();
-    }
-
-    /** Aplikacije koje mogu da otvore bilo koju veb adresu; osvežava se na svakih 5 minuta. */
-    private Set<String> webApps() {
-        long now = SystemClock.elapsedRealtime();
-        if (webApps == null || now - webAppsAt > 5 * 60000L) {
-            Set<String> out = new HashSet<>();
-            try {
-                Intent i = new Intent(Intent.ACTION_VIEW, android.net.Uri.parse("http://example.com/"));
-                i.addCategory(Intent.CATEGORY_BROWSABLE);
-                for (android.content.pm.ResolveInfo r : getPackageManager().queryIntentActivities(i, PackageManager.MATCH_ALL)) {
-                    if (r.activityInfo != null) out.add(r.activityInfo.packageName);
-                }
-            } catch (Throwable ignored) {
-            }
-            out.remove("android"); // izbor aplikacije, nije pregledač
-            webApps = out;
-            webAppsAt = now;
-        }
-        return webApps;
+        return browserMonitor.isUnknownBrowser(p, store.hasSiteRules());
     }
 
     /** Promene sadržaja trebaju za adresu u pregledaču i, dok je zaštita uključena, za ekrane podešavanja. */
@@ -1119,7 +1029,7 @@ public class GuardService extends AccessibilityService {
      */
     private boolean quiet(String raw) {
         if (handsOff(raw)) return true;
-        if (raw.equals(getPackageName()) || BROWSERS.containsKey(raw) || store.focusActive()) return false;
+        if (raw.equals(getPackageName()) || BrowserMonitor.isBrowser(raw) || store.focusActive()) return false;
         if (settingsLike(raw) && store.protectNow()) return false;
         if (inAppBrowser(raw)) return false;
         String p = cloneOf(raw);
@@ -1161,7 +1071,7 @@ public class GuardService extends AccessibilityService {
     }
 
     private boolean wantsContent(String p) {
-        return (BROWSERS.containsKey(p) && (store == null || store.hasSiteRules() || store.focusHasSites()))
+        return (BrowserMonitor.isBrowser(p) && (store == null || store.hasSiteRules() || store.focusHasSites()))
                 || (settingsLike(p) && store != null && store.protectNow());
     }
 
@@ -1292,31 +1202,6 @@ public class GuardService extends AccessibilityService {
         return "Otključavanje je iskorišćeno. Sledeće je moguće za " + min + " min.";
     }
 
-    /** Never infer an address from page text. Preserve a verified host only within the same window. */
-    private BrowserAddressState readAddress(AccessibilityNodeInfo root, String id) {
-        String key = root.getPackageName() + ":" + root.getWindowId();
-        BrowserAddressState state = browserAddresses.get(key);
-        if (state == null) {
-            state = new BrowserAddressState();
-            browserAddresses.put(key, state);
-        }
-        List<AccessibilityNodeInfo> nodes = root.findAccessibilityNodeInfosByViewId(id);
-        if (nodes == null || nodes.isEmpty()) {
-            state.missing(SystemClock.elapsedRealtime());
-            return state;
-        }
-        AccessibilityNodeInfo n = nodes.get(0);
-        if (n == null) {
-            state.missing(SystemClock.elapsedRealtime());
-        } else if (n.isFocused()) {
-            state.editing();
-        } else {
-            CharSequence text = n.getText();
-            state.readable(Store.hostOf(text == null ? "" : text.toString()));
-        }
-        return state;
-    }
-
     private String appLabel(String pkg) {
         try {
             PackageManager pm = getPackageManager();
@@ -1334,8 +1219,8 @@ public class GuardService extends AccessibilityService {
     }
 
     private String browserForCurrentBlock() {
-        if (currentPkg != null && BROWSERS.containsKey(currentPkg)) return currentPkg;
-        return rawPkg != null && BROWSERS.containsKey(rawPkg) ? rawPkg : null;
+        if (currentPkg != null && BrowserMonitor.isBrowser(currentPkg)) return currentPkg;
+        return rawPkg != null && BrowserMonitor.isBrowser(rawPkg) ? rawPkg : null;
     }
 
     /**
@@ -1444,15 +1329,7 @@ public class GuardService extends AccessibilityService {
             // zatvorio karticu bez istorije i izašao iz aplikacije umesto da te vrati na početnu stranu.
             boolean catchBack = inBrowserPage(key, kind);
             if (catchBack) v = backCatcher(v, key, kind);
-            WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
-                    WindowManager.LayoutParams.MATCH_PARENT,
-                    WindowManager.LayoutParams.MATCH_PARENT,
-                    WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-                    catchBack ? 0 : WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-                    PixelFormat.TRANSLUCENT);
-            lp.gravity = Gravity.TOP | Gravity.START;
-            wm.addView(v, lp);
-            silenceMedia();
+            overlayWindow.show(v, catchBack);
             overlay = v;
             overlayKey = key;
             overlayKind = kind;
@@ -1474,56 +1351,12 @@ public class GuardService extends AccessibilityService {
         }
     }
 
-    /**
-     * Blokirana aplikacija ostaje ispod ekrana za blokadu, pa bi video ili muzika nastavili da idu.
-     * Zato se pošalje „pauza“ i uzme zvuk za sebe dok je ekran prikazan (YouTube, Spotify i slični tada stanu).
-     */
-    private void silenceMedia() {
-        if (audio == null) return;
-        try {
-            audio.dispatchMediaKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PAUSE));
-            audio.dispatchMediaKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_PAUSE));
-        } catch (Throwable error) {
-            GuardDiagnostics.report("mediaPause", error);
-        }
-        try {
-            if (silence == null) {
-                silence = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
-                        .setAudioAttributes(new AudioAttributes.Builder()
-                                .setUsage(AudioAttributes.USAGE_MEDIA)
-                                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                                .build())
-                        .setOnAudioFocusChangeListener(change -> { })
-                        .build();
-                audio.requestAudioFocus(silence);
-            }
-        } catch (Throwable error) {
-            GuardDiagnostics.report("audioFocus", error);
-            silence = null;
-        }
-    }
-
-    private void releaseMedia() {
-        if (audio == null || silence == null) return;
-        try {
-            audio.abandonAudioFocusRequest(silence);
-        } catch (Throwable error) {
-            GuardDiagnostics.report("releaseAudioFocus", error);
-        }
-        silence = null;
-    }
-
     private void hideOverlay() {
         if (overlay != null) {
-            try {
-                wm.removeView(overlay);
-            } catch (Throwable error) {
-                GuardDiagnostics.report("hideOverlay", error);
-            }
+            overlayWindow.hide(overlay);
             overlay = null;
             overlayKey = null;
             overlayKind = 0;
-            releaseMedia();
             overlayRule = null;
             overlayCooling = false;
             overlayCode = false;
