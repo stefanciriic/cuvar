@@ -52,22 +52,22 @@ public class GuardService extends AccessibilityService {
     /** Povratak u istu aplikaciju za manje od ovoga ne računa se kao novo otvaranje. */
     private static final long OPEN_GRACE_MS = 15000L;
 
-    private static final int KIND_LOCK = 1;       // aplikacija zaključana PIN-om
-    private static final int KIND_TIME = 2;       // istekao dnevni limit aplikacije
-    private static final int KIND_SITE = 3;       // sajt uvek blokiran
-    private static final int KIND_SITE_TIME = 4;  // istekao dnevni limit sajta
-    private static final int KIND_SCHEDULE = 5;
-    private static final int KIND_CODE = 6;       // van perioda režima, otključava se dnevnom šifrom
-    private static final int KIND_NIGHT = 8;      // noćna blokada od 22:00, ništa se ne otključava do 06:00
-    private static final int KIND_DAY = 7;        // potrošen ukupni dnevni limit, ništa se ne otključava do ponoći
-    private static final int KIND_OPENS = 9;      // potrošena otvaranja aplikacije za danas
-    private static final int KIND_PAUSE = 11;     // kratka pauza pre otvaranja aplikacije sa pravilom, posle nje se nastavlja
+    static final int KIND_LOCK = 1;       // aplikacija zaključana PIN-om
+    static final int KIND_TIME = 2;       // istekao dnevni limit aplikacije
+    static final int KIND_SITE = 3;       // sajt uvek blokiran
+    static final int KIND_SITE_TIME = 4;  // istekao dnevni limit sajta
+    static final int KIND_SCHEDULE = 5;
+    static final int KIND_CODE = 6;       // van perioda režima, otključava se dnevnom šifrom
+    static final int KIND_NIGHT = 8;      // noćna blokada od 22:00, ništa se ne otključava do 06:00
+    static final int KIND_DAY = 7;        // potrošen ukupni dnevni limit, ništa se ne otključava do ponoći
+    static final int KIND_OPENS = 9;      // potrošena otvaranja aplikacije za danas
+    static final int KIND_PAUSE = 11;     // kratka pauza pre otvaranja aplikacije sa pravilom, posle nje se nastavlja
     static final int PAUSE_SECONDS = 6;
-    private static final int KIND_BREAK = 12;     // obavezna pauza posle najdužeg korišćenja u komadu
-    private static final int KIND_CLONER = 13;    // aplikacija za kloniranje (Parallel Space i sl.), dok postoje pravila za aplikacije
-    private static final int KIND_INAPP = 14;     // pregledač unutar aplikacije (Instagram, Facebook) u kome se ne vidi adresa
-    private static final int KIND_ADDRESS = 15;   // podržan pregledač, ali adresa još nije potvrđena
-    private static final int KIND_FOCUS = 16;     // ručni režim: dozvoljene su samo izabrane aplikacije/sajtovi
+    static final int KIND_BREAK = 12;     // obavezna pauza posle najdužeg korišćenja u komadu
+    static final int KIND_CLONER = 13;    // aplikacija za kloniranje (Parallel Space i sl.), dok postoje pravila za aplikacije
+    static final int KIND_INAPP = 14;     // pregledač unutar aplikacije (Instagram, Facebook) u kome se ne vidi adresa
+    static final int KIND_ADDRESS = 15;   // podržan pregledač, ali adresa još nije potvrđena
+    static final int KIND_FOCUS = 16;     // ručni režim: dozvoljene su samo izabrane aplikacije/sajtovi
 
     /** Aplikacije koje pokreću kopije drugih aplikacija pod svojim imenom, pa ih Čuvar ne bi prepoznao. */
     private static final String[] CLONERS = {"com.lbe.parallel", "com.parallel.space", "com.excelliance.multiaccount",
@@ -76,7 +76,7 @@ public class GuardService extends AccessibilityService {
             "com.trendmicro.dualapps", "do.multiple.cloner", "com.cloneapp", "com.waxmoon.ma.gp", "com.oasisfeng.island",
             "com.lody.virtual", "io.va.exposed", "com.vmos"};
 
-    private static final int KIND_BROWSER = 10;   // pregledač u kome Čuvar ne vidi adresu, dok postoje pravila za sajtove
+    static final int KIND_BROWSER = 10;   // pregledač u kome Čuvar ne vidi adresu, dok postoje pravila za sajtove
     /** Sistemski prozori koji se pojave preko aplikacije, a ne znače da je korisnik izašao iz nje. */
     private static final Set<String> TRANSPARENT = new HashSet<>();
     /** Navigacija: Čuvar je nikad ne prati, ne čita i ne blokira, osim ako sama ima pravilo. */
@@ -88,8 +88,8 @@ public class GuardService extends AccessibilityService {
         TRANSPARENT.add("android");
     }
 
-    private final Handler h = new Handler(Looper.getMainLooper());
-    private Store store;
+    final Handler h = new Handler(Looper.getMainLooper());
+    Store store;
     private GuardOverlayWindow overlayWindow;
     private PowerManager power;
     private KeyguardManager keyguard;
@@ -102,6 +102,8 @@ public class GuardService extends AccessibilityService {
     private final Set<String> visibleHosts = new HashSet<>();
     private final Set<String> secondaryContentPackages = new HashSet<>();
     private BrowserMonitor browserMonitor;
+    PauseOverlayContent pauseOverlayContent;
+    private BlockOverlayContent blockOverlayContent;
     private BrowserAddressState currentAddress;
     private boolean observationValid;
     private boolean checkPending;
@@ -116,7 +118,7 @@ public class GuardService extends AccessibilityService {
     private int overlayKind;
     private boolean overlayCooling;   // prikazana je pauza posle otključavanja
     private boolean overlayCode;      // otključava se dnevnom šifrom umesto PIN-om
-    private TextView cooldownLabel;  // odbrojavanje do sledećeg mogućeg otključavanja
+    TextView cooldownLabel;  // odbrojavanje do sledećeg mogućeg otključavanja
     private String leavingSiteKey;
     private String leavingSiteBrowser;
     private long leavingSiteUntil;
@@ -150,7 +152,6 @@ public class GuardService extends AccessibilityService {
     private Map<String, String> clones;
     private long clonesAt;
     private String pausePkg;         // aplikacija upravo otvorena koja pre prikaza čeka pauzu
-    private long pauseShownAt;
     private String lastLeftPkg;      // aplikacija iz koje se upravo izašlo
     private long lastLeftAt;
     private boolean leftBlocked, leftPending, leftPause;
@@ -201,7 +202,7 @@ public class GuardService extends AccessibilityService {
         }
     };
 
-    private final Runnable recheckSoon = new Runnable() {
+    final Runnable recheckSoon = new Runnable() {
         @Override
         public void run() {
             safeCheck();
@@ -270,6 +271,21 @@ public class GuardService extends AccessibilityService {
         store = Store.get(this);
         browserMonitor = new BrowserMonitor(this);
         overlayWindow = new GuardOverlayWindow(this);
+        pauseOverlayContent = new PauseOverlayContent(this, h, store, new PauseOverlayContent.Actions() {
+            @Override public boolean isVisible(View view) { return overlay == view; }
+            @Override public String appLabel(String packageName) { return GuardService.this.appLabel(packageName); }
+            @Override public void close() {
+                pausePkg = null;
+                performGlobalAction(GLOBAL_ACTION_HOME);
+                h.removeCallbacks(recheckSoon);
+                h.postDelayed(recheckSoon, 600L);
+            }
+            @Override public void continueToApp() {
+                pausePkg = null;
+                safeCheck();
+            }
+        });
+        blockOverlayContent = new BlockOverlayContent(this);
         power = (PowerManager) getSystemService(Context.POWER_SERVICE);
         keyguard = (KeyguardManager) getSystemService(Context.KEYGUARD_SERVICE);
 
@@ -445,7 +461,7 @@ public class GuardService extends AccessibilityService {
         }
     }
 
-    private void safeCheck() {
+    void safeCheck() {
         // Settle the OLD app/site before check() changes the observed context or shows a block.
         accountUntilNow(null);
         try {
@@ -957,7 +973,7 @@ public class GuardService extends AccessibilityService {
     }
 
     /** Blokade koje se ne otključavaju: vremenski režim, potrošen limit aplikacije, sajta ili ukupni. */
-    private static boolean hard(int kind) {
+    static boolean hard(int kind) {
         return kind == KIND_SCHEDULE || kind == KIND_DAY || kind == KIND_NIGHT || kind == KIND_TIME || kind == KIND_SITE_TIME
                 || kind == KIND_OPENS || kind == KIND_BREAK || kind == KIND_FOCUS;
     }
@@ -1197,12 +1213,12 @@ public class GuardService extends AccessibilityService {
         }
     }
 
-    private static String cooldownText(long left) {
+    static String cooldownText(long left) {
         long min = (left + 59999L) / 60000L;
         return "Otključavanje je iskorišćeno. Sledeće je moguće za " + min + " min.";
     }
 
-    private String appLabel(String pkg) {
+    String appLabel(String pkg) {
         try {
             PackageManager pm = getPackageManager();
             return pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString();
@@ -1218,7 +1234,7 @@ public class GuardService extends AccessibilityService {
         return (key.startsWith("site:") || kind == KIND_ADDRESS) && browserForCurrentBlock() != null;
     }
 
-    private String browserForCurrentBlock() {
+    String browserForCurrentBlock() {
         if (currentPkg != null && BrowserMonitor.isBrowser(currentPkg)) return currentPkg;
         return rawPkg != null && BrowserMonitor.isBrowser(rawPkg) ? rawPkg : null;
     }
@@ -1227,7 +1243,7 @@ public class GuardService extends AccessibilityService {
      * Izlaz sa ekrana za blokadu. Blokiran sajt u pregledaču: ostani u pregledaču, samo skloni karticu
      * sa te stranice (otvori početnu Google stranu). Sve ostalo: početni ekran telefona.
      */
-    private void leaveBlock(String key, int kind) {
+    void leaveBlock(String key, int kind) {
         boolean sitePage = inBrowserPage(key, kind);
         String browser = sitePage ? browserForCurrentBlock() : null;
         if (sitePage) {
@@ -1324,7 +1340,7 @@ public class GuardService extends AccessibilityService {
         if (overlay == null && overlayRetryAt > SystemClock.elapsedRealtime()) return;
         hideOverlay();
         try {
-            View v = buildOverlay(key, kind, rule, cooling, code);
+            View v = blockOverlayContent.build(key, kind, rule, cooling, code);
             // Kod sajta u pregledaču naš ekran hvata i sistemsko „nazad“: inače bi ga dobio pregledač,
             // zatvorio karticu bez istorije i izašao iz aplikacije umesto da te vrati na početnu stranu.
             boolean catchBack = inBrowserPage(key, kind);
@@ -1371,435 +1387,9 @@ public class GuardService extends AccessibilityService {
                 && a.days == b.days && a.code == b.code;
     }
 
-    /**
-     * Pauza od nekoliko sekundi pre otvaranja aplikacije sa pravilom. Istraživanja pokazuju da ovakav kratak zastoj
-     * sa lakim izlazom smanjuje otvaranja više od samih zabrana. Otvaranje se broji tek kad se pređe pauza.
-     */
-    private View buildPause(final String key) {
-        final Context c = this;
-        String pkg = key.substring(4);
-        String name = appLabel(pkg);
-        pauseShownAt = SystemClock.elapsedRealtime();
-
-        ScrollView scroll = new ScrollView(c);
-        scroll.setBackgroundColor(Ui.NIGHT);
-        scroll.setFillViewport(true);
-        scroll.setClickable(true);
-        LinearLayout box = Ui.column(c);
-        box.setGravity(Gravity.CENTER);
-        int p = Ui.dp(c, 24);
-        box.setPadding(p, p, p, p);
-
-        TextView eyebrow = Ui.text(c, "ČUVAR", 12, Ui.NIGHT_ACCENT, true);
-        eyebrow.setLetterSpacing(0.25f);
-        eyebrow.setGravity(Gravity.CENTER);
-        box.addView(eyebrow, Ui.fill(c, 0));
-
-        TextView t = Ui.text(c, "Zastani na trenutak", 25, 0xFFFFFFFF, true);
-        t.setGravity(Gravity.CENTER);
-        box.addView(t, Ui.fill(c, 10));
-
-        StringBuilder sb = new StringBuilder("Otvaraš ").append(name).append(". Danas si ga koristio ")
-                .append(Ui.fmt(store.usedShared(pkg)));
-        int limit = store.appLimitNow(pkg);
-        if (limit > 0) sb.append(" od ").append(limit).append(" min");
-        int opens = store.appOpensNow(pkg);
-        if (opens > 0) {
-            sb.append(", a otvorio ").append(Ui.count(store.opensToday(key), "put", "puta", "puta"))
-                    .append(" od ").append(opens);
-        }
-        sb.append(". Da li ti zaista treba sada?");
-        TextView s = Ui.text(c, sb.toString(), 15, Ui.NIGHT_MUTED, false);
-        s.setGravity(Gravity.CENTER);
-        box.addView(s, Ui.fill(c, 8));
-
-        TextView close = overlayButton(c, "Zatvori");
-        close.setTextSize(17);
-        close.setBackground(Ui.pressable(Ui.ACCENT, Ui.ACCENT_DOWN, Ui.dp(c, 14)));
-        close.setOnClickListener(v -> {
-            pausePkg = null;
-            performGlobalAction(GLOBAL_ACTION_HOME);
-            h.removeCallbacks(recheckSoon);
-            h.postDelayed(recheckSoon, 600);
-        });
-        box.addView(close, Ui.fill(c, 24));
-
-        final TextView go = overlayButton(c, "");
-        go.setTextColor(Ui.NIGHT_MUTED);
-        go.setBackground(null);
-        go.setEnabled(false);
-        box.addView(go, Ui.fill(c, 16));
-        final View self = scroll;
-        Runnable count = new Runnable() {
-            @Override
-            public void run() {
-                if (overlay != self) return;
-                long left = PAUSE_SECONDS * 1000L - (SystemClock.elapsedRealtime() - pauseShownAt);
-                if (left > 0) {
-                    go.setText("Nastavi za " + ((left + 999L) / 1000L) + " s");
-                    h.postDelayed(this, 250L);
-                } else {
-                    go.setText("Nastavi u " + name);
-                    go.setEnabled(true);
-                }
-            }
-        };
-        go.setText("Nastavi za " + PAUSE_SECONDS + " s");
-        h.postDelayed(count, 250L);
-        go.setOnClickListener(v -> {
-            if (SystemClock.elapsedRealtime() - pauseShownAt < PAUSE_SECONDS * 1000L) return;
-            pausePkg = null;
-            safeCheck();
-        });
-
-        scroll.addView(box, new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT));
-        return scroll;
+    void overlayGlobalBack() {
+        performGlobalAction(GLOBAL_ACTION_BACK);
     }
 
-    private View buildOverlay(final String key, int kind, DailySchedule.Rule rule, boolean cooling, final boolean code) {
-        if (kind == KIND_PAUSE) return buildPause(key);
-        final Context c = this;
-        final boolean isSite = key.startsWith("site:");
-        String name = isSite ? key.substring(5) : appLabel(key.substring(4));
 
-        String title;
-        String sub;
-        String joke;
-        if (kind == KIND_NIGHT) {
-            title = "Noćna blokada";
-            sub = "Od " + DailyCode.LOCK_HOUR + ":00 do 0" + DailyCode.NIGHT_END_HOUR + ":00 sve iz tvojih pravila je zaključano. "
-                    + name + " se ne otvara do jutra, ni šifrom.";
-            joke = Jokes.pick(Jokes.SCHEDULE);
-        } else if (kind == KIND_DAY) {
-            title = "Dnevni limit je potrošen";
-            sub = "Danas si u aplikacijama i na sajtovima iz svojih pravila proveo "
-                    + Ui.fmt(store.guardedToday()) + ", a limit je " + DayLimit.label(store.dayLimit()) + ". " + name
-                    + " je zaključan do ponoći i ne može da se otključa, ni šifrom.";
-            joke = Jokes.pick(Jokes.TIME_UP);
-        } else if (kind == KIND_OPENS) {
-            String pkg = key.substring(4);
-            title = "Otvaranja za danas su potrošena";
-            sub = name + " si danas otvorio " + Ui.count(store.opensToday(key), "put", "puta", "puta") + ", a dozvoljeno je "
-                    + store.appOpensNow(pkg) + ". Do ponoći se ne otvara, ni šifrom.";
-            joke = Jokes.pick(Jokes.TIME_UP);
-        } else if (kind == KIND_BREAK) {
-            String pkg = key.substring(4);
-            long left = store.sessionBreakLeft(pkg);
-            title = "Vreme je za pauzu";
-            sub = "Bio si u " + name + " " + store.appSessionNow(pkg) + " min u komadu. "
-                    + name + " se ponovo otvara posle pauze, za " + Ui.fmt(left) + ", ni šifrom ranije.";
-            joke = Jokes.pick(Jokes.TIME_UP);
-        } else if (kind == KIND_FOCUS) {
-            title = "Fokus režim je aktivan";
-            long left = store.focusLeft();
-            sub = "Dozvoljene su samo aplikacije i sajtovi koje si izabrao. Fokus traje još "
-                    + Ui.fmt(left) + " i ne može se zaobići dnevnom šifrom.";
-            joke = Jokes.pick(Jokes.SCHEDULE);
-        } else if (kind == KIND_SCHEDULE && rule != null) {
-            title = "Režim „" + rule.name + "“ je aktivan";
-            sub = name + " je blokiran " + rule.daysLabel() + " od " + DailySchedule.label(rule.start)
-                    + " do " + DailySchedule.label(rule.end) + "."
-                    + (rule.code ? " Posle toga se otključava dnevnom šifrom." : "");
-            joke = Jokes.pick(Jokes.SCHEDULE);
-        } else if (kind == KIND_CODE) {
-            title = name + " je zaključan";
-            sub = "Unesi dnevnu šifru. Važi od " + DailyCode.CHANGE_HOUR + ":00 do " + DailyCode.LOCK_HOUR + ":00 i vidi se u Čuvaru.";
-            joke = Jokes.pick(Jokes.LOCK);
-        } else if (kind == KIND_BROWSER) {
-            title = name + " je zaključan";
-            sub = "U ovom pregledaču Čuvar ne vidi koji je sajt otvoren, pa je zaključan dok imaš pravila za sajtove. "
-                    + "Koristi Chrome, Samsung Internet, Firefox, Edge, Brave ili Vivaldi. Otvara se dnevnom šifrom, od "
-                    + DailyCode.CHANGE_HOUR + ":00 do " + DailyCode.LOCK_HOUR + ":00.";
-            joke = Jokes.pick(Jokes.LOCK);
-        } else if (kind == KIND_CLONER) {
-            title = name + " je zaključan";
-            sub = "U aplikaciji za kloniranje bi se zaključane aplikacije otvarale pod drugim imenom. "
-                    + "Zato je zaključana dok imaš pravila za aplikacije. Otvara se dnevnom šifrom, od "
-                    + DailyCode.CHANGE_HOUR + ":00 do " + DailyCode.LOCK_HOUR + ":00.";
-            joke = Jokes.pick(Jokes.LOCK);
-        } else if (kind == KIND_INAPP) {
-            title = "Link je zaključan";
-            sub = "U pregledaču unutar aplikacije " + name + " Čuvar ne vidi koji je sajt otvoren, a imaš pravila za sajtove. "
-                    + "Vrati se nazad ili otvori link u Chrome-u (meni sa tri tačke, „Otvori u pregledaču“). "
-                    + "Otvara se i dnevnom šifrom, od " + DailyCode.CHANGE_HOUR + ":00 do " + DailyCode.LOCK_HOUR + ":00.";
-            joke = Jokes.pick(Jokes.SITE);
-        } else if (kind == KIND_ADDRESS) {
-            title = "Adresa sajta nije dostupna";
-            sub = "Čuvar još nije mogao da pročita adresu u " + name + ", a imaš pravila za sajtove. "
-                    + "Vrati se nazad i prikaži adresnu traku ili otvori sajt u drugom podržanom pregledaču. "
-                    + "Otključavanje dnevnom šifrom važi kao i za pregledač bez dostupne adrese.";
-            joke = Jokes.pick(Jokes.SITE);
-        } else if (kind == KIND_LOCK) {
-            title = name + " je zaključan";
-            sub = "Otvara se dnevnom šifrom, od " + DailyCode.CHANGE_HOUR + ":00 do " + DailyCode.LOCK_HOUR + ":00. Šifra se vidi u Čuvaru.";
-            joke = Jokes.pick(Jokes.LOCK);
-        } else if (kind == KIND_SITE) {
-            title = "Sajt je blokiran";
-            sub = name + " je na tvojoj listi blokiranih sajtova. Otvara se dnevnom šifrom, od "
-                    + DailyCode.CHANGE_HOUR + ":00 do " + DailyCode.LOCK_HOUR + ":00.";
-            joke = Jokes.pick(Jokes.SITE);
-        } else {
-            title = "Vreme je isteklo";
-            long used = store.usedShared(isSite ? key : key.substring(4));
-            sub = "Danas si na " + name + " proveo " + Ui.fmt(used) + ". Dnevni limit je potrošen i "
-                    + name + " je zaključan do ponoći, ni šifrom se ne otvara.";
-            joke = Jokes.pick(Jokes.TIME_UP);
-        }
-
-        ScrollView scroll = new ScrollView(c);
-        scroll.setBackgroundColor(Ui.NIGHT);
-        scroll.setFillViewport(true);
-        scroll.setClickable(true);
-
-        LinearLayout box = Ui.column(c);
-        box.setGravity(Gravity.CENTER);
-        int p = Ui.dp(c, 24);
-        box.setPadding(p, p, p, p);
-
-        TextView eyebrow = Ui.text(c, "ČUVAR", 12, Ui.NIGHT_ACCENT, true);
-        eyebrow.setLetterSpacing(0.25f);
-        eyebrow.setGravity(Gravity.CENTER);
-        box.addView(eyebrow, Ui.fill(c, 0));
-
-        TextView t = Ui.text(c, title, 25, 0xFFFFFFFF, true);
-        t.setGravity(Gravity.CENTER);
-        box.addView(t, Ui.fill(c, 10));
-
-        TextView s = Ui.text(c, sub, 15, Ui.NIGHT_MUTED, false);
-        s.setGravity(Gravity.CENTER);
-        box.addView(s, Ui.fill(c, 8));
-
-        int tries = store.opensToday("try:" + key);
-        if (tries > 1) {
-            TextView tr = Ui.text(c, "Ovo ti je danas " + tries + ". pokušaj.", 15, 0xFFFFFFFF, true);
-            tr.setGravity(Gravity.CENTER);
-            box.addView(tr, Ui.fill(c, 10));
-        }
-
-        TextView j = Ui.text(c, joke, 16, Ui.NIGHT_ACCENT, false);
-        j.setGravity(Gravity.CENTER);
-        j.setTypeface(Typeface.create("sans-serif", Typeface.ITALIC));
-        box.addView(j, Ui.fill(c, 16));
-
-        // Najveće dugme na ekranu je izlaz: najlakši izbor je da odustaneš.
-        TextView close = overlayButton(c, "Zatvori");
-        close.setTextSize(17);
-        close.setBackground(Ui.pressable(Ui.ACCENT, Ui.ACCENT_DOWN, Ui.dp(c, 14)));
-        final int k = kind;
-        close.setOnClickListener(v -> leaveBlock(key, k));
-        box.addView(close, Ui.fill(c, 20));
-
-        if (cooling) {
-            // Pauza posle otključavanja: nema dugmeta ni PIN-a, samo odbrojavanje.
-            cooldownLabel = Ui.text(c, cooldownText(store.cooldownLeft(key)), 15, 0xFFFFFFFF, true);
-            cooldownLabel.setGravity(Gravity.CENTER);
-            box.addView(cooldownLabel, Ui.fill(c, 22));
-            if (store.emergencyAvailable()) {
-                final LinearLayout urgent = Ui.column(c);
-                urgent.setGravity(Gravity.CENTER_HORIZONTAL);
-                box.addView(urgent, Ui.fill(c, 16));
-                TextView ask = overlayButton(c, "Hitno otključavanje (" + Store.EMERGENCY_MS / 60000L + " min)");
-                ask.setTextColor(Ui.NIGHT_MUTED);
-                ask.setBackground(null);
-                ask.setOnClickListener(v -> showQuiz(urgent, () -> showEmergencyPad(urgent, key, code), null));
-                urgent.addView(ask);
-            }
-        } else if (code && !hard(kind)) {
-            final LinearLayout unlock = Ui.column(c);
-            unlock.setGravity(Gravity.CENTER_HORIZONTAL);
-            box.addView(unlock, Ui.fill(c, 22));
-            // Zaključana aplikacija odmah traži odgovor pa PIN; kod isteklog vremena i blokiranog sajta prvo pitamo.
-            if (kind == KIND_LOCK || kind == KIND_CODE || kind == KIND_BROWSER || kind == KIND_CLONER) {
-                showQuiz(unlock, () -> showPinPad(unlock, key, code), null);
-            } else {
-                TextView ask = overlayButton(c, "Ipak želim da otključam");
-                ask.setTextColor(Ui.NIGHT_MUTED);
-                ask.setBackground(null);
-                ask.setOnClickListener(v -> showAreYouSure(unlock, key, k, code));
-                unlock.addView(ask);
-            }
-        }
-
-        LinearLayout actions = Ui.row(c);
-        actions.setGravity(Gravity.CENTER);
-        if (isSite || kind == KIND_INAPP || kind == KIND_ADDRESS) {
-            TextView back = overlayButton(c, "Nazad");
-            back.setOnClickListener(v -> {
-                if ((key.startsWith("site:") || k == KIND_ADDRESS) && browserForCurrentBlock() != null) {
-                    leaveBlock(key, k);
-                } else {
-                    performGlobalAction(GLOBAL_ACTION_BACK);
-                    h.removeCallbacks(recheckSoon);
-                    h.postDelayed(recheckSoon, 600);
-                }
-            });
-            actions.addView(back, actionParams(c));
-        }
-        if (actions.getChildCount() > 0) box.addView(actions, Ui.fill(c, 12));
-
-        scroll.addView(box, new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT));
-        return scroll;
-    }
-
-    /** Šaljivo „Jesi li siguran?“ pre unosa PIN-a. */
-    private void showAreYouSure(final LinearLayout area, final String key, final int kind, final boolean code) {
-        final Context c = this;
-        area.removeAllViews();
-        TextView q = Ui.text(c, "Jesi li siguran?", 22, 0xFFFFFFFF, true);
-        q.setGravity(Gravity.CENTER);
-        area.addView(q, Ui.fill(c, 0));
-        TextView why = Ui.text(c, Jokes.pick(Jokes.ARE_YOU_SURE), 15, Ui.NIGHT_MUTED, false);
-        why.setGravity(Gravity.CENTER);
-        area.addView(why, Ui.fill(c, 6));
-        area.addView(rulesNote(c), Ui.fill(c, 8));
-
-        TextView no = overlayButton(c, Jokes.pick(Jokes.NO));
-        no.setBackground(Ui.pressable(Ui.ACCENT, Ui.ACCENT_DOWN, Ui.dp(c, 14)));
-        no.setOnClickListener(v -> leaveBlock(key, kind));
-        area.addView(no, Ui.fill(c, 16));
-
-        TextView yes = overlayButton(c, Jokes.pick(Jokes.YES));
-        yes.setOnClickListener(v -> showQuiz(area, () -> showPinPad(area, key, code), null));
-        area.addView(yes, Ui.fill(c, 10));
-    }
-
-    /** Pitanje pre PIN-a. Tačan odgovor vodi dalje, a pogrešan donosi novo pitanje. */
-    private void showQuiz(final LinearLayout area, final Runnable onPass, String notice) {
-        final Context c = this;
-        area.removeAllViews();
-        final Quiz.Question q = Quiz.next();
-
-        TextView head = Ui.text(c, "Prvo odgovori na pitanje", 20, 0xFFFFFFFF, true);
-        head.setGravity(Gravity.CENTER);
-        area.addView(head, Ui.fill(c, 0));
-        if (notice != null) {
-            TextView n = Ui.text(c, notice, 14, Ui.NIGHT_ACCENT, false);
-            n.setGravity(Gravity.CENTER);
-            area.addView(n, Ui.fill(c, 8));
-        }
-        TextView cat = Ui.text(c, q.category.toUpperCase(Locale.ROOT), 11, Ui.NIGHT_MUTED, true);
-        cat.setLetterSpacing(0.15f);
-        cat.setGravity(Gravity.CENTER);
-        area.addView(cat, Ui.fill(c, 16));
-        TextView text = Ui.text(c, q.text, 18, 0xFFFFFFFF, false);
-        text.setGravity(Gravity.CENTER);
-        area.addView(text, Ui.fill(c, 6));
-
-        if (q.typed()) {
-            final PinPad pad = new PinPad(c, true);
-            pad.showDigits();
-            pad.setListener(given -> {
-                if (q.isCorrect(given)) {
-                    onPass.run();
-                } else {
-                    showQuiz(area, onPass, "Netačno. Evo novog pitanja.");
-                }
-            });
-            area.addView(pad, Ui.fill(c, 12));
-        } else {
-            for (final String choice : q.choices) {
-                TextView b = overlayButton(c, choice);
-                b.setOnClickListener(v -> {
-                    if (q.isCorrect(choice)) {
-                        onPass.run();
-                    } else {
-                        showQuiz(area, onPass, "Netačno. Evo novog pitanja.");
-                    }
-                });
-                area.addView(b, Ui.fill(c, 10));
-            }
-        }
-    }
-
-    /** Tastatura za PIN, ili za dnevnu šifru kod režima sa šifrom. */
-    private void showPinPad(final LinearLayout area, final String key, final boolean code) {
-        area.removeAllViews();
-        if (code) area.addView(codeNote(this), Ui.fill(this, 0));
-        area.addView(rulesNote(this), Ui.fill(this, code ? 6 : 0));
-        final PinPad pad = new PinPad(this, true);
-        pad.setListener(pin -> {
-            if (store.cooldownLeft(key) > 0) {
-                safeCheck(); // pauza je počela dok je tastatura bila otvorena
-                return;
-            }
-            String err = store.tryCode(pin);
-            if (err == null) {
-                store.startUnlock(key);
-                safeCheck(); // another matching domain or rule may still require a block
-            } else {
-                pad.clear();
-                pad.setMessage(err);
-            }
-        });
-        area.addView(pad, Ui.fill(this, 12));
-    }
-
-    /** Hitno otključavanje mimo pauze: posle pitanja upozorenje pa PIN. */
-    private void showEmergencyPad(final LinearLayout area, final String key, final boolean code) {
-        final Context c = this;
-        area.removeAllViews();
-        TextView t = Ui.text(c, "Hitno otključavanje", 20, 0xFFFFFFFF, true);
-        t.setGravity(Gravity.CENTER);
-        area.addView(t, Ui.fill(c, 0));
-        String times = Store.EMERGENCY_PER_DAY == 1 ? "samo jednom dnevno"
-                : Store.EMERGENCY_PER_DAY + " puta dnevno";
-        TextView note = Ui.text(c, "Otključava na " + Store.EMERGENCY_MS / 60000L
-                + " min i može se iskoristiti " + times + ". Ako ga sada potrošiš, do ponoći ga više nemaš.",
-                13, Ui.NIGHT_MUTED, false);
-        note.setGravity(Gravity.CENTER);
-        area.addView(note, Ui.fill(c, 6));
-        if (code) area.addView(codeNote(c), Ui.fill(c, 8));
-        final PinPad pad = new PinPad(c, true);
-        pad.setListener(pin -> {
-            if (!store.emergencyAvailable()) {
-                pad.clear();
-                pad.setMessage("Hitno otključavanje je danas već iskorišćeno");
-                return;
-            }
-            String err = store.tryCode(pin);
-            if (err == null) {
-                store.startEmergency(key);
-                safeCheck();
-            } else {
-                pad.clear();
-                pad.setMessage(err);
-            }
-        });
-        area.addView(pad, Ui.fill(c, 12));
-    }
-
-    private static TextView codeNote(Context c) {
-        TextView t = Ui.text(c, "Unesi dnevnu šifru (4 cifre) iz Čuvara.", 15, 0xFFFFFFFF, true);
-        t.setGravity(Gravity.CENTER);
-        return t;
-    }
-
-    /** Upozorenje pre otključavanja: koliko traje i šta sledi posle. */
-    private static TextView rulesNote(Context c) {
-        TextView t = Ui.text(c, "Otključano je " + Store.UNLOCK_USE_MS / 60000L
-                + " min, a posle toga " + Store.UNLOCK_COOLDOWN_MS / 60000L
-                + " min nema otključavanja ničega, ni šifrom.", 13, Ui.NIGHT_MUTED, false);
-        t.setGravity(Gravity.CENTER);
-        return t;
-    }
-
-    private static TextView overlayButton(Context c, String label) {
-        TextView b = Ui.text(c, label, 15, 0xFFFFFFFF, true);
-        b.setGravity(Gravity.CENTER);
-        b.setBackground(Ui.pressable(Ui.NIGHT_KEY, Ui.NIGHT_KEY_DOWN, Ui.dp(c, 14)));
-        int ph = Ui.dp(c, 22);
-        int pv = Ui.dp(c, 13);
-        b.setPadding(ph, pv, ph, pv);
-        return b;
-    }
-
-    private static LinearLayout.LayoutParams actionParams(Context c) {
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        int m = Ui.dp(c, 6);
-        lp.setMargins(m, 0, m, 0);
-        return lp;
-    }
 }
