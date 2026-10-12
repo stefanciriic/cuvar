@@ -209,8 +209,10 @@ public class GuardService extends AccessibilityService {
         public void run() {
             try {
                 if (usageOk && foreground != null && power != null && power.isInteractive()) {
-                    String fg = foreground.current();
-                    if (fg != null && !fg.equals(rawPkg) && !TRANSPARENT.contains(fg)) safeCheck();
+                    foreground.refresh(() -> h.post(() -> {
+                        String fg = foreground == null ? null : foreground.current();
+                        if (fg != null && !fg.equals(rawPkg) && !TRANSPARENT.contains(fg)) safeCheck();
+                    }));
                 }
             } catch (Throwable error) {
                 GuardDiagnostics.report("foregroundPoll", error);
@@ -296,7 +298,7 @@ public class GuardService extends AccessibilityService {
                 contentEvents = false;
                 info.flags |= AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
                         | AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS;
-                info.notificationTimeout = 100;
+                info.notificationTimeout = 250;
                 setServiceInfo(info);
             }
         } catch (Throwable error) {
@@ -325,6 +327,7 @@ public class GuardService extends AccessibilityService {
             GuardDiagnostics.report("guardStarted", error);
         }
         foreground = new ForegroundApp(this);
+        if (usageOk) foreground.refresh(() -> h.post(this::safeCheck));
         updateWatched();
         h.removeCallbacks(tick);
         h.postDelayed(tick, TICK_MS);
@@ -548,8 +551,8 @@ public class GuardService extends AccessibilityService {
         if (usageOk && foreground != null && overlay == null) {
             String fg = foreground.current();
             // Android ponekad kasni sa zapisom: ako je posle njega javila aplikacija sa pravilom, čita se prozor.
-            if (fg != null && !TRANSPARENT.contains(fg) && quiet(fg) && foreground.since() > ruledSeenAt
-                    && appWindowCount() < 2) {
+            if (fg != null && !TRANSPARENT.contains(fg) && quiet(fg)
+                    && (handsOff(fg) || (foreground.since() > ruledSeenAt && appWindowCount() < 2))) {
                 pkg = fg;
             }
         }
@@ -570,7 +573,7 @@ public class GuardService extends AccessibilityService {
         if (TRANSPARENT.contains(pkg)) {
             return;
         }
-        boolean quiet = overlay == null && quiet(pkg) && appWindowCount() < 2;
+        boolean quiet = overlay == null && quiet(pkg) && (handsOff(pkg) || appWindowCount() < 2);
         if (!quiet && root == null) return;
         // Ceo vrh ekrana (sa delom sadržaja) treba samo za pregledač unutar aplikacije, gde se adresa traži po ekranu.
         // U pregledačima se adresa čita direktno po polju za adresu, bez čitanja stranice.
@@ -1302,6 +1305,9 @@ public class GuardService extends AccessibilityService {
      * sa te stranice (otvori početnu Google stranu). Sve ostalo: početni ekran telefona.
      */
     private void leaveBlock(String key, int kind) {
+        // Remove the accessibility window before starting browser navigation so Back feels immediate and
+        // the browser can receive focus while we set its neutral URL.
+        hideOverlay();
         if (inBrowserPage(key, kind)) {
             openStartPage(currentPkg, key);
         } else {
@@ -1316,6 +1322,7 @@ public class GuardService extends AccessibilityService {
     /** U istoj kartici upiše početnu adresu u traku za adresu; ako to ne uspe, otvori je u tom pregledaču. */
     private void openStartPage(final String browser, final String key) {
         final String id = BROWSERS.get(browser);
+        final String blockedHost = currentHost;
         AccessibilityNodeInfo bar = urlBar(browser, id);
         if (bar == null || Build.VERSION.SDK_INT < 30) {
             startPageIntent(browser);
@@ -1336,9 +1343,9 @@ public class GuardService extends AccessibilityService {
                 if (!ok) {
                     startPageIntent(browser);
                 } else {
-                    // Neki pregledači prihvate „Enter“ a ne odu na adresu: ako je stranica i dalje blokirana, otvori je drugim putem.
+                    // Neki pregledači prihvate „Enter“ a ne odu na adresu: ako je host ostao isti, probaj direktan intent.
                     h.postDelayed(() -> {
-                        if (overlay != null && key.equals(overlayKey)) startPageIntent(browser);
+                        if (blockedHost != null && blockedHost.equals(currentHost)) startPageIntent(browser);
                     }, 1800);
                 }
             } catch (Throwable t) {
@@ -1397,18 +1404,27 @@ public class GuardService extends AccessibilityService {
         if (Build.VERSION.SDK_INT >= 33) {
             // Android 16 šalje „nazad“ kao povratni poziv, ne kao taster.
             wrap.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
+                private android.window.OnBackInvokedDispatcher dispatcher;
+                private android.window.OnBackInvokedCallback callback;
+
                 @Override
                 public void onViewAttachedToWindow(View v) {
                     v.requestFocus();
-                    android.window.OnBackInvokedDispatcher d = v.findOnBackInvokedDispatcher();
-                    if (d != null) {
-                        d.registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,
-                                () -> leaveBlock(key, kind));
+                    dispatcher = v.findOnBackInvokedDispatcher();
+                    if (dispatcher != null) {
+                        callback = () -> leaveBlock(key, kind);
+                        dispatcher.registerOnBackInvokedCallback(
+                                android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, callback);
                     }
                 }
 
                 @Override
                 public void onViewDetachedFromWindow(View v) {
+                    if (dispatcher != null && callback != null) {
+                        dispatcher.unregisterOnBackInvokedCallback(callback);
+                        dispatcher = null;
+                        callback = null;
+                    }
                 }
             });
         }
