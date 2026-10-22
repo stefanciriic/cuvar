@@ -24,6 +24,21 @@ public final class BrowserAddressStateTest {
         s.missing(910000);
         check(!s.unresolved(912999), "unverified window waits for the toolbar");
         check(s.unresolved(913000), "unverified window does not inherit old host and fails closed");
+        BrowserAddressState h = new BrowserAddressState();
+        h.missing(0);
+        h.internalScreen();
+        check(h.host() == null && !h.unresolved(600000), "Chrome history screen without address bar does not lock");
+        check(BrowserAddressState.isInternalScreen("org.chromium.chrome.browser.history.HistoryActivity"), "history activity");
+        check(BrowserAddressState.isInternalScreen("org.chromium.chrome.browser.bookmarks.BookmarkActivity"), "bookmarks");
+        check(BrowserAddressState.isInternalScreen("org.chromium.chrome.browser.download.DownloadActivity"), "downloads");
+        check(!BrowserAddressState.isInternalScreen("org.chromium.chrome.browser.ChromeTabbedActivity"), "tabs show websites");
+        check(!BrowserAddressState.isInternalScreen("org.chromium.chrome.browser.customtabs.CustomTabActivity"), "custom tabs show websites");
+        check(!BrowserAddressState.isInternalScreen(null), "unknown screen fails closed");
+        check(BrowserAddressState.isInternalAddress("chrome://history"), "chrome history page");
+        check(BrowserAddressState.isInternalAddress("about:blank"), "about page");
+        check(!BrowserAddressState.isInternalAddress("youtube.com"), "website");
+        check(!BrowserAddressState.isInternalAddress("https://www.youtube.com/watch?v=1"), "website with scheme");
+        check(!BrowserAddressState.isInternalAddress("view-source:https://youtube.com"), "view-source still shows the site");
         System.out.println("Prošlo: " + checks + " provera BrowserAddressState.");
     }
 

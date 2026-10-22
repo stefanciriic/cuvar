@@ -94,7 +94,12 @@ final class BrowserMonitor {
         return hasSiteRules && !isBrowser(pkg) && !context.getPackageName().equals(pkg) && webApps().contains(pkg);
     }
 
-    BrowserAddressState readAddress(AccessibilityNodeInfo root, String id) {
+    /**
+     * Reads only the browser's own address bar, found by its view id; page content is never read.
+     * {@code activity} is the browser screen last opened, used to recognize history, bookmarks and
+     * similar screens that have no address bar and cannot show a website.
+     */
+    BrowserAddressState readAddress(AccessibilityNodeInfo root, String id, String activity) {
         String key = root.getPackageName() + ":" + root.getWindowId();
         BrowserAddressState state = addresses.get(key);
         if (state == null) {
@@ -103,7 +108,8 @@ final class BrowserMonitor {
         }
         List<AccessibilityNodeInfo> nodes = root.findAccessibilityNodeInfosByViewId(id);
         if (nodes == null || nodes.isEmpty()) {
-            state.missing(SystemClock.elapsedRealtime());
+            if (BrowserAddressState.isInternalScreen(activity)) state.internalScreen();
+            else state.missing(SystemClock.elapsedRealtime());
             return state;
         }
         AccessibilityNodeInfo node = nodes.get(0);
@@ -113,7 +119,9 @@ final class BrowserMonitor {
             state.editing();
         } else {
             CharSequence text = node.getText();
-            state.readable(Store.hostOf(text == null ? "" : text.toString()));
+            String value = text == null ? "" : text.toString();
+            if (BrowserAddressState.isInternalAddress(value)) state.internalScreen();
+            else state.readable(Store.hostOf(value));
         }
         return state;
     }

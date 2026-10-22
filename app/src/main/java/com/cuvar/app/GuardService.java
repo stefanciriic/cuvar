@@ -660,7 +660,7 @@ public class GuardService extends AccessibilityService {
             setContentEvents(inApp || wantsContent(pkg));
         }
         if (urlBarId != null && !root.getPackageName().toString().equals(getPackageName())) {
-            currentAddress = browserMonitor.readAddress(root, urlBarId);
+            currentAddress = browserMonitor.readAddress(root, urlBarId, activityOf.get(raw));
             currentHost = currentAddress.host();
         } else if (inApp && !root.getPackageName().toString().equals(getPackageName())) {
             String host = browserMonitor.inAppHost(root);
@@ -771,7 +771,7 @@ public class GuardService extends AccessibilityService {
             if (id != null || embedded) secondaryContentPackages.add(other.rawPkg);
             String host = null;
             if (id != null) {
-                BrowserAddressState address = browserMonitor.readAddress(other.root, id);
+                BrowserAddressState address = browserMonitor.readAddress(other.root, id, activityOf.get(other.rawPkg));
                 host = address.host();
                 if (address.unresolved(SystemClock.elapsedRealtime()) && store.hasSiteRules()) {
                     secondary.add(new Block("app:" + other.pkg, KIND_ADDRESS, null, true));
