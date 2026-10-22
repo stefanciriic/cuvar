@@ -485,9 +485,8 @@ public class GuardService extends AccessibilityService {
                 || keyguard.isKeyguardLocked() || overlay != null || currentPkg == null) return keys;
         if (tracked(this, currentPkg)) keys.add(currentPkg);
         for (String host : visibleHosts) {
+            // Meri se samo vreme sajtova sa pravilom (za limit); istorija ostalih sajtova se ne čuva.
             for (String domain : store.matchingSitesNow(host)) keys.add("site:" + domain);
-            String web = Store.mainDomain(host);
-            if (web != null) keys.add("web:" + web);
         }
         if (countsForDayLimit()) keys.add(Store.GUARDED_KEY);
         return keys;

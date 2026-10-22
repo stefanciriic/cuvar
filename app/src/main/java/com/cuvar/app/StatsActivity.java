@@ -23,7 +23,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 
-/** Statistika za danas ili više dana: poređenje sa ranijim danima, krug po aplikacijama, kolone po danima, sajtovi i kategorije. */
+/** Statistika za danas ili više dana: poređenje sa ranijim danima, krug po aplikacijama, kolone po danima i kategorije. */
 public class StatsActivity extends SubActivity {
 
     private static final class Row {
@@ -126,7 +126,6 @@ public class StatsActivity extends SubActivity {
         skip.add(getPackageName());
 
         Map<String, Long> perApp = new HashMap<>();
-        Map<String, Long> perSite = new HashMap<>();
         Map<Integer, Long> perCategory = new HashMap<>();
         List<Map<String, Long>> appsPerDay = new ArrayList<>();
         long grandTotal = 0;
@@ -136,22 +135,10 @@ public class StatsActivity extends SubActivity {
         for (String dk : dayKeys) {
             Map<String, Long> apps = new HashMap<>();
             Map<String, Long> day = store.dayMap(dk);
-            // Dani pre merenja svih sajtova imaju samo sajtove sa liste; tada se prikazuju oni.
-            boolean hasWeb = false;
-            for (String key : day.keySet()) {
-                if (key.startsWith("web:")) {
-                    hasWeb = true;
-                    break;
-                }
-            }
             for (Map.Entry<String, Long> e : day.entrySet()) {
                 String key = e.getKey();
                 long ms = e.getValue();
                 if (key.startsWith("web:") || key.startsWith("site:")) {
-                    if (key.startsWith("web:") == hasWeb) {
-                        String domain = key.substring(key.indexOf(':') + 1);
-                        perSite.put(domain, perSite.getOrDefault(domain, 0L) + ms);
-                    }
                     continue; // vreme sajta je već deo vremena pregledača, ne broji se duplo u ukupno
                 }
                 if (skip.contains(key) || !GuardService.tracked(this, key)) {
@@ -180,7 +167,6 @@ public class StatsActivity extends SubActivity {
         if (days > 1) {
             body.addView(columnsCard(dayKeys, appsPerDay, colored, avg), Ui.fill(this, 16));
         }
-        body.addView(barsCard("Top 3 sajta u pregledaču", topRows(perSite, k -> k, 3)), Ui.fill(this, 16));
         body.addView(barsCard("Po kategorijama", categoryRows(perCategory)), Ui.fill(this, 16));
         if (top.size() > TOP) {
             // Prvih 5 je već u legendi kruga; ovde su sledeće po redu.

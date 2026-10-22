@@ -89,6 +89,7 @@ final class Store {
         usage = parse(sp.getString("usage", "{}"));
         opens = parse(sp.getString("opens", "{}"));
         sessions = parse(sp.getString("sessions", "{}"));
+        dropSiteHistory();
         migrateSchedule();
         loadSchedules();
         workEveryDay();
@@ -1208,6 +1209,26 @@ final class Store {
             usage.remove(days.remove(0));
             dirty = true;
         }
+    }
+
+    /**
+     * Istorija sajtova se ne čuva: brišu se svi zapisi "web:" (ranije se merio svaki sajt) i vreme
+     * sajtova sa pravilom iz ranijih dana. Današnje vreme sajtova sa pravilom ostaje jer ga troši limit.
+     */
+    private void dropSiteHistory() {
+        String today = day();
+        boolean changed = false;
+        for (String dk : keysOf(usage)) {
+            JSONObject d = usage.optJSONObject(dk);
+            if (d == null) continue;
+            for (String k : keysOf(d)) {
+                if (k.startsWith("web:") || (k.startsWith("site:") && !dk.equals(today))) {
+                    d.remove(k);
+                    changed = true;
+                }
+            }
+        }
+        if (changed) sp.edit().putString("usage", usage.toString()).apply();
     }
 
     synchronized void addUsage(String key, long ms) {
