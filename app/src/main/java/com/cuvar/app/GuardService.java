@@ -637,6 +637,16 @@ public class GuardService extends AccessibilityService {
             return;
         }
 
+        if (store.rulesPaused()) {
+            // Pauza svih pravila do sutra u 06:00: ništa se ne blokira i ne zatvara, vreme se i dalje meri.
+            currentInApp = false;
+            currentHost = null;
+            currentAddress = null;
+            setContentEvents(false);
+            hideOverlay();
+            return;
+        }
+
         if (store.protectNow() && guardsSelf(root, pkg)) {
             // Ekran na kome bi Čuvar mogao da se isključi, zaustavi ili obriše: zatvori ga.
             hideOverlay();

@@ -160,6 +160,13 @@ public class MainActivity extends Activity {
         }
 
         col.addView(Ui.section(this, "Sada"), Ui.fill(this, 24));
+        if (store.rulesPaused()) {
+            LinearLayout paused = Ui.card(this);
+            paused.addView(Ui.text(this, "Pravila su pauzirana do sutra u 06:00", 18, Ui.ACCENT, true));
+            paused.addView(Ui.text(this, "Danas ništa nije zaključano: ni aplikacije, ni sajtovi, ni limiti, ni noćna blokada. "
+                    + "Sva tvoja pravila su sačuvana i sutra u 06:00 sama ponovo važe.", 14, Ui.MUTED, false), Ui.fill(this, 6));
+            col.addView(paused, Ui.fill(this, 8));
+        }
         col.addView(nowCard(), Ui.fill(this, 8));
 
         col.addView(Ui.section(this, "Danas"), Ui.fill(this, 24));

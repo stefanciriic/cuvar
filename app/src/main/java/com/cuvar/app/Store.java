@@ -1517,6 +1517,14 @@ final class Store {
         }
     }
 
+    /** Jednokratna pauza: na ovaj dan pravila (od 06:00 do 06:00 sledećeg jutra) ne važe. Ništa se ne briše. */
+    static final String PAUSED_RULES_DAY = "20261025";
+
+    /** Da li su sva pravila upravo pauzirana (danas, do sutra u 06:00). */
+    synchronized boolean rulesPaused() {
+        return PAUSED_RULES_DAY.equals(rulesDay());
+    }
+
     /** Dan za odložena popuštanja: menja se u 06:00, kad se završi noćna blokada, a ne u ponoć dok ona traje. */
     private String rulesDay() {
         return UsageCalendar.rulesDay(now(), zone(), DailyCode.NIGHT_END_HOUR);
