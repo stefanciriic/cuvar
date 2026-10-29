@@ -170,7 +170,7 @@ final class Sheet {
     /** Polje za unos: bela zaobljena kartica, bez sive linije ispod. */
     static EditText input(Context c, String hint, boolean number) {
         EditText e = new EditText(c);
-        e.setHint(hint);
+        e.setHint(Ui.cyr(hint));
         e.setSingleLine(true);
         e.setTextSize(16);
         e.setTextColor(Ui.INK);

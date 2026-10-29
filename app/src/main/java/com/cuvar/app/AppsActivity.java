@@ -178,7 +178,7 @@ public class AppsActivity extends SubActivity {
                     }
                     Item it = new Item();
                     it.pkg = pkg;
-                    CharSequence l = ri.loadLabel(pm);
+                    CharSequence l = Translit.keep(String.valueOf(ri.loadLabel(pm)));
                     it.label = l == null ? pkg : l.toString();
                     try {
                         it.icon = ri.loadIcon(pm);
@@ -278,7 +278,7 @@ public class AppsActivity extends SubActivity {
 
     private void pendingToast() {
         if (!store.pendingChanges(getPackageManager()).isEmpty()) {
-            Toast.makeText(this, "Pooštravanje važi odmah, a popuštanje tek sutra od 06:00.", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, Ui.cyr("Pooštravanje važi odmah, a popuštanje tek sutra od 06:00."), Toast.LENGTH_LONG).show();
         }
     }
 
@@ -286,8 +286,8 @@ public class AppsActivity extends SubActivity {
         long busy = store.hasAppRule(it.pkg) ? store.unlockBusyLeft() : 0;
         if (busy > 0) {
             // Inače bi se pauza posle otključavanja zaobišla brisanjem ograničenja.
-            Toast.makeText(this, "Nedavno je nešto otključano. Ograničenja se mogu menjati za "
-                    + Ui.fmt(busy) + ".", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, Ui.cyr("Nedavno je nešto otključano. Ograničenja se mogu menjati za "
+                    + Ui.fmt(busy) + "."), Toast.LENGTH_LONG).show();
             return;
         }
         LinearLayout box = Ui.column(this);

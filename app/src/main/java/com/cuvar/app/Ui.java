@@ -102,6 +102,7 @@ final class Ui {
 
     /** Poziva se na početku onCreate, pre super.onCreate: bira boje i sistemsku temu ekrana. */
     static void theme(Activity a) {
+        loadScript(a);
         palette(wantsDark(a));
         a.setTheme(dark ? android.R.style.Theme_Material_NoActionBar
                 : android.R.style.Theme_Material_Light_NoActionBar);
@@ -131,8 +132,51 @@ final class Ui {
         return s;
     }
 
+    /** Natpis koji se, kad je izabrana ćirilica, sam prikazuje ćirilicom (i posle svakog setText). */
+    static final class Label extends TextView {
+        Label(Context c) {
+            super(c);
+        }
+
+        @Override
+        public void setText(CharSequence text, BufferType type) {
+            super.setText(cyr(text), type);
+        }
+    }
+
+    /** Tekst u izabranom pismu; nazivi aplikacija i adrese ostaju latinicom (vidi Translit). */
+    static CharSequence cyr(CharSequence s) {
+        if (!Translit.cyrillic || s == null || s.length() == 0) return s;
+        if (!(s instanceof android.text.Spanned)) return Translit.toCyrillic(s.toString());
+        java.util.List<Translit.Edit> edits = Translit.edits(s.toString());
+        if (edits.isEmpty()) return s;
+        android.text.SpannableStringBuilder b = new android.text.SpannableStringBuilder(s);
+        for (int i = edits.size() - 1; i >= 0; i--) {
+            Translit.Edit e = edits.get(i);
+            b.replace(e.start, e.end, e.repl);
+        }
+        return b;
+    }
+
+    static String cyr(String s) {
+        return Translit.cyrillic && s != null ? Translit.toCyrillic(s) : s;
+    }
+
+    static boolean cyrillicChoice(Context c) {
+        return prefs(c).getBoolean("cyrillic", false);
+    }
+
+    static void setCyrillic(Context c, boolean on) {
+        prefs(c).edit().putBoolean("cyrillic", on).apply();
+        Translit.cyrillic = on;
+    }
+
+    static void loadScript(Context c) {
+        Translit.cyrillic = cyrillicChoice(c);
+    }
+
     static TextView text(Context c, CharSequence s, float sp, int color, boolean bold) {
-        TextView t = new TextView(c);
+        TextView t = new Label(c);
         t.setText(s);
         t.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp);
         t.setTextColor(color);

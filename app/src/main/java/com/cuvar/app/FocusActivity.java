@@ -163,7 +163,7 @@ public class FocusActivity extends SubActivity {
                     if (pkg == null || pkg.equals(getPackageName()) || !seen.add(pkg)) continue;
                     Item item = new Item();
                     item.pkg = pkg;
-                    CharSequence label = ri.loadLabel(pm);
+                    CharSequence label = Translit.keep(String.valueOf(ri.loadLabel(pm)));
                     item.label = label == null ? pkg : label.toString();
                     try { item.icon = ri.loadIcon(pm); } catch (Throwable ignored) { }
                     out.add(item);
@@ -180,7 +180,7 @@ public class FocusActivity extends SubActivity {
 
     private void showAppPicker() {
         if (apps.isEmpty()) {
-            Toast.makeText(this, "Aplikacije se još učitavaju.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, Ui.cyr("Aplikacije se još učitavaju."), Toast.LENGTH_SHORT).show();
             return;
         }
         LinearLayout box = Ui.column(this);
@@ -204,7 +204,7 @@ public class FocusActivity extends SubActivity {
             @Override public void beforeTextChanged(CharSequence s, int st, int c, int a) { }
             @Override public void onTextChanged(CharSequence s, int st, int b, int c) { }
             @Override public void afterTextChanged(Editable s) {
-                String q = s.toString().trim().toLowerCase(Locale.ROOT);
+                String q = Translit.toLatin(s.toString().trim()).toLowerCase(Locale.ROOT);
                 for (int i = 0; i < rows.size(); i++) {
                     rows.get(i).setVisibility(q.isEmpty() || apps.get(i).label.toLowerCase(Locale.ROOT).contains(q)
                             ? View.VISIBLE : View.GONE);
@@ -240,7 +240,7 @@ public class FocusActivity extends SubActivity {
             return;
         }
         store.startFocus(durationMin * 60000L, selectedApps, sites);
-        Toast.makeText(this, "Fokus je pokrenut na " + durationMin + " min.", Toast.LENGTH_LONG).show();
+        Toast.makeText(this, Ui.cyr("Fokus je pokrenut na " + durationMin + " min."), Toast.LENGTH_LONG).show();
         finish();
     }
 }

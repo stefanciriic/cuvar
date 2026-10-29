@@ -8,3 +8,4 @@ app/src/main/java/com/cuvar/app/UsageCalendar.java
 app/src/main/java/com/cuvar/app/UsageTracker.java
 app/src/main/java/com/cuvar/app/BrowserAddressState.java
 app/src/main/java/com/cuvar/app/Links.java
+app/src/main/java/com/cuvar/app/Translit.java

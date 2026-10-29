@@ -1144,7 +1144,8 @@ final class Store {
         if (url == null) {
             return null;
         }
-        String s = url.replaceAll("[\\u200b-\\u200f\\u202a-\\u202e\\u2066-\\u2069]", "")
+        // Adresa ukucana ćirilicom (линкедин.цом) postaje latinica (linkedin.com).
+        String s = Translit.toLatin(url).replaceAll("[\\u200b-\\u200f\\u202a-\\u202e\\u2066-\\u2069]", "")
                 .trim().toLowerCase(Locale.ROOT);
         if (s.isEmpty() || s.contains(" ")) {
             return null;
@@ -1840,12 +1841,12 @@ final class Store {
         for (String p : eLinks) {
             if (want.contains(p)) continue;
             String name = Links.pkgOf(p);
-            try { name = pm.getApplicationLabel(pm.getApplicationInfo(name, 0)).toString(); } catch (Exception ignored) { }
+            try { name = Translit.keep(pm.getApplicationLabel(pm.getApplicationInfo(name, 0)).toString()); } catch (Exception ignored) { }
             out.add(name + " i " + Links.domainOf(p) + " se razdvajaju");
         }
         for (String pkg : keysOf(eApps)) {
             String name = pkg;
-            try { name = pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString(); } catch (Exception ignored) { }
+            try { name = Translit.keep(pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()); } catch (Exception ignored) { }
             boolean el = rawLock(pkg), dl = appLock(pkg);
             int ei = rawLimit(pkg), di = appLimit(pkg);
             if (el && !dl) out.add(name + ": bez zaključavanja");

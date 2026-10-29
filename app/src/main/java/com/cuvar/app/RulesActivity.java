@@ -351,7 +351,7 @@ public class RulesActivity extends SubActivity {
 
     private static String appLabel(PackageManager pm, String pkg) {
         try {
-            return pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString();
+            return Translit.keep(pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString());
         } catch (Exception e) {
             return pkg;
         }
@@ -381,7 +381,7 @@ public class RulesActivity extends SubActivity {
 
     private void pendingToast() {
         if (!store.pendingChanges(getPackageManager()).isEmpty()) {
-            Toast.makeText(this, "Pooštravanje važi odmah, a popuštanje tek sutra od 06:00.", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, Ui.cyr("Pooštravanje važi odmah, a popuštanje tek sutra od 06:00."), Toast.LENGTH_LONG).show();
         }
     }
 
@@ -393,7 +393,7 @@ public class RulesActivity extends SubActivity {
             ok &= site ? store.setScheduleSite(id, key, on) : store.setScheduleApp(id, key, on);
         }
         if (!ok) {
-            Toast.makeText(this, "Režim koji sada traje ne može da izgubi stavku dok traje", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, Ui.cyr("Režim koji sada traje ne može da izgubi stavku dok traje"), Toast.LENGTH_LONG).show();
         }
         return ok;
     }
@@ -505,7 +505,7 @@ public class RulesActivity extends SubActivity {
     }
 
     private void busy() {
-        Toast.makeText(this, "Režim koji sada traje ne može da izgubi stavku dok traje", Toast.LENGTH_LONG).show();
+        Toast.makeText(this, Ui.cyr("Režim koji sada traje ne može da izgubi stavku dok traje"), Toast.LENGTH_LONG).show();
     }
 
     private void editSite(String domain) {
@@ -592,7 +592,7 @@ public class RulesActivity extends SubActivity {
     }
 
     private void pickApp() {
-        Toast.makeText(this, "Učitavam aplikacije…", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, Ui.cyr("Učitavam aplikacije…"), Toast.LENGTH_SHORT).show();
         new Thread(() -> {
             List<String[]> items = new ArrayList<>();
             List<Drawable> icons = new ArrayList<>();
@@ -601,12 +601,12 @@ public class RulesActivity extends SubActivity {
                 Intent intent = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER);
                 Set<String> seen = new HashSet<>();
                 List<ResolveInfo> found = pm.queryIntentActivities(intent, 0);
-                found.sort((a, b) -> a.loadLabel(pm).toString().compareToIgnoreCase(b.loadLabel(pm).toString()));
+                found.sort((a, b) -> Translit.keep(a.loadLabel(pm).toString()).compareToIgnoreCase(Translit.keep(b.loadLabel(pm).toString())));
                 for (ResolveInfo info : found) {
                     if (info.activityInfo == null) continue;
                     String pkg = info.activityInfo.packageName;
                     if (pkg.equals(getPackageName()) || !seen.add(pkg)) continue;
-                    items.add(new String[]{pkg, info.loadLabel(pm).toString()});
+                    items.add(new String[]{pkg, Translit.keep(info.loadLabel(pm).toString())});
                     Drawable d = null;
                     try { d = info.loadIcon(pm); } catch (Throwable ignored) { }
                     icons.add(d);
@@ -640,7 +640,7 @@ public class RulesActivity extends SubActivity {
             @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) { }
             @Override public void onTextChanged(CharSequence s, int a, int b, int c) { }
             @Override public void afterTextChanged(Editable s) {
-                String q = s.toString().trim().toLowerCase(Locale.ROOT);
+                String q = Translit.toLatin(s.toString().trim()).toLowerCase(Locale.ROOT);
                 for (int i = 0; i < rows.size(); i++) {
                     boolean show = q.isEmpty() || items.get(i)[1].toLowerCase(Locale.ROOT).contains(q);
                     rows.get(i).setVisibility(show ? View.VISIBLE : View.GONE);

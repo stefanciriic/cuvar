@@ -116,7 +116,7 @@ public class SitesActivity extends SubActivity {
         long busy = domain == null ? 0 : store.unlockBusyLeft();
         if (busy > 0) {
             // Inače bi se pauza posle otključavanja zaobišla brisanjem sajta sa liste.
-            Toast.makeText(this, "Nedavno je nešto otključano. Može se menjati za " + Ui.fmt(busy) + ".",
+            Toast.makeText(this, Ui.cyr("Nedavno je nešto otključano. Može se menjati za " + Ui.fmt(busy) + "."),
                     Toast.LENGTH_LONG).show();
             return;
         }

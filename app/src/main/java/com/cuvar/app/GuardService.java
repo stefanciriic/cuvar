@@ -271,6 +271,7 @@ public class GuardService extends AccessibilityService {
     @Override
     protected void onServiceConnected() {
         super.onServiceConnected();
+        Ui.loadScript(this);
         store = Store.get(this);
         browserMonitor = new BrowserMonitor(this);
         overlayWindow = new GuardOverlayWindow(this);
@@ -522,8 +523,8 @@ public class GuardService extends AccessibilityService {
                 if (key.startsWith("site:") || key.startsWith("web:") || key.equals(Store.GUARDED_KEY)) continue;
                 long left = store.addSession(key, dt);
                 if (left > 0 && left <= 60000L && left + dt > 60000L) {
-                    Toast.makeText(this, "Čuvar: još minut u komadu, pa pauza od "
-                            + Store.SESSION_BREAK_MS / 60000L + " min.", Toast.LENGTH_LONG).show();
+                    Toast.makeText(this, Ui.cyr("Čuvar: još minut u komadu, pa pauza od "
+                            + Store.SESSION_BREAK_MS / 60000L + " min."), Toast.LENGTH_LONG).show();
                 }
             }
         } catch (Throwable error) {
@@ -686,7 +687,7 @@ public class GuardService extends AccessibilityService {
             long nowEl = SystemClock.elapsedRealtime();
             if (nowEl - protectToastAt > 5000L) {
                 protectToastAt = nowEl;
-                Toast.makeText(this, "Čuvar je zaštićen od isključivanja. Zaštita se gasi u Čuvaru i važi tek od sledećeg jutra.",
+                Toast.makeText(this, Ui.cyr("Čuvar je zaštićen od isključivanja. Zaštita se gasi u Čuvaru i važi tek od sledećeg jutra."),
                         Toast.LENGTH_LONG).show();
             }
             return;
@@ -737,7 +738,7 @@ public class GuardService extends AccessibilityService {
             long used = store.guardedToday();
             if (DayLimit.warn(dayLimit, used) && store.firstDayLimitWarning()) {
                 long left = dayLimit * 60000L - used;
-                Toast.makeText(this, "Čuvar: do dnevnog limita ostalo je " + Ui.fmt(left) + ".",
+                Toast.makeText(this, Ui.cyr("Čuvar: do dnevnog limita ostalo je " + Ui.fmt(left) + "."),
                         Toast.LENGTH_LONG).show();
             }
             if (DayLimit.reached(dayLimit, used)) store.markDayLimitHit();
@@ -1319,7 +1320,7 @@ public class GuardService extends AccessibilityService {
     String appLabel(String pkg) {
         try {
             PackageManager pm = getPackageManager();
-            return pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString();
+            return Translit.keep(pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString());
         } catch (Throwable t) {
             return pkg;
         }

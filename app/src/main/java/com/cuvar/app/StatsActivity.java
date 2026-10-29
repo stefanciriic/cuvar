@@ -491,7 +491,7 @@ public class StatsActivity extends SubActivity {
 
     private static String labelOf(PackageManager pm, String pkg) {
         try {
-            return pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString();
+            return Translit.keep(pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString());
         } catch (Throwable t) {
             return null;
         }

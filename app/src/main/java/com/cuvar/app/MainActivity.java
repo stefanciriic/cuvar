@@ -370,6 +370,10 @@ public class MainActivity extends Activity {
             sheet.dismiss();
             chooseTheme();
         });
+        groupRow(g, "Pismo", Ui.cyrillicChoice(this) ? "Ćirilica" : "Latinica", v -> {
+            sheet.dismiss();
+            chooseScript();
+        });
         groupRow(g, "Privatnost", "Šta Čuvar vidi i gde se čuva", v -> {
             sheet.dismiss();
             showPrivacy();
@@ -397,6 +401,28 @@ public class MainActivity extends Activity {
             });
             box.addView(b, Ui.fill(this, i == 0 ? 0 : 10));
         }
+        sheet.show();
+    }
+
+    private void chooseScript() {
+        LinearLayout box = Ui.column(this);
+        Sheet sheet = new Sheet(this, "Pismo").view(box).secondary("Zatvori", null);
+        boolean current = Ui.cyrillicChoice(this);
+        String[] names = {"Latinica", "Ćirilica"};
+        for (int i = 0; i < 2; i++) {
+            final boolean cyr = i == 1;
+            TextView b = Ui.button(this, names[i], cyr == current);
+            b.setOnClickListener(v -> {
+                sheet.dismiss();
+                if (cyr != Ui.cyrillicChoice(this)) {
+                    Ui.setCyrillic(this, cyr);
+                    recreate();
+                }
+            });
+            box.addView(b, Ui.fill(this, i == 0 ? 0 : 10));
+        }
+        box.addView(Ui.text(this, "Nazivi aplikacija i adrese sajtova ostaju latinicom. Adresu sajta možeš da ukucaš i ćirilicom.",
+                13, Ui.MUTED, false), Ui.fill(this, 12));
         sheet.show();
     }
 
@@ -503,8 +529,8 @@ public class MainActivity extends Activity {
                         + ". Ovo je jedino povećanje danas i ne može se ponoviti do sutra.",
                         "Povećaj", () -> {
                             int added = store.raiseDayLimit();
-                            Toast.makeText(this, added > 0 ? "Limit je sada " + DayLimit.label(store.dayLimit())
-                                    : "Povećanje je danas već iskorišćeno.", Toast.LENGTH_LONG).show();
+                            Toast.makeText(this, Ui.cyr(added > 0 ? "Limit je sada " + DayLimit.label(store.dayLimit())
+                                    : "Povećanje je danas već iskorišćeno."), Toast.LENGTH_LONG).show();
                         });
             });
             box.addView(up, Ui.fill(this, 14));
@@ -525,7 +551,7 @@ public class MainActivity extends Activity {
                 sheet.dismiss();
                 Runnable apply = () -> {
                     if (store.lowerDayLimit(min)) {
-                        Toast.makeText(this, "Limit je sada " + DayLimit.label(min), Toast.LENGTH_LONG).show();
+                        Toast.makeText(this, Ui.cyr("Limit je sada " + DayLimit.label(min)), Toast.LENGTH_LONG).show();
                     }
                 };
                 if (limit <= 0) {
@@ -551,11 +577,11 @@ public class MainActivity extends Activity {
                 sheet.dismiss();
                 if (offTomorrow) {
                     store.keepDayLimit();
-                    Toast.makeText(this, "Limit ostaje uključen.", Toast.LENGTH_LONG).show();
+                    Toast.makeText(this, Ui.cyr("Limit ostaje uključen."), Toast.LENGTH_LONG).show();
                 } else {
                     store.turnOffDayLimitTomorrow();
-                    Toast.makeText(this, "Isključuje se od sutra. Danas ostaje "
-                            + DayLimit.label(limit).toLowerCase(Locale.ROOT) + ".", Toast.LENGTH_LONG).show();
+                    Toast.makeText(this, Ui.cyr("Isključuje se od sutra. Danas ostaje "
+                            + DayLimit.label(limit).toLowerCase(Locale.ROOT) + "."), Toast.LENGTH_LONG).show();
                 }
                 showDashboard();
             });
@@ -761,7 +787,7 @@ public class MainActivity extends Activity {
 
     private static String labelOf(PackageManager pm, String pkg) {
         try {
-            return pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString();
+            return Translit.keep(pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString());
         } catch (Throwable t) {
             return null;
         }
@@ -824,7 +850,7 @@ public class MainActivity extends Activity {
         try {
             startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
         } catch (Throwable t) {
-            Toast.makeText(this, "Otvori Podešavanja → Pristupačnost ručno", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, Ui.cyr("Otvori Podešavanja → Pristupačnost ručno"), Toast.LENGTH_LONG).show();
         }
     }
 

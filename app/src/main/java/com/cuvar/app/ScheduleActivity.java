@@ -220,7 +220,7 @@ public class ScheduleActivity extends SubActivity {
         if (rule.apps.isEmpty()) empty("Još nema aplikacija u režimu.");
         for (String pkg : rule.apps) {
             String label = pkg;
-            try { label = getPackageManager().getApplicationLabel(getPackageManager().getApplicationInfo(pkg, 0)).toString(); }
+            try { label = Translit.keep(getPackageManager().getApplicationLabel(getPackageManager().getApplicationInfo(pkg, 0)).toString()); }
             catch (Exception ignored) { }
             action(label + " · ukloni", () -> {
                 if (!store.setScheduleApp(id, pkg, false)) refused();
@@ -250,7 +250,7 @@ public class ScheduleActivity extends SubActivity {
 
     /** Izmena bi oslabila aktivan režim: ekran se vraća na sačuvano stanje. */
     private void refused() {
-        Toast.makeText(this, "Režim je sada aktivan i to ne može da se promeni do kraja perioda", Toast.LENGTH_LONG).show();
+        Toast.makeText(this, Ui.cyr("Režim je sada aktivan i to ne može da se promeni do kraja perioda"), Toast.LENGTH_LONG).show();
         render();
     }
 
@@ -269,7 +269,7 @@ public class ScheduleActivity extends SubActivity {
                 .secondary("Otkaži", null)
                 .primary("Sačuvaj", () -> {
                     if (days[0] == 0) {
-                        Toast.makeText(this, "Izaberi bar jedan dan", Toast.LENGTH_LONG).show();
+                        Toast.makeText(this, Ui.cyr("Izaberi bar jedan dan"), Toast.LENGTH_LONG).show();
                         return false;
                     }
                     if (!store.setScheduleDays(id, days[0])) refused(); else render();
@@ -324,7 +324,7 @@ public class ScheduleActivity extends SubActivity {
                 .secondary("Otkaži", null)
                 .primary("Sačuvaj", () -> {
                     if (values[0] == values[1]) {
-                        Toast.makeText(this, "Početak i kraj moraju biti različiti", Toast.LENGTH_LONG).show();
+                        Toast.makeText(this, Ui.cyr("Početak i kraj moraju biti različiti"), Toast.LENGTH_LONG).show();
                         return false;
                     }
                     DailySchedule.Rule now = store.schedule(id);
@@ -341,7 +341,7 @@ public class ScheduleActivity extends SubActivity {
     }
 
     private void chooseApps(DailySchedule.Rule rule) {
-        Toast.makeText(this, "Učitavam aplikacije…", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, Ui.cyr("Učitavam aplikacije…"), Toast.LENGTH_SHORT).show();
         new Thread(() -> {
             List<AppItem> items = new ArrayList<>();
             try {
@@ -354,7 +354,7 @@ public class ScheduleActivity extends SubActivity {
                     if (pkg.equals(getPackageName()) || !seen.add(pkg)) continue;
                     AppItem it = new AppItem();
                     it.pkg = pkg;
-                    it.label = info.loadLabel(pm).toString();
+                    it.label = Translit.keep(info.loadLabel(pm).toString());
                     try { it.icon = info.loadIcon(pm); } catch (Throwable ignored) { }
                     items.add(it);
                 }
@@ -368,7 +368,7 @@ public class ScheduleActivity extends SubActivity {
             runOnUiThread(() -> {
                 if (isFinishing() || isDestroyed()) return;
                 if (items.isEmpty()) {
-                    Toast.makeText(this, "Nije moguće učitati aplikacije", Toast.LENGTH_LONG).show();
+                    Toast.makeText(this, Ui.cyr("Nije moguće učitati aplikacije"), Toast.LENGTH_LONG).show();
                     return;
                 }
                 showAppPicker(rule, items);
@@ -404,7 +404,7 @@ public class ScheduleActivity extends SubActivity {
             @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) { }
             @Override public void onTextChanged(CharSequence s, int a, int b, int c) { }
             @Override public void afterTextChanged(Editable s) {
-                String q = s.toString().trim().toLowerCase(Locale.ROOT);
+                String q = Translit.toLatin(s.toString().trim()).toLowerCase(Locale.ROOT);
                 for (int i = 0; i < rows.size(); i++) {
                     boolean show = q.isEmpty() || items.get(i).label.toLowerCase(Locale.ROOT).contains(q);
                     rows.get(i).setVisibility(show ? View.VISIBLE : View.GONE);

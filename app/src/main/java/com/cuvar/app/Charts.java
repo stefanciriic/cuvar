@@ -97,11 +97,11 @@ final class Charts {
             text.setColor(Ui.INK);
             text.setTextSize(sp(22));
             text.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-            canvas.drawText(center, cx, cy + sp(4), text);
+            canvas.drawText(Ui.cyr(center), cx, cy + sp(4), text);
             text.setColor(Ui.MUTED);
             text.setTextSize(sp(12));
             text.setTypeface(Typeface.DEFAULT);
-            canvas.drawText(caption, cx, cy + sp(22), text);
+            canvas.drawText(Ui.cyr(caption), cx, cy + sp(22), text);
         }
 
         private float sp(float v) {
@@ -187,7 +187,7 @@ final class Charts {
                 text.setColor(today ? Ui.INK : Ui.MUTED);
                 text.setTextSize((n > 10 ? 10 : 12) * scaled);
                 text.setTypeface(today ? Typeface.create("sans-serif-medium", Typeface.NORMAL) : Typeface.DEFAULT);
-                canvas.drawText(labels.get(i), cx, getHeight() - 6 * density, text);
+                canvas.drawText(Ui.cyr(labels.get(i)), cx, getHeight() - 6 * density, text);
             }
 
             if (avg > 0) {
@@ -200,7 +200,7 @@ final class Charts {
                 text.setTextSize(11 * scaled);
                 text.setTypeface(Typeface.DEFAULT);
                 text.setTextAlign(Paint.Align.RIGHT);
-                canvas.drawText("prosek " + Ui.fmt(avg), getWidth(), y - 5 * density, text);
+                canvas.drawText(Ui.cyr("prosek " + Ui.fmt(avg)), getWidth(), y - 5 * density, text);
                 text.setTextAlign(Paint.Align.CENTER);
             }
         }
