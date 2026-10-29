@@ -70,16 +70,23 @@ public class FocusActivity extends SubActivity {
                 finish();
             });
             card.addView(stop, Ui.fill(this, 14));
-            root.addView(card, Ui.fill(this, 20));
+            LinearLayout.LayoutParams clp = Ui.fill(this, 20);
+            clp.leftMargin = Ui.dp(this, 20);
+            clp.rightMargin = Ui.dp(this, 20);
+            root.addView(card, clp);
             setContentView(root);
             return;
         }
 
         root.addView(header("Fokus režim", "Dozvoli samo izabrano · ne menja trajna pravila"));
-        root.addView(Ui.text(this, "Dok traje fokus, sve ostalo je zaključano. Pozivi, poruke, početni ekran i Čuvar ostaju dostupni. Postojeći limiti i noćna blokada i dalje važe.",
+        // Sadržaj ima isti razmak od ivica kao zaglavlje, da tekst i dugmad ne budu uz ivicu ekrana.
+        LinearLayout box = Ui.column(this);
+        box.setPadding(Ui.dp(this, 20), 0, Ui.dp(this, 20), Ui.dp(this, 24));
+        root.addView(box);
+        box.addView(Ui.text(this, "Dok traje fokus, sve ostalo je zaključano. Pozivi, poruke, početni ekran i Čuvar ostaju dostupni. Postojeći limiti i noćna blokada i dalje važe.",
                 14, Ui.MUTED, false), Ui.fill(this, 20));
 
-        root.addView(Sheet.label(this, "Trajanje"), Ui.fill(this, 12));
+        box.addView(Sheet.label(this, "Trajanje"), Ui.fill(this, 12));
         LinearLayout durations = Ui.row(this);
         for (int min : new int[]{15, 25, 50, 90}) {
             TextView b = Ui.button(this, min + " min", min == durationMin);
@@ -88,27 +95,34 @@ public class FocusActivity extends SubActivity {
                 durationMin = chosen;
                 render();
             });
-            durations.addView(b, new LinearLayout.LayoutParams(0, Ui.dp(this, 52), 1f));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, Ui.dp(this, 52), 1f);
+            lp.leftMargin = Ui.dp(this, 4);
+            lp.rightMargin = Ui.dp(this, 4);
+            durations.addView(b, lp);
         }
-        root.addView(durations, Ui.fill(this, 8));
+        box.addView(durations, Ui.fill(this, 8));
 
         appButton = Ui.button(this, appSummary(), false);
         appButton.setOnClickListener(v -> showAppPicker());
-        root.addView(appButton, Ui.fill(this, 18));
+        box.addView(appButton, Ui.fill(this, 18));
 
-        root.addView(Sheet.label(this, "Dozvoljeni sajtovi (opciono, razdvoj zarezima)"), Ui.fill(this, 12));
+        box.addView(Sheet.label(this, "Dozvoljeni sajtovi (opciono, razdvoj zarezima)"), Ui.fill(this, 12));
         sitesInput = Sheet.input(this, "npr. docs.google.com, github.com", false);
         sitesInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
         sitesInput.setText(joinSites());
-        root.addView(sitesInput, Ui.fill(this, 6));
+        box.addView(sitesInput, Ui.fill(this, 6));
 
         TextView start = Ui.button(this, "Pokreni fokus", true);
         start.setOnClickListener(v -> startFocus());
-        root.addView(start, Ui.fill(this, 20));
+        box.addView(start, Ui.fill(this, 20));
 
         status = Ui.text(this, "Izaberi bar jednu aplikaciju ili sajt.", 13, Ui.MUTED, false);
-        root.addView(status, Ui.fill(this, 8));
-        setContentView(root);
+        box.addView(status, Ui.fill(this, 8));
+        android.widget.ScrollView scroll = new android.widget.ScrollView(this);
+        scroll.setBackgroundColor(Ui.BG);
+        scroll.setFillViewport(true);
+        scroll.addView(root);
+        setContentView(scroll);
     }
 
     private String appSummary() {
