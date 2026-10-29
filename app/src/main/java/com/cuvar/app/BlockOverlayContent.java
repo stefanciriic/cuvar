@@ -228,13 +228,32 @@ final class BlockOverlayContent {
         area.addView(yes, Ui.fill(c, 10));
     }
 
-    /** Pitanje pre PIN-a. Tačan odgovor vodi dalje, a pogrešan donosi novo pitanje. */
+    /** Posle odgovora: dovoljno tačnih zaredom vodi dalje, inače novo pitanje (greška traži jedan tačan više, najviše 3). */
+    private void answer(LinearLayout area, Runnable onPass, boolean ok) {
+        if (ok) {
+            if (Quiz.LADDER.correct()) {
+                onPass.run();
+            } else {
+                showQuiz(area, onPass, "Tačno!");
+            }
+        } else {
+            Quiz.LADDER.wrong();
+            int need = Quiz.LADDER.required();
+            showQuiz(area, onPass, "Netačno. Sada treba " + need + " tačna odgovora zaredom.");
+        }
+    }
+
+    /** Pitanje pre šifre. Tačan odgovor vodi dalje, a pogrešan traži više tačnih zaredom. */
     private void showQuiz(final LinearLayout area, final Runnable onPass, String notice) {
         final Context c = host;
         area.removeAllViews();
         final Quiz.Question q = Quiz.next();
 
-        TextView head = Ui.text(c, "Prvo odgovori na pitanje", 20, 0xFFFFFFFF, true);
+        int need = Quiz.LADDER.required(), left = Quiz.LADDER.left();
+        String title = need == 1 ? "Prvo odgovori na pitanje"
+                : left == need ? "Treba " + need + " tačna odgovora zaredom"
+                : "Još " + Ui.count(left, "tačan odgovor", "tačna odgovora", "tačnih odgovora") + " zaredom";
+        TextView head = Ui.text(c, title, 20, 0xFFFFFFFF, true);
         head.setGravity(Gravity.CENTER);
         area.addView(head, Ui.fill(c, 0));
         if (notice != null) {
@@ -253,24 +272,12 @@ final class BlockOverlayContent {
         if (q.typed()) {
             final PinPad pad = new PinPad(c, true);
             pad.showDigits();
-            pad.setListener(given -> {
-                if (q.isCorrect(given)) {
-                    onPass.run();
-                } else {
-                    showQuiz(area, onPass, "Netačno. Evo novog pitanja.");
-                }
-            });
+            pad.setListener(given -> answer(area, onPass, q.isCorrect(given)));
             area.addView(pad, Ui.fill(c, 12));
         } else {
             for (final String choice : q.choices) {
                 TextView b = overlayButton(c, choice);
-                b.setOnClickListener(v -> {
-                    if (q.isCorrect(choice)) {
-                        onPass.run();
-                    } else {
-                        showQuiz(area, onPass, "Netačno. Evo novog pitanja.");
-                    }
-                });
+                b.setOnClickListener(v -> answer(area, onPass, q.isCorrect(choice)));
                 area.addView(b, Ui.fill(c, 10));
             }
         }

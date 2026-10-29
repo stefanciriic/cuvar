@@ -339,4 +339,39 @@ final class Quiz {
     private static int between(Random r, int lo, int hi) {
         return lo + r.nextInt(hi - lo + 1);
     }
+
+    /**
+     * Koliko tačnih odgovora zaredom treba: prvo 1, posle greške 2, posle sledeće greške 3,
+     * i ostaje 3 dok ne budu 3 tačna zaredom. Pamti se i kad se ekran zatvori, pa se izlaskom ne poništava.
+     */
+    static final class Ladder {
+        static final int MAX = 3;
+        private int required = 1;
+        private int streak;
+
+        /** Tačan odgovor; vraća true kad je potreban broj tačnih zaredom dostignut (i sve kreće od početka). */
+        synchronized boolean correct() {
+            streak++;
+            if (streak < required) return false;
+            required = 1;
+            streak = 0;
+            return true;
+        }
+
+        /** Pogrešan odgovor: niz kreće ispočetka, a traži se jedan tačan više (najviše 3). */
+        synchronized void wrong() {
+            streak = 0;
+            required = Math.min(MAX, required + 1);
+        }
+
+        synchronized int required() {
+            return required;
+        }
+
+        synchronized int left() {
+            return required - streak;
+        }
+    }
+
+    static final Ladder LADDER = new Ladder();
 }

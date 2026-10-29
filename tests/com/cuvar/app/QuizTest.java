@@ -11,6 +11,7 @@ public final class QuizTest {
     private static int checks;
 
     public static void main(String[] args) {
+        ladder();
         bank();
         countries();
         generated();
@@ -197,5 +198,21 @@ public final class QuizTest {
         if (!ok) {
             throw new AssertionError(what + ": " + detail);
         }
+    }
+
+    private static void ladder() {
+        Quiz.Ladder l = new Quiz.Ladder();
+        if (!l.correct()) throw new AssertionError("Prvo pitanje tačno: prolaz");
+        l.wrong();
+        if (l.required() != 2) throw new AssertionError("Posle greške trebaju 2");
+        if (l.correct()) throw new AssertionError("Jedan od 2 nije dovoljan");
+        l.wrong();
+        if (l.required() != 3 || l.left() != 3) throw new AssertionError("Posle druge greške trebaju 3 ispočetka");
+        l.correct();
+        l.correct();
+        l.wrong();
+        if (l.required() != 3 || l.left() != 3) throw new AssertionError("Ostaje 3, niz ispočetka");
+        if (l.correct() || l.correct() || !l.correct()) throw new AssertionError("3 tačna zaredom: prolaz");
+        if (l.required() != 1) throw new AssertionError("Posle prolaza opet 1");
     }
 }
