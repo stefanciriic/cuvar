@@ -669,8 +669,11 @@ public class GuardService extends AccessibilityService {
             currentAddress = null;
             setContentEvents(inApp || wantsContent(pkg));
         }
+        AccessibilityNodeInfo addressRoot = null;
         if (urlBarId != null && !root.getPackageName().toString().equals(getPackageName())) {
-            currentAddress = browserMonitor.readAddress(root, urlBarId, activityOf.get(raw));
+            // Oblačić, meni ili savet preko stranice je poseban prozor bez adresne trake: adresa se čita iz glavnog prozora.
+            addressRoot = browserAddressRoot(root, raw, urlBarId);
+            currentAddress = browserMonitor.readAddress(addressRoot, urlBarId, activityOf.get(raw));
             currentHost = currentAddress.host();
         } else if (inApp && !root.getPackageName().toString().equals(getPackageName())) {
             String host = browserMonitor.inAppHost(root);
@@ -774,6 +777,7 @@ public class GuardService extends AccessibilityService {
         // Inspect every visible window even while another rule wins, so all visible sites are timed.
         List<Block> secondary = new ArrayList<>();
         for (AppWindow other : otherAppWindows()) {
+            if (isSameBrowserWindow(other, raw, urlBarId, addressRoot)) continue;
             Block b = appOnlyBlock(other.pkg);
             if (b != null) secondary.add(b);
             String id = BrowserMonitor.addressViewId(other.pkg);
@@ -896,6 +900,47 @@ public class GuardService extends AccessibilityService {
             this.rawPkg = rawPkg;
             this.root = root;
         }
+    }
+
+    /**
+     * Prozor pregledača u kome je adresna traka. Kad je napred oblačić, meni ili savet pregledača (poseban mali
+     * prozor bez trake), traži se glavni prozor istog pregledača na ekranu. Ako ga nema, ostaje prednji prozor.
+     */
+    private AccessibilityNodeInfo browserAddressRoot(AccessibilityNodeInfo root, String raw, String urlBarId) {
+        if (hasNode(root, urlBarId)) return root;
+        try {
+            for (AccessibilityWindowInfo w : getWindows()) {
+                if (w == null || w.getType() != AccessibilityWindowInfo.TYPE_APPLICATION) continue;
+                if (w.getId() == root.getWindowId()) continue;
+                AccessibilityNodeInfo r = w.getRoot();
+                if (r == null || r.getPackageName() == null || !raw.equals(r.getPackageName().toString())) continue;
+                if (hasNode(r, urlBarId)) return r;
+            }
+        } catch (Throwable error) {
+            GuardDiagnostics.report("addressWindow", error);
+        }
+        return root;
+    }
+
+    private static boolean hasNode(AccessibilityNodeInfo root, String id) {
+        if (root == null) return false;
+        try {
+            List<AccessibilityNodeInfo> nodes = root.findAccessibilityNodeInfosByViewId(id);
+            return nodes != null && !nodes.isEmpty();
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /**
+     * Drugi prozor istog pregledača koji je već proveren (glavni prozor pročitan umesto oblačića)
+     * ili je samo njegov oblačić/meni bez adresne trake. Pravi drugi prozor pregledača (podeljen ekran) ima traku.
+     */
+    private static boolean isSameBrowserWindow(AppWindow other, String raw, String urlBarId,
+                                               AccessibilityNodeInfo addressRoot) {
+        if (urlBarId == null || !other.rawPkg.equals(raw)) return false;
+        if (addressRoot != null && other.root.getWindowId() == addressRoot.getWindowId()) return true;
+        return !hasNode(other.root, urlBarId);
     }
 
     /** Other visible application windows; retain their roots to enforce website rules too. */
