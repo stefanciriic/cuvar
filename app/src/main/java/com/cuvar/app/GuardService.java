@@ -10,6 +10,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.graphics.Typeface;
+import android.media.AudioManager;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
@@ -143,6 +144,8 @@ public class GuardService extends AccessibilityService {
             "com.android.vending", "com.miui.securitycenter", "com.samsung.android.lool", "com.samsung.accessibility",
             "com.google.android.marvin.talkback", "com.huawei.systemmanager", "com.coloros.safecenter", "com.oplus.safecenter"};
     private ForegroundApp foreground;
+    private AudioManager audio;
+    private boolean currentCall;     // napred je ekran poziva aplikacije kojoj pozivi uvek prolaze
     private boolean usageOk;
     private long usageCheckedAt;
     private Set<String> watched;     // paketi od kojih Pristupačnost šalje događaje 
@@ -288,6 +291,7 @@ public class GuardService extends AccessibilityService {
         blockOverlayContent = new BlockOverlayContent(this);
         power = (PowerManager) getSystemService(Context.POWER_SERVICE);
         keyguard = (KeyguardManager) getSystemService(Context.KEYGUARD_SERVICE);
+        audio = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
 
         try {
             AccessibilityServiceInfo info = getServiceInfo();
@@ -483,6 +487,7 @@ public class GuardService extends AccessibilityService {
         Set<String> keys = new HashSet<>();
         if (!observationValid || store == null || power == null || keyguard == null || !power.isInteractive()
                 || keyguard.isKeyguardLocked() || overlay != null || currentPkg == null) return keys;
+        if (currentCall) return keys; // poziv ne troši limit aplikacije ni ukupni dnevni limit
         if (tracked(this, currentPkg)) keys.add(currentPkg);
         for (String host : visibleHosts) {
             // Meri se samo vreme sajtova sa pravilom (za limit); istorija ostalih sajtova se ne čuva.
@@ -524,6 +529,31 @@ public class GuardService extends AccessibilityService {
         } catch (Throwable error) {
             GuardDiagnostics.report("usage", error);
         }
+    }
+
+    /**
+     * Da li je napred poziv u aplikaciji kojoj pozivi uvek prolaze: ekran poziva (dolazni, odlazni, u toku)
+     * ili internet poziv koji upravo traje (Telegram poziv nema poseban ekran).
+     */
+    private boolean callPasses(String pkg, String raw) {
+        if (!store.callsPass(pkg)) return false;
+        String cls = activityOf.get(raw);
+        if (cls != null && callScreen(cls)) return true;
+        try {
+            return audio != null && audio.getMode() == AudioManager.MODE_IN_COMMUNICATION;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** Ekran poziva po imenu (npr. VoipActivityV2, PhoneFragmentActivity, RtcCallActivity), a ne istorija poziva. */
+    static boolean callScreen(String cls) {
+        String n = cls.substring(cls.lastIndexOf('.') + 1).toLowerCase(Locale.ROOT);
+        if (n.contains("log") || n.contains("history") || n.contains("link") || n.contains("setting")
+                || n.contains("info") || n.contains("contact") || n.contains("picker") || n.contains("permission")) {
+            return false;
+        }
+        return n.contains("call") || n.contains("voip") || n.startsWith("phone");
     }
 
     /** Glavna odluka: šta je na ekranu i da li to treba blokirati. */
@@ -627,6 +657,7 @@ public class GuardService extends AccessibilityService {
             }
         }
 
+        currentCall = false;
         if (quiet) {
             // Aplikacija bez pravila: samo se beleži da je napred (za merenje), bez čitanja ekrana i drugih prozora.
             currentInApp = false;
@@ -658,6 +689,19 @@ public class GuardService extends AccessibilityService {
                 Toast.makeText(this, "Čuvar je zaštićen od isključivanja. Zaštita se gasi u Čuvaru i važi tek od sledećeg jutra.",
                         Toast.LENGTH_LONG).show();
             }
+            return;
+        }
+
+        if (callPasses(pkg, raw)) {
+            // Glasovni ili video poziv (WhatsApp, Viber...): prolazi kroz noć, limite, režime i pauzu,
+            // ne broji se kao otvaranje i ne troši limit. Prozor sa porukama ostaje pod pravilima.
+            currentCall = true;
+            currentInApp = false;
+            currentHost = null;
+            currentAddress = null;
+            pendingOpen = null;
+            setContentEvents(false);
+            hideOverlay();
             return;
         }
 

@@ -916,6 +916,27 @@ final class Store {
         return false;
     }
 
+    // ---------- Pozivi uvek prolaze ----------
+
+    /** Aplikacije za poruke kojima pozivi (glasovni i video) uvek prolaze, ni jedno pravilo ih ne zaustavlja. */
+    static final Set<String> CALL_APPS_DEFAULT = new java.util.HashSet<>(java.util.Arrays.asList(
+            "com.whatsapp", "com.whatsapp.w4b", "com.viber.voip", "org.telegram.messenger",
+            "org.thoughtcrime.securesms", "com.facebook.orca", "com.facebook.mlite"));
+
+    /** Da li ekran poziva ove aplikacije prolazi kroz sva pravila (noć, limit, režim, pauza). */
+    synchronized boolean callsPass(String pkg) {
+        Set<String> s = sp.getStringSet("callsPass", null);
+        return s == null ? CALL_APPS_DEFAULT.contains(pkg) : s.contains(pkg);
+    }
+
+    /** Važi odmah u oba smera: propušta se samo ekran poziva, poruke ostaju pod pravilima. */
+    synchronized void setCallsPass(String pkg, boolean on) {
+        Set<String> s = sp.getStringSet("callsPass", null);
+        Set<String> next = new java.util.HashSet<>(s == null ? CALL_APPS_DEFAULT : s);
+        if (on) next.add(pkg); else next.remove(pkg);
+        sp.edit().putStringSet("callsPass", next).apply();
+    }
+
     // ---------- Noćna blokada ----------
 
     /** Podešena noćna blokada (uključivanje važi odmah, isključivanje tek sledećeg jutra u 06:00). */

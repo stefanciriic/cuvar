@@ -432,6 +432,10 @@ public class RulesActivity extends SubActivity {
         EditText session = Sheet.input(this, "0", true);
         session.setText(String.valueOf(store.appSession(pkg)));
         box.addView(session, Ui.fill(this, 6));
+        CheckRow calls = new CheckRow(this, null, "Pozivi uvek prolaze",
+                "Glasovni i video pozivi rade i noću i preko limita, a poruke ostaju zaključane");
+        calls.setChecked(store.callsPass(pkg));
+        box.addView(calls, Ui.fill(this, 14));
         box.addView(Ui.text(this, "Danas korišćeno: " + Ui.fmt(store.usedShared(pkg)) + ", otvoreno "
                 + Ui.count(store.opensToday("app:" + pkg), "put", "puta", "puta"), 13, Ui.MUTED, false),
                 Ui.fill(this, 8));
@@ -454,6 +458,7 @@ public class RulesActivity extends SubActivity {
                     }
                     boolean adding = wantLock || wantLimit > 0 || wantOpens > 0 || wantSession > 0;
                     for (CheckRow r : rows) adding |= r.isChecked();
+                    if (calls.isChecked() != store.callsPass(pkg)) store.setCallsPass(pkg, calls.isChecked());
                     saveGuarding(pkg, label, adding, () -> {
                         if (!java.util.Objects.equals(wantSite, dom)) store.setLink(pkg, wantSite);
                         saveRules(rules, rows, pkg, false);
