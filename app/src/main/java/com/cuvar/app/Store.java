@@ -1339,8 +1339,7 @@ final class Store {
     static String dayLabel(String dayKey) {
         try {
             Date d = new SimpleDateFormat("yyyyMMdd", Locale.US).parse(dayKey);
-            return new SimpleDateFormat("EEE d.M.",
-                    new Locale.Builder().setLanguage("sr").setScript("Latn").build()).format(d);
+            return new SimpleDateFormat("EEE d.M.", Ui.locale()).format(d);
         } catch (Exception e) {
             return dayKey;
         }
@@ -2009,8 +2008,7 @@ final class Store {
             return out;
         }
         long since = now() - days * 86400000L;
-        SimpleDateFormat f = new SimpleDateFormat("EEE d.M. HH:mm",
-                new Locale.Builder().setLanguage("sr").setScript("Latn").build());
+        SimpleDateFormat f = new SimpleDateFormat("EEE d.M. HH:mm", Ui.locale());
         SimpleDateFormat hm = new SimpleDateFormat("HH:mm", Locale.US);
         f.setTimeZone(zone());
         hm.setTimeZone(zone());

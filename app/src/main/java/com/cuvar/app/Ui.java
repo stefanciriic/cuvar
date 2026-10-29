@@ -142,37 +142,73 @@ final class Ui {
         public void setText(CharSequence text, BufferType type) {
             super.setText(cyr(text), type);
         }
+
+        /** Tekst bez prevoda (npr. naziv jezika, koji je već na svom jeziku). */
+        void setRaw(CharSequence text) {
+            super.setText(text, BufferType.NORMAL);
+        }
     }
 
-    /** Tekst u izabranom pismu; nazivi aplikacija i adrese ostaju latinicom (vidi Translit). */
+    /**
+     * Tekst na izabranom jeziku: engleski (Lang, prevodi u assets/en.tsv) ili srpski ćirilicom (Translit).
+     * Nazivi aplikacija i adrese ostaju kakvi jesu.
+     */
     static CharSequence cyr(CharSequence s) {
-        if (!Translit.cyrillic || s == null || s.length() == 0) return s;
-        if (!(s instanceof android.text.Spanned)) return Translit.toCyrillic(s.toString());
-        java.util.List<Translit.Edit> edits = Translit.edits(s.toString());
-        if (edits.isEmpty()) return s;
+        if (s == null || s.length() == 0 || (!Lang.english && !Translit.cyrillic)) return s;
+        if (!(s instanceof android.text.Spanned)) return cyr(s.toString());
         android.text.SpannableStringBuilder b = new android.text.SpannableStringBuilder(s);
-        for (int i = edits.size() - 1; i >= 0; i--) {
-            Translit.Edit e = edits.get(i);
-            b.replace(e.start, e.end, e.repl);
+        if (Lang.english) {
+            java.util.List<Lang.Edit> edits = Lang.edits(s.toString());
+            for (int i = edits.size() - 1; i >= 0; i--) b.replace(edits.get(i).start, edits.get(i).end, edits.get(i).repl);
+        } else {
+            java.util.List<Translit.Edit> edits = Translit.edits(s.toString());
+            for (int i = edits.size() - 1; i >= 0; i--) b.replace(edits.get(i).start, edits.get(i).end, edits.get(i).repl);
         }
         return b;
     }
 
     static String cyr(String s) {
-        return Translit.cyrillic && s != null ? Translit.toCyrillic(s) : s;
+        if (s == null) return null;
+        if (Lang.english) return Lang.translate(s);
+        return Translit.cyrillic ? Translit.toCyrillic(s) : s;
     }
 
-    static boolean cyrillicChoice(Context c) {
-        return prefs(c).getBoolean("cyrillic", false);
+    static final String LANG_LATIN = "sr";
+    static final String LANG_CYRILLIC = "sr-Cyrl";
+    static final String LANG_ENGLISH = "en";
+
+    static String langChoice(Context c) {
+        SharedPreferences p = prefs(c);
+        String l = p.getString("lang", null);
+        if (l != null) return l;
+        return p.getBoolean("cyrillic", false) ? LANG_CYRILLIC : LANG_LATIN;
     }
 
-    static void setCyrillic(Context c, boolean on) {
-        prefs(c).edit().putBoolean("cyrillic", on).apply();
-        Translit.cyrillic = on;
+    static void setLang(Context c, String lang) {
+        prefs(c).edit().putString("lang", lang).apply();
+        loadScript(c);
     }
 
     static void loadScript(Context c) {
-        Translit.cyrillic = cyrillicChoice(c);
+        String l = langChoice(c);
+        Translit.cyrillic = LANG_CYRILLIC.equals(l);
+        boolean en = LANG_ENGLISH.equals(l);
+        if (en && !Lang.loaded()) {
+            try (java.io.Reader r = new java.io.InputStreamReader(c.getAssets().open("en.tsv"),
+                    java.nio.charset.StandardCharsets.UTF_8)) {
+                Lang.load(r);
+            } catch (Exception e) {
+                en = false;
+            }
+        }
+        Lang.english = en;
+        Quiz.english = en;
+    }
+
+    /** Jezik za datume i dane u nedelji. */
+    static java.util.Locale locale() {
+        return Lang.english ? java.util.Locale.ENGLISH
+                : new java.util.Locale.Builder().setLanguage("sr").setScript("Latn").build();
     }
 
     static TextView text(Context c, CharSequence s, float sp, int color, boolean bold) {
@@ -225,6 +261,7 @@ final class Ui {
 
     /** "1 aplikacija", "3 aplikacije", "5 aplikacija" (srpska množina). */
     static String count(int n, String one, String few, String many) {
+        if (Lang.english) return n + " " + Lang.get(n == 1 ? one : few);
         int d = n % 10, dd = n % 100;
         if (d == 1 && dd != 11) return n + " " + one;
         if (d >= 2 && d <= 4 && (dd < 12 || dd > 14)) return n + " " + few;

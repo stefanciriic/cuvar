@@ -235,8 +235,7 @@ public class MainActivity extends Activity {
     }
 
     private String dateLabel() {
-        return new SimpleDateFormat("EEEE, d. MMMM",
-                new Locale.Builder().setLanguage("sr").setScript("Latn").build()).format(new Date());
+        return new SimpleDateFormat(Lang.english ? "EEEE, d MMMM" : "EEEE, d. MMMM", Ui.locale()).format(new Date());
     }
 
     private String codeState() {
@@ -370,7 +369,7 @@ public class MainActivity extends Activity {
             sheet.dismiss();
             chooseTheme();
         });
-        groupRow(g, "Pismo", Ui.cyrillicChoice(this) ? "Ćirilica" : "Latinica", v -> {
+        groupRow(g, "Jezik", langName(Ui.langChoice(this)), v -> {
             sheet.dismiss();
             chooseScript();
         });
@@ -404,25 +403,36 @@ public class MainActivity extends Activity {
         sheet.show();
     }
 
+    private static final String[] LANGS = {Ui.LANG_LATIN, Ui.LANG_CYRILLIC, Ui.LANG_ENGLISH};
+
+    /** Naziv jezika uvek na tom jeziku, da se nađe i kad je izabran pogrešan. */
+    private static String langName(String lang) {
+        if (Ui.LANG_ENGLISH.equals(lang)) return "English";
+        if (Ui.LANG_CYRILLIC.equals(lang)) return "Српски (ћирилица)";
+        return "Srpski (latinica)";
+    }
+
     private void chooseScript() {
         LinearLayout box = Ui.column(this);
-        Sheet sheet = new Sheet(this, "Pismo").view(box).secondary("Zatvori", null);
-        boolean current = Ui.cyrillicChoice(this);
-        String[] names = {"Latinica", "Ćirilica"};
-        for (int i = 0; i < 2; i++) {
-            final boolean cyr = i == 1;
-            TextView b = Ui.button(this, names[i], cyr == current);
+        Sheet sheet = new Sheet(this, "Jezik").view(box).secondary("Zatvori", null);
+        String current = Ui.langChoice(this);
+        for (int i = 0; i < LANGS.length; i++) {
+            final String lang = LANGS[i];
+            TextView b = Ui.button(this, "", lang.equals(current));
+            ((Ui.Label) b).setRaw(langName(lang)); // naziv je već na svom jeziku
             b.setOnClickListener(v -> {
                 sheet.dismiss();
-                if (cyr != Ui.cyrillicChoice(this)) {
-                    Ui.setCyrillic(this, cyr);
+                if (!lang.equals(Ui.langChoice(this))) {
+                    Ui.setLang(this, lang);
                     recreate();
                 }
             });
             box.addView(b, Ui.fill(this, i == 0 ? 0 : 10));
         }
-        box.addView(Ui.text(this, "Nazivi aplikacija i adrese sajtova ostaju latinicom. Adresu sajta možeš da ukucaš i ćirilicom.",
-                13, Ui.MUTED, false), Ui.fill(this, 12));
+        if (!Lang.english) {
+            box.addView(Ui.text(this, "Nazivi aplikacija i adrese sajtova ostaju latinicom. Adresu sajta možeš da ukucaš i ćirilicom.",
+                    13, Ui.MUTED, false), Ui.fill(this, 12));
+        }
         sheet.show();
     }
 

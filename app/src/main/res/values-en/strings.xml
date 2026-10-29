@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Čuvar</string>
+    <string name="guard_desc">Čuvar sees which app is open and the site name in the browser, to track phone time and block the apps and sites you choose. It doesn\'t read messages or other text (with Protection from turning off it only looks for the name Čuvar on settings screens), has no internet permission and sends nothing: all data stays on this phone.</string>
+</resources>

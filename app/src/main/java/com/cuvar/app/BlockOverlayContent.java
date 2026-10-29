@@ -61,7 +61,7 @@ final class BlockOverlayContent {
             joke = Jokes.pick(Jokes.SCHEDULE);
         } else if (kind == GuardService.KIND_SCHEDULE && rule != null) {
             title = "Režim „" + rule.name + "“ je aktivan";
-            sub = name + " je blokiran " + rule.daysLabel() + " od " + DailySchedule.label(rule.start)
+            sub = name + " je blokiran " + rule.daysLabel() + ", od " + DailySchedule.label(rule.start)
                     + " do " + DailySchedule.label(rule.end) + "."
                     + (rule.code ? " Posle toga se otključava dnevnom šifrom." : "");
             joke = Jokes.pick(Jokes.SCHEDULE);

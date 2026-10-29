@@ -50,6 +50,9 @@ final class Quiz {
     private static final Random RANDOM = new Random();
     private static final Deque<String> RECENT = new ArrayDeque<>();
 
+    /** Engleski: samo pitanja koja se sklapaju (računanje, nizovi, sat...), banka pitanja je na srpskom. */
+    static volatile boolean english;
+
     static final String[] DAYS = {"ponedeljak", "utorak", "sreda", "četvrtak", "petak", "subota", "nedelja"};
 
     private Quiz() {
@@ -78,9 +81,13 @@ final class Quiz {
         // Pitanje treba da bude kratka mentalna pauza, a ne test programiranja.
         // Java/Claude grupe ostaju u banci za budući namenski izbor, ali nisu
         // deo podrazumevanog toka otključavanja.
-        if (roll < 20) return math(r);
-        if (roll < 35) return geography(r);
-        if (roll < 78) return fromBank(r);
+        if (english) {
+            if (roll < 40) return math(r);
+        } else {
+            if (roll < 20) return math(r);
+            if (roll < 35) return geography(r);
+            if (roll < 78) return fromBank(r);
+        }
         switch (r.nextInt(5)) {
             case 0: return sequence(r);
             case 1: return roman(r);
@@ -310,7 +317,7 @@ final class Quiz {
         Collections.shuffle(others, r);
         choices.addAll(others.subList(0, 3));
         Collections.shuffle(choices, r);
-        String text = "Danas je " + DAYS[today] + ". Koji dan " + (back ? "je bio pre " + n + " dana?" : "će biti za " + n + " dana?");
+        String text = "Danas je " + DAYS[today] + ". Koji dan " + (back ? "je bio pre " + n + " dana?" : "će biti za " + n + " dana od danas?");
         return new Question("Kalendar", text, choices, DAYS[day]);
     }
 
