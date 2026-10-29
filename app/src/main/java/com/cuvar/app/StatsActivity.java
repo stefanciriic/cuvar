@@ -39,6 +39,9 @@ public class StatsActivity extends SubActivity {
     private TextView tab1;
     private TextView tab7;
     private TextView tab14;
+    private LinearLayout dayStrip;
+    /** Izabrani dan kad je otvoren pregled jednog dana (jedan od poslednjih 7); null = danas. */
+    private String pickedDay;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -51,11 +54,12 @@ public class StatsActivity extends SubActivity {
 
         LinearLayout tabs = Ui.row(this);
         tabs.setPadding(Ui.dp(this, 20), 0, Ui.dp(this, 20), 0);
-        tab1 = chip("Danas");
+        tab1 = chip("Po danu");
         tab7 = chip("7 dana");
         tab14 = chip("14 dana");
         tab1.setOnClickListener(v -> {
             days = 1;
+            pickedDay = null;
             render();
         });
         tab7.setOnClickListener(v -> {
@@ -70,6 +74,11 @@ public class StatsActivity extends SubActivity {
         tabs.addView(tab7, chipParams());
         tabs.addView(tab14, chipParams());
         root.addView(tabs, Ui.fill(this, 4));
+
+        // Poslednjih 7 dana kao zasebna dugmad: dodir prikazuje samo taj dan.
+        dayStrip = Ui.row(this);
+        dayStrip.setPadding(Ui.dp(this, 20), 0, Ui.dp(this, 20), 0);
+        root.addView(dayStrip, Ui.fill(this, 10));
 
         body = Ui.column(this);
         body.setPadding(Ui.dp(this, 20), Ui.dp(this, 4), Ui.dp(this, 20), Ui.dp(this, 36));
@@ -119,6 +128,7 @@ public class StatsActivity extends SubActivity {
         setChipActive(tab7, days == 7);
         setChipActive(tab14, days == 14);
         body.removeAllViews();
+        renderDayStrip();
 
         PackageManager pm = getPackageManager();
         skip.clear();
@@ -131,7 +141,7 @@ public class StatsActivity extends SubActivity {
         long grandTotal = 0;
 
         // Kalendarski dani zaključno sa danas; dani bez korišćenja se računaju kao nula.
-        List<String> dayKeys = store.lastDays(days);
+        List<String> dayKeys = days == 1 ? Collections.singletonList(selectedDay()) : store.lastDays(days);
         for (String dk : dayKeys) {
             Map<String, Long> apps = new HashMap<>();
             Map<String, Long> day = store.dayMap(dk);
@@ -175,6 +185,53 @@ public class StatsActivity extends SubActivity {
         }
     }
 
+    private String today() {
+        List<String> k = store.lastDays(1);
+        return k.get(0);
+    }
+
+    private String selectedDay() {
+        return pickedDay == null ? today() : pickedDay;
+    }
+
+    private boolean pickedToday() {
+        return selectedDay().equals(today());
+    }
+
+    /** Sedam dugmića (pon 23, uto 24 ... danas), vidljiva samo u pregledu po danu. */
+    private void renderDayStrip() {
+        dayStrip.removeAllViews();
+        dayStrip.setVisibility(days == 1 ? View.VISIBLE : View.GONE);
+        if (days != 1) return;
+        List<String> week = store.lastDays(7);
+        String sel = selectedDay();
+        for (int i = 0; i < week.size(); i++) {
+            final String key = week.get(i);
+            boolean last = i == week.size() - 1;
+            LinearLayout b = Ui.column(this);
+            b.setGravity(Gravity.CENTER);
+            int p = Ui.dp(this, 8);
+            b.setPadding(0, p, 0, p);
+            boolean active = key.equals(sel);
+            b.setBackground(Ui.round(active ? Ui.ACCENT : Ui.SOFT, Ui.dp(this, 12)));
+            int fg = active ? 0xFFFFFFFF : Ui.INK;
+            TextView name = Ui.text(this, last ? "danas" : columnLabel(key, false), 11, active ? 0xFFFFFFFF : Ui.MUTED, false);
+            name.setGravity(Gravity.CENTER);
+            TextView num = Ui.text(this, columnLabel(key, true), 17, fg, true);
+            num.setGravity(Gravity.CENTER);
+            b.addView(name, Ui.fill(this, 0));
+            b.addView(num, Ui.fill(this, 4));
+            b.setContentDescription(Store.dayLabel(key));
+            b.setOnClickListener(v -> {
+                pickedDay = key;
+                render();
+            });
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+            lp.setMargins(Ui.dp(this, 3), 0, Ui.dp(this, 3), 0);
+            dayStrip.addView(b, lp);
+        }
+    }
+
     private static final int TOP = 5;
     private final Set<String> skip = new HashSet<>();
 
@@ -208,7 +265,9 @@ public class StatsActivity extends SubActivity {
 
     private View summaryCard(long total, long avg) {
         LinearLayout card = Ui.card(this);
-        TextView eyebrow = Ui.text(this, days == 1 ? "UKUPNO DANAS" : "UKUPNO ZA " + days + " DANA", 12, Ui.MUTED, true);
+        String dayTitle = days != 1 ? "UKUPNO ZA " + days + " DANA"
+                : pickedToday() ? "UKUPNO DANAS" : "UKUPNO · " + Store.dayLabel(selectedDay()).toUpperCase(Locale.ROOT);
+        TextView eyebrow = Ui.text(this, dayTitle, 12, Ui.MUTED, true);
         eyebrow.setLetterSpacing(0.15f);
         card.addView(eyebrow);
         card.addView(Ui.text(this, Ui.fmt(total), 34, Ui.INK, true), Ui.fill(this, 4));
@@ -218,14 +277,18 @@ public class StatsActivity extends SubActivity {
         String change;
         int changeColor;
         if (days == 1) {
-            List<String> week = store.lastDays(8);
-            long yesterday = store.hasDay(week.get(6)) ? totalOf(week.get(6)) : -1;
-            long weekAvg = avgOf(week.subList(0, 7));
-            tiles.addView(tile("Juče", yesterday < 0 ? "–" : Ui.fmt(yesterday)), tileParams(false));
-            tiles.addView(tile("Prosek 7 dana", weekAvg < 0 ? "–" : Ui.fmt(weekAvg)), tileParams(true));
+            // Dan pre izabranog i prosek 7 dana pre njega.
+            List<String> week = store.lastDays(21);
+            int at = week.indexOf(selectedDay());
+            if (at < 7) at = week.size() - 1;
+            String prev = week.get(at - 1);
+            long yesterday = store.hasDay(prev) ? totalOf(prev) : -1;
+            long weekAvg = avgOf(week.subList(at - 7, at));
+            tiles.addView(tile(pickedToday() ? "Juče" : "Dan pre", yesterday < 0 ? "–" : Ui.fmt(yesterday)), tileParams(false));
+            tiles.addView(tile("Prosek 7 dana pre", weekAvg < 0 ? "–" : Ui.fmt(weekAvg)), tileParams(true));
             if (weekAvg > 0) {
                 long pct = Math.round(100.0 * total / weekAvg);
-                change = "Danas do sada: " + pct + "% tvog dnevnog proseka";
+                change = (pickedToday() ? "Danas do sada: " : "Tog dana: ") + pct + "% tvog dnevnog proseka";
                 changeColor = pct > 100 ? Ui.ACCENT : Ui.MUTED;
             } else {
                 change = "Za poređenje treba još koji dan merenja.";
@@ -299,7 +362,7 @@ public class StatsActivity extends SubActivity {
         }
         if (rest > 0) parts.add(new Charts.Part(rest, Charts.color(0, true)));
 
-        Charts.Donut donut = new Charts.Donut(this, parts, Ui.fmt(total), days == 1 ? "danas" : "za " + days + " dana");
+        Charts.Donut donut = new Charts.Donut(this, parts, Ui.fmt(total), days == 1 ? (pickedToday() ? "danas" : Store.dayLabel(selectedDay())) : "za " + days + " dana");
         card.addView(donut, Ui.fill(this, 12));
 
         for (int i = 0; i < colored.size(); i++) {
@@ -359,18 +422,32 @@ public class StatsActivity extends SubActivity {
         }
         Charts.Columns chart = new Charts.Columns(this, cols, labels, dayKeys.size() - 1, avg);
         chart.setContentDescription(desc);
+        // Dodir na kolonu otvara taj dan.
+        chart.setOnTouchListener((v, ev) -> {
+            if (ev.getAction() != android.view.MotionEvent.ACTION_UP || v.getWidth() <= 0) return true;
+            int i = (int) (ev.getX() * dayKeys.size() / v.getWidth());
+            i = Math.max(0, Math.min(dayKeys.size() - 1, i));
+            pickedDay = dayKeys.get(i);
+            days = 1;
+            render();
+            return true;
+        });
         card.addView(chart, Ui.fill(this, 14));
-        card.addView(Ui.text(this, "Boje su iste kao u krugu iznad. Isprekidana linija je prosek po danu.",
+        card.addView(Ui.text(this, "Dodirni kolonu da vidiš taj dan. Boje su iste kao u krugu iznad. Isprekidana linija je prosek po danu.",
                 12, Ui.MUTED, false), Ui.fill(this, 10));
         return card;
     }
 
     /** Ispod kolone: dan u nedelji za 7 dana, a datum za 14 dana. */
     private String columnLabel(String dayKey) {
+        return columnLabel(dayKey, days > 7);
+    }
+
+    private static String columnLabel(String dayKey, boolean date) {
         try {
             Calendar c = Calendar.getInstance();
             c.setTime(new SimpleDateFormat("yyyyMMdd", Locale.US).parse(dayKey));
-            if (days > 7) return String.valueOf(c.get(Calendar.DAY_OF_MONTH));
+            if (date) return String.valueOf(c.get(Calendar.DAY_OF_MONTH));
             return DailySchedule.DAY_NAMES[(c.get(Calendar.DAY_OF_WEEK) + 5) % 7];
         } catch (Exception e) {
             return "";
