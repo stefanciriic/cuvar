@@ -143,7 +143,7 @@ public class FocusActivity extends SubActivity {
         if (sitesInput == null) return;
         Set<String> parsed = new HashSet<>();
         for (String raw : sitesInput.getText().toString().split(",")) {
-            String host = Store.hostOf(raw.trim());
+            String host = Hosts.hostOf(raw.trim());
             if (host != null && host.contains(".")) parsed.add(host);
         }
         selectedSites.clear();
@@ -223,7 +223,7 @@ public class FocusActivity extends SubActivity {
         Set<String> sites = new HashSet<>();
         if (sitesInput != null) {
             for (String raw : sitesInput.getText().toString().split(",")) {
-                String host = Store.hostOf(raw.trim());
+                String host = Hosts.hostOf(raw.trim());
                 if (host == null || !host.contains(".")) {
                     if (!raw.trim().isEmpty()) {
                         sitesInput.setError("Unesi domen, npr. github.com");

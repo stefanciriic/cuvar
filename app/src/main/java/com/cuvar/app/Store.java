@@ -9,8 +9,6 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -59,8 +57,7 @@ final class Store {
     private boolean eProtect;
     private boolean dirty;
     private long lastSave;
-    private int fails;
-    private long blockedUntil;
+    private final CodeAttempts codeTries = new CodeAttempts();
     private final int boot;          // redni broj paljenja telefona, -1 ako nije poznat
     private final JSONObject unlocks; // "app:paket" / "site:domen" -> kada je otključano PIN-om
     private final JSONObject emergency; // hitno otključavanje: koliko je danas iskorišćeno i šta je otključano
@@ -186,7 +183,7 @@ final class Store {
         focusApps.addAll(apps);
         focusSites.clear();
         for (String site : sites) {
-            String host = hostOf(site);
+            String host = Hosts.hostOf(site);
             if (host != null && host.contains(".")) focusSites.add(host);
         }
         focusUntil = now() + Math.max(1L, durationMs);
@@ -205,26 +202,18 @@ final class Store {
     /** Vraća pokušaje i kratku blokadu i posle restartovanja procesa. */
     private void loadCodeLockout() {
         JSONObject o = parse(sp.getString("codeLockout", "{}"));
-        fails = Math.max(0, o.optInt("fails", 0));
-        long now = now();
-        long wall = o.optLong("wall", 0L);
-        if (wall <= now) {
-            blockedUntil = 0L;
-            return;
-        }
-        if (boot != -1 && o.optInt("boot", -2) == boot) {
-            blockedUntil = Math.max(0L, o.optLong("el", 0L));
-        } else {
-            blockedUntil = SystemClock.elapsedRealtime() + (wall - now);
-        }
+        codeTries.fails = Math.max(0, o.optInt("fails", 0));
+        boolean sameBoot = boot != -1 && o.optInt("boot", -2) == boot;
+        codeTries.blockedUntil = CodeAttempts.restore(o.optLong("wall", 0L), o.optLong("el", 0L), sameBoot,
+                now(), SystemClock.elapsedRealtime());
     }
 
     private void saveCodeLockout() {
         long now = now();
-        long left = Math.max(0L, blockedUntil - SystemClock.elapsedRealtime());
+        long left = codeTries.waitLeft(SystemClock.elapsedRealtime());
         try {
             JSONObject o = new JSONObject();
-            o.put("fails", fails);
+            o.put("fails", codeTries.fails);
             o.put("wall", now + left);
             o.put("el", SystemClock.elapsedRealtime() + left);
             o.put("boot", boot);
@@ -236,38 +225,30 @@ final class Store {
     /** Vraća null ako je dnevna šifra tačna, inače poruku. Važi samo od 17:00 do 22:00; 5 grešaka donosi 30 s čekanja. */
     synchronized String tryCode(String code) {
         long now = SystemClock.elapsedRealtime();
-        if (blockedUntil > 0L && now >= blockedUntil) {
-            blockedUntil = 0L;
-            saveCodeLockout();
-        }
-        if (now < blockedUntil) {
-            return "Previše pokušaja. Sačekaj " + ((blockedUntil - now) / 1000 + 1) + " s";
+        if (codeTries.expire(now)) saveCodeLockout();
+        long wait = codeTries.waitLeft(now);
+        if (wait > 0) {
+            return "Previše pokušaja. Sačekaj " + CodeAttempts.waitSeconds(wait) + " s";
         }
         if (!dailyCodeVisible()) {
             return "Dnevna šifra važi od " + DailyCode.CHANGE_HOUR + ":00 do " + DailyCode.LOCK_HOUR + ":00";
         }
         if (dailyCode().equals(code)) {
-            fails = 0;
+            codeTries.success();
             saveCodeLockout();
             return null;
         }
-        fails++;
-        if (fails >= 5) {
-            fails = 0;
-            blockedUntil = now + 30000L;
-            saveCodeLockout();
-            return "Previše pokušaja. Sačekaj 30 s";
-        }
+        boolean blocked = codeTries.fail(now);
         saveCodeLockout();
-        return "Pogrešna dnevna šifra";
+        return blocked ? "Previše pokušaja. Sačekaj " + CodeAttempts.WAIT_MS / 1000 + " s" : "Pogrešna dnevna šifra";
     }
 
     // ---------- Otključavanje sa pauzom ----------
 
     /** Koliko se dugo sme koristiti posle otključavanja šifrom. */
-    static final long UNLOCK_USE_MS = 5 * 60000L;
+    static final long UNLOCK_USE_MS = UnlockTimer.USE_MS;
     /** Koliko posle toga nema nikakvog otključavanja. */
-    static final long UNLOCK_COOLDOWN_MS = 60 * 60000L;
+    static final long UNLOCK_COOLDOWN_MS = UnlockTimer.COOLDOWN_MS;
 
     private static int bootCount(Context c) {
         try {
@@ -328,8 +309,7 @@ final class Store {
 
     /** Koliko je još ostalo od 5 minuta korišćenja (0 ako nije otključano). */
     synchronized long unlockLeft(String key) {
-        long since = sinceUnlock(key);
-        return since >= 0 && since < UNLOCK_USE_MS ? UNLOCK_USE_MS - since : 0;
+        return UnlockTimer.useLeft(sinceUnlock(key));
     }
 
     /**
@@ -339,10 +319,7 @@ final class Store {
     synchronized long cooldownLeft(String key) {
         long left = 0;
         for (String k : keysOf(unlocks)) {
-            long since = sinceUnlock(k);
-            if (since >= 0 && (!k.equals(key) || since >= UNLOCK_USE_MS)) {
-                left = Math.max(left, UNLOCK_USE_MS + UNLOCK_COOLDOWN_MS - since);
-            }
+            left = Math.max(left, UnlockTimer.cooldownFor(sinceUnlock(k), k.equals(key)));
         }
         return left;
     }
@@ -351,10 +328,7 @@ final class Store {
     synchronized long unlockBusyLeft() {
         long left = 0;
         for (String k : keysOf(unlocks)) {
-            long since = sinceUnlock(k);
-            if (since >= 0) {
-                left = Math.max(left, UNLOCK_USE_MS + UNLOCK_COOLDOWN_MS - since);
-            }
+            left = Math.max(left, UnlockTimer.busyLeft(sinceUnlock(k)));
         }
         return left;
     }
@@ -382,14 +356,11 @@ final class Store {
         if (boot != -1 && o.optInt("boot", -2) == boot) {
             since = SystemClock.elapsedRealtime() - o.optLong("el", 0L);
         } else {
-            since = now() - o.optLong("wall", 0L);
-            if (since < 0) {
-                since = UNLOCK_USE_MS; // sat je vraćen unazad: kreće cela pauza, bez novih 5 minuta
-            }
+            since = UnlockTimer.sinceAfterRestart(now(), o.optLong("wall", 0L));
             saveUnlock(key, since); // od sada opet meri vremenom od paljenja
         }
         since = Math.max(0L, since);
-        if (since >= UNLOCK_USE_MS + UNLOCK_COOLDOWN_MS) {
+        if (UnlockTimer.finished(since)) {
             unlocks.remove(key);
             sp.edit().putString("unlocks", unlocks.toString()).apply();
             return -1;
@@ -1026,9 +997,6 @@ final class Store {
 
     // ---------- Pouzdano vreme ----------
 
-    /** Sat telefona u nekom trenutku posle 1.1.2026; manje od toga znači da sat još nije podešen. */
-    private static final long SANE_WALL = 1767225600000L;
-
     /**
      * U jednom paljenju telefona vreme se meri od paljenja, pa pomeranje sata ne skraćuje režim
      * i ne donosi novu šifru ranije. Pamti se i koliko je sat telefona ručno pomeren u odnosu na
@@ -1039,14 +1007,12 @@ final class Store {
         JSONObject o = parse(sp.getString("clock", "{}"));
         long el = SystemClock.elapsedRealtime();
         long wall = System.currentTimeMillis();
-        boolean sameBoot = o.has("off") && (boot != -1 ? o.optInt("boot", -2) == boot : el >= o.optLong("el", Long.MAX_VALUE));
+        boolean sameBoot = TrustedClock.sameBoot(o.has("off"), boot, o.optInt("boot", -2), el, o.optLong("el", Long.MAX_VALUE));
         if (sameBoot) {
             clockOff = o.optLong("off");
             zone = TimeZone.getTimeZone(o.optString("zone", TimeZone.getDefault().getID()));
         } else {
-            long last = o.optLong("last", 0L);
-            long base = autoTime() ? wall : wall - o.optLong("skew", 0L);
-            clockOff = Math.max(base, last) - el;
+            clockOff = TrustedClock.offsetAfterBoot(wall, el, o.optLong("last", 0L), o.optLong("skew", 0L), autoTime());
             // Ručno izabrana zona ne važi ni posle restarta; prati se samo automatska zona.
             zone = autoZone() || !o.has("zone") ? TimeZone.getDefault() : TimeZone.getTimeZone(o.optString("zone"));
         }
@@ -1074,16 +1040,9 @@ final class Store {
     synchronized long now() {
         long el = SystemClock.elapsedRealtime();
         long wall = System.currentTimeMillis();
-        long skew = wall - (el + clockOff);
-        if (el + clockOff < SANE_WALL && wall >= SANE_WALL) {
-            clockOff = wall - el; // telefon je upaljen pre nego što je dobio tačno vreme
-            saveClock();
-        } else if (Math.abs(skew) > 60000L && autoTime()) {
-            clockOff = wall - el; // automatsko vreme je uključeno: sat telefona je tačan
-            saveClock();
-        } else if (el - clockSaved > 60000L || Math.abs(skew - skewSaved) > 30000L) {
-            saveClock(); // sat je ručno pomeren: odmah se pamti, da restart ne pomogne
-        }
+        int action = TrustedClock.onRead(el, wall, clockOff, skewSaved, clockSaved, this::autoTime);
+        if (action == TrustedClock.RESET) clockOff = wall - el;
+        if (action != TrustedClock.KEEP) saveClock();
         return el + clockOff;
     }
 
@@ -1179,82 +1138,6 @@ final class Store {
             }
         }
         return best;
-    }
-
-    /** Iz adrese vadi čist domen: "https://www.Facebook.com/x" -> "facebook.com". */
-    static String hostOf(String url) {
-        if (url == null) {
-            return null;
-        }
-        // Adresa ukucana ćirilicom (линкедин.цом) postaje latinica (linkedin.com).
-        String s = Translit.toLatin(url).replaceAll("[\\u200b-\\u200f\\u202a-\\u202e\\u2066-\\u2069]", "")
-                .trim().toLowerCase(Locale.ROOT);
-        if (s.isEmpty() || s.contains(" ")) {
-            return null;
-        }
-        int i = s.indexOf("://");
-        if (i >= 0) {
-            s = s.substring(i + 3);
-        }
-        int cut = s.length();
-        for (char ch : new char[]{'/', '?', '#'}) {
-            int k = s.indexOf(ch);
-            if (k >= 0 && k < cut) {
-                cut = k;
-            }
-        }
-        s = s.substring(0, cut);
-        int at = s.lastIndexOf('@');
-        if (at >= 0) {
-            s = s.substring(at + 1);
-        }
-        int colon = s.indexOf(':');
-        if (colon >= 0) {
-            s = s.substring(0, colon);
-        }
-        if (s.startsWith("www.")) {
-            s = s.substring(4);
-        }
-        while (s.endsWith(".")) {
-            s = s.substring(0, s.length() - 1);
-        }
-        return s.isEmpty() ? null : s;
-    }
-
-    /** Drugi nivo ispod državnog domena, npr. "co" u "bbc.co.uk" ili "org" u "nesto.org.rs". */
-    private static final Set<String> SECOND_LEVEL = new HashSet<>(Arrays.asList(
-            "co", "com", "org", "net", "edu", "gov", "ac", "in", "or", "ne", "go"));
-
-    /**
-     * Glavni domen hosta, da se poddomeni sabiraju zajedno:
-     * "m.youtube.com" -> "youtube.com", "news.bbc.co.uk" -> "bbc.co.uk". Null ako ne liči na domen.
-     */
-    static String mainDomain(String host) {
-        if (host == null || host.indexOf('.') < 0 || !host.matches("[\\p{L}\\p{N}.-]+")) {
-            return null;
-        }
-        if (host.matches("[0-9.]+")) {
-            return host; // IP adresa
-        }
-        List<String> parts = new ArrayList<>();
-        for (String part : host.split("\\.")) {
-            if (!part.isEmpty()) {
-                parts.add(part);
-            }
-        }
-        int n = parts.size();
-        if (n < 2) {
-            return null;
-        }
-        int keep = n >= 3 && parts.get(n - 1).length() == 2 && SECOND_LEVEL.contains(parts.get(n - 2)) ? 3 : 2;
-        StringBuilder sb = new StringBuilder();
-        for (int i = n - Math.min(keep, n); i < n; i++) {
-            if (sb.length() > 0) {
-                sb.append('.');
-            }
-            sb.append(parts.get(i));
-        }
-        return sb.toString();
     }
 
     // ---------- Izmereno vreme ----------
@@ -1580,14 +1463,6 @@ final class Store {
         }
     }
 
-    /** Jednokratna pauza: na ovaj dan pravila (od 06:00 do 06:00 sledećeg jutra) ne važe. Ništa se ne briše. */
-    static final String PAUSED_RULES_DAY = "20261025";
-
-    /** Da li su sva pravila upravo pauzirana (danas, do sutra u 06:00). */
-    synchronized boolean rulesPaused() {
-        return PAUSED_RULES_DAY.equals(rulesDay());
-    }
-
     /** Dan za odložena popuštanja: menja se u 06:00, kad se završi noćna blokada, a ne u ponoć dok ona traje. */
     private String rulesDay() {
         return UsageCalendar.rulesDay(now(), zone(), DailyCode.NIGHT_END_HOUR);
@@ -1615,10 +1490,10 @@ final class Store {
         for (String pkg : keys) {
             JSONObject e = eApps.optJSONObject(pkg), d = apps.optJSONObject(pkg);
             boolean lock = (e != null && e.optBoolean("lock", false)) || (d != null && d.optBoolean("lock", false));
-            int limit = minLimit(e == null ? 0 : e.optInt("limit", 0), d == null ? 0 : d.optInt("limit", 0));
-            int max = minLimit(e == null ? 0 : e.optInt("opens", 0), d == null ? 0 : d.optInt("opens", 0));
-            int ses = minLimit(e == null ? 0 : e.optInt("session", 0), d == null ? 0 : d.optInt("session", 0));
-            if (!lock && limit <= 0 && max <= 0 && ses <= 0) continue;
+            int limit = RuleMerge.stricterLimit(e == null ? 0 : e.optInt("limit", 0), d == null ? 0 : d.optInt("limit", 0));
+            int max = RuleMerge.stricterLimit(e == null ? 0 : e.optInt("opens", 0), d == null ? 0 : d.optInt("opens", 0));
+            int ses = RuleMerge.stricterLimit(e == null ? 0 : e.optInt("session", 0), d == null ? 0 : d.optInt("session", 0));
+            if (!RuleMerge.anyAppRule(lock, limit, max, ses)) continue;
             try {
                 na.put(pkg, new JSONObject().put("lock", lock).put("limit", limit).put("opens", max).put("session", ses));
             } catch (JSONException ignored) {
@@ -1629,8 +1504,8 @@ final class Store {
         keys.addAll(keysOf(sites));
         for (String dom : keys) {
             JSONObject e = eSites.optJSONObject(dom), d = sites.optJSONObject(dom);
-            int a = e == null ? -1 : e.optInt("limit", 0), b = d == null ? -1 : d.optInt("limit", 0);
-            int limit = a < 0 ? b : b < 0 ? a : (a == 0 || b == 0) ? 0 : Math.min(a, b);
+            int a = e == null ? RuleMerge.NO_SITE : e.optInt("limit", 0), b = d == null ? RuleMerge.NO_SITE : d.optInt("limit", 0);
+            int limit = RuleMerge.stricterSite(a, b);
             try {
                 ns.put(dom, new JSONObject().put("limit", limit));
             } catch (JSONException ignored) {
@@ -1642,13 +1517,6 @@ final class Store {
         eSchedules.clear();
         eSchedules.addAll(nr);
         saveEnforced();
-    }
-
-    /** Manji od dva dnevna limita; 0 znači bez limita. */
-    private static int minLimit(int a, int b) {
-        if (a <= 0) return Math.max(0, b);
-        if (b <= 0) return a;
-        return Math.min(a, b);
     }
 
     /** Važeći režimi, uz aplikaciju i njen povezan sajt (i obrnuto). */
@@ -1736,7 +1604,7 @@ final class Store {
     private int groupLimit(String pkg, boolean now) {
         JSONObject o = appsOf(now).optJSONObject(pkg);
         int limit = o == null ? 0 : o.optInt("limit", 0);
-        for (String k : coveredSites(pkg, now)) limit = minLimit(limit, sitesOf(now).optJSONObject(k).optInt("limit", 0));
+        for (String k : coveredSites(pkg, now)) limit = RuleMerge.stricterLimit(limit, sitesOf(now).optJSONObject(k).optInt("limit", 0));
         return limit;
     }
 
@@ -2093,7 +1961,7 @@ final class Store {
     // ---------- Korišćenje u komadu ----------
 
     /** Koliko traje obavezna pauza posle najdužeg dozvoljenog korišćenja u komadu. */
-    static final long SESSION_BREAK_MS = 15 * 60000L;
+    static final long SESSION_BREAK_MS = SessionLimit.BREAK_MS;
 
     /**
      * Dodaje vreme u komadu za aplikaciju sa tim pravilom. Izlazak kraći od pauze ne prekida komad,
@@ -2110,19 +1978,19 @@ final class Store {
                 o = new JSONObject();
                 sessions.put(pkg, o);
             }
-            if (o.optLong("b", 0) > now) return 0;
-            if (now - o.optLong("l", 0) > SESSION_BREAK_MS) o.put("u", 0L);
-            long u = o.optLong("u", 0) + ms;
-            o.put("l", now);
-            if (u >= cap * 60000L) {
-                o.put("u", 0L);
-                o.put("b", now + SESSION_BREAK_MS);
+            long oldBreak = o.optLong("b", 0);
+            if (oldBreak > now) return 0;
+            SessionLimit.State st = new SessionLimit.State(o.optLong("u", 0), o.optLong("l", 0), oldBreak);
+            long left = SessionLimit.add(st, cap * 60000L, now, ms);
+            o.put("u", st.used);
+            o.put("l", st.lastSeen);
+            if (st.breakUntil != oldBreak) {
+                o.put("b", st.breakUntil);
                 sp.edit().putString("sessions", sessions.toString()).apply();
                 return 0;
             }
-            o.put("u", u);
             dirty = true;
-            return cap * 60000L - u;
+            return left;
         } catch (JSONException e) {
             return -1;
         }
@@ -2132,8 +2000,7 @@ final class Store {
     synchronized long sessionBreakLeft(String pkg) {
         JSONObject o = sessions.optJSONObject(pkg);
         if (o == null) return 0;
-        long left = o.optLong("b", 0) - now();
-        return left > 0 && left <= SESSION_BREAK_MS ? left : 0;
+        return SessionLimit.breakLeft(o.optLong("b", 0), now());
     }
 
     /** Ne zadržava sesije za aplikacije koje više nemaju pravilo. */
@@ -2146,9 +2013,7 @@ final class Store {
                 continue;
             }
             boolean hasRule = appSession(pkg) > 0 || appSessionNow(pkg) > 0;
-            boolean onBreak = o.optLong("b", 0L) > now;
-            long last = o.optLong("l", 0L);
-            if (!hasRule && !onBreak && (last <= 0L || now - last > SESSION_BREAK_MS)) sessions.remove(pkg);
+            if (SessionLimit.stale(hasRule, o.optLong("b", 0L), o.optLong("l", 0L), now)) sessions.remove(pkg);
         }
     }
 

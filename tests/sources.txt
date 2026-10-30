@@ -9,6 +9,16 @@ app/src/main/java/com/cuvar/app/UsageTracker.java
 app/src/main/java/com/cuvar/app/BrowserAddressState.java
 app/src/main/java/com/cuvar/app/Links.java
 app/src/main/java/com/cuvar/app/Translit.java
+app/src/main/java/com/cuvar/app/Hosts.java
 app/src/main/java/com/cuvar/app/Lang.java
 app/src/main/java/com/cuvar/app/WebAddress.java
 app/src/main/java/com/cuvar/app/UnlockStreak.java
+app/src/main/java/com/cuvar/app/UnlockTimer.java
+app/src/main/java/com/cuvar/app/CodeAttempts.java
+app/src/main/java/com/cuvar/app/TrustedClock.java
+app/src/main/java/com/cuvar/app/SessionLimit.java
+app/src/main/java/com/cuvar/app/RuleMerge.java
+app/src/main/java/com/cuvar/app/BlockKind.java
+app/src/main/java/com/cuvar/app/LimitWarnings.java
+app/src/main/java/com/cuvar/app/SystemScreens.java
+app/src/main/java/com/cuvar/app/Clones.java

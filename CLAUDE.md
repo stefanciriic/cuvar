@@ -91,6 +91,10 @@ Pregled funkcija i mapa fajlova: [README.md](README.md).
   klasama iz `tests/sources.txt`. Test je obična klasa sa `main` u
   `tests/com/cuvar/app/*Test.java`. Nova klasa bez Android zavisnosti koju test
   koristi mora da se doda u `tests/sources.txt`.
+- `Store` i `GuardService` zavise od Android-a i ne mogu da se testiraju na računaru.
+  Novu logiku (računanje vremena, pravila, prepoznavanje) piši kao malu klasu bez
+  Android-a (kao `UnlockTimer`, `SessionLimit`, `RuleMerge`, `BlockKind`) sa testom,
+  a u `Store`/`GuardService` ostavi samo čitanje, čuvanje i poziv te klase.
 - `tests/README.md` sadrži detaljne scenarije za ručnu proveru na
   telefonu/emulatoru (dnevni limiti, noćni blok, pitalice, vremenski režimi...).
 - Komentari u kodu su kratki i na srpskom.

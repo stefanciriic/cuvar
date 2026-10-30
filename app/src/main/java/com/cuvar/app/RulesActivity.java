@@ -451,7 +451,7 @@ public class RulesActivity extends SubActivity {
                     Integer wantSession = Ui.nonNegativeNumber(session);
                     if (wantSession == null) return false;
                     String typed = siteBox.getText().toString().trim();
-                    String wantSite = typed.isEmpty() ? null : Store.hostOf(typed);
+                    String wantSite = typed.isEmpty() ? null : Hosts.hostOf(typed);
                     if (!typed.isEmpty() && (wantSite == null || !wantSite.contains("."))) {
                         siteBox.setError("Unesi adresu sajta, npr. linkedin.com");
                         return false;
@@ -576,7 +576,7 @@ public class RulesActivity extends SubActivity {
                 .view(box)
                 .secondary("Otkaži", null)
                 .primary("Dalje", () -> {
-                    String host = Store.hostOf(address.getText().toString());
+                    String host = Hosts.hostOf(address.getText().toString());
                     if (host == null || !host.contains(".") || !host.matches("[a-z0-9\\p{L}.-]+")) {
                         address.setError("Unesi adresu sajta, npr. youtube.com, ili izaberi aplikaciju");
                         return false;

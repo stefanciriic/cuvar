@@ -32,6 +32,11 @@ final class ForegroundApp {
         usm = (UsageStatsManager) c.getSystemService(Context.USAGE_STATS_SERVICE);
     }
 
+    /** Gasi pozadinsku nit kad se servis ugasi; posle toga se ništa više ne javlja. */
+    void close() {
+        worker.shutdownNow();
+    }
+
     /** Da li je korisnik dozvolio Čuvaru pristup korišćenju. */
     static boolean granted(Context c) {
         try {
@@ -84,7 +89,7 @@ final class ForegroundApp {
                 // Keep the last known foreground package; transient UsageStats failures must not stall enforcement.
             } finally {
                 queryPending.set(false);
-                if (onUpdated != null) onUpdated.run();
+                if (onUpdated != null && !worker.isShutdown()) onUpdated.run();
             }
         });
     }

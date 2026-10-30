@@ -134,8 +134,21 @@ Ceo kod je obična Java, bez dodatnih biblioteka, u
 | `Ui.java`, `Sheet.java`, `CheckRow.java`, `PinPad.java`, `SubActivity.java` | Zajednički delovi interfejsa |
 | `GuardDiagnostics.java` | Lokalni zapis grešaka (bez adresa i sadržaja) |
 
-`AppsActivity.java` i `SitesActivity.java` su stari ekrani koji se više ne
-otvaraju iz aplikacije.
+Delovi logike su izdvojeni u male klase bez Android-a, da bi mogli da se testiraju
+na računaru:
+
+| Fajl | Šta radi |
+|------|----------|
+| `BlockKind.java` | Vrste blokade, koje se ne otključavaju, koja se prikazuje |
+| `UnlockTimer.java` | 5 minuta posle otključavanja, pa sat vremena pauze |
+| `CodeAttempts.java` | Pogrešne šifre i čekanje od 30 s |
+| `TrustedClock.java` | Pravila pouzdanog sata (pomeranje sata, restart) |
+| `SessionLimit.java` | Najduže u komadu i pauza od 15 minuta |
+| `RuleMerge.java` | Spajanje današnjeg i novog pravila (strožije ostaje) |
+| `LimitWarnings.java` | Upozorenja 5 i 1 minut pre limita |
+| `SystemScreens.java` | Ekrani poziva i podešavanja, pominjanje Čuvara |
+| `Clones.java` | Kopije aplikacija i aplikacije za kloniranje |
+| `Hosts.java` | Domen iz adrese i glavni domen |
 
 ## Prevod
 

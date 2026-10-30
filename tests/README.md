@@ -48,10 +48,7 @@ klasu greške (bez URL-a, naziva aplikacije, poruke izuzetka ili sadržaja ekran
 
 Automatska provera svih minuta u danu za noćni i dnevni period, prazni period i granice u ponoć, kao i za više režima (svaki sa svojim periodom, aplikacijama i sajtovima, uključujući period preko ponoći i isključen režim):
 
-```powershell
-javac -encoding UTF-8 -d .review/schedule app/src/main/java/com/cuvar/app/DailySchedule.java app/src/main/java/com/cuvar/app/DailyCode.java tests/com/cuvar/app/DailyScheduleTest.java
-java -cp .review/schedule com.cuvar.app.DailyScheduleTest
-```
+`DailyScheduleTest`, pokreće se sa ostalim testovima (`./tests/run.ps1`).
 
 Provera na Android telefonu:
 

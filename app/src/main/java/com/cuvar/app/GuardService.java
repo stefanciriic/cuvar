@@ -9,7 +9,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
-import android.graphics.Typeface;
 import android.media.AudioManager;
 import android.os.Build;
 import android.os.Handler;
@@ -20,14 +19,11 @@ import android.provider.Settings;
 import android.provider.Telephony;
 import android.telecom.TelecomManager;
 import android.view.KeyEvent;
-import android.view.Gravity;
 import android.view.View;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.view.accessibility.AccessibilityWindowInfo;
 import android.widget.FrameLayout;
-import android.widget.LinearLayout;
-import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -41,6 +37,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
+import com.cuvar.app.BlockKind.Block;
+
 /**
  * Srce aplikacije. Prati koja je aplikacija na ekranu i koji je sajt otvoren u pregledaču,
  * meri vreme i po potrebi prikazuje ekran za blokadu preko svega.
@@ -50,38 +48,29 @@ public class GuardService extends AccessibilityService {
     static volatile boolean running;
 
     private static final long TICK_MS = 5000L;
-    private static final long LIMIT_WARN_MS = 5 * 60000L;
-    private final Set<String> limitWarned = new HashSet<>();
-    private String limitWarnedDay;
+    private final LimitWarnings limitWarnings = new LimitWarnings();
     private final Map<String, String> webApkHosts = new HashMap<>();
     /** Povratak u istu aplikaciju za manje od ovoga ne računa se kao novo otvaranje. */
     private static final long OPEN_GRACE_MS = 15000L;
 
-    static final int KIND_LOCK = 1;       // aplikacija zaključana PIN-om
-    static final int KIND_TIME = 2;       // istekao dnevni limit aplikacije
-    static final int KIND_SITE = 3;       // sajt uvek blokiran
-    static final int KIND_SITE_TIME = 4;  // istekao dnevni limit sajta
-    static final int KIND_SCHEDULE = 5;
-    static final int KIND_CODE = 6;       // van perioda režima, otključava se dnevnom šifrom
-    static final int KIND_NIGHT = 8;      // noćna blokada od 22:00, ništa se ne otključava do 06:00
-    static final int KIND_DAY = 7;        // potrošen ukupni dnevni limit, ništa se ne otključava do ponoći
-    static final int KIND_OPENS = 9;      // potrošena otvaranja aplikacije za danas
-    static final int KIND_PAUSE = 11;     // kratka pauza pre otvaranja aplikacije sa pravilom, posle nje se nastavlja
+    // Vrste blokade: opis je u BlockKind.
+    static final int KIND_LOCK = BlockKind.LOCK;
+    static final int KIND_TIME = BlockKind.TIME;
+    static final int KIND_SITE = BlockKind.SITE;
+    static final int KIND_SITE_TIME = BlockKind.SITE_TIME;
+    static final int KIND_SCHEDULE = BlockKind.SCHEDULE;
+    static final int KIND_CODE = BlockKind.CODE;
+    static final int KIND_NIGHT = BlockKind.NIGHT;
+    static final int KIND_DAY = BlockKind.DAY;
+    static final int KIND_OPENS = BlockKind.OPENS;
+    static final int KIND_PAUSE = BlockKind.PAUSE;
     static final int PAUSE_SECONDS = 6;
-    static final int KIND_BREAK = 12;     // obavezna pauza posle najdužeg korišćenja u komadu
-    static final int KIND_CLONER = 13;    // aplikacija za kloniranje (Parallel Space i sl.), dok postoje pravila za aplikacije
-    static final int KIND_INAPP = 14;     // pregledač unutar aplikacije (Instagram, Facebook) u kome se ne vidi adresa
-    static final int KIND_ADDRESS = 15;   // podržan pregledač, ali adresa još nije potvrđena
-    static final int KIND_FOCUS = 16;     // ručni režim: dozvoljene su samo izabrane aplikacije/sajtovi
-
-    /** Aplikacije koje pokreću kopije drugih aplikacija pod svojim imenom, pa ih Čuvar ne bi prepoznao. */
-    private static final String[] CLONERS = {"com.lbe.parallel", "com.parallel.space", "com.excelliance.multiaccount",
-            "com.excelliance.dualaid", "com.ludashi.dualspace", "com.ludashi.superclone", "com.polestar.multiaccount",
-            "com.polestar.domultiple", "com.jumobile.multiapp", "com.applisto.appcloner", "com.dualspace", "com.multiple.account",
-            "com.trendmicro.dualapps", "do.multiple.cloner", "com.cloneapp", "com.waxmoon.ma.gp", "com.oasisfeng.island",
-            "com.lody.virtual", "io.va.exposed", "com.vmos"};
-
-    static final int KIND_BROWSER = 10;   // pregledač u kome Čuvar ne vidi adresu, dok postoje pravila za sajtove
+    static final int KIND_BREAK = BlockKind.BREAK;
+    static final int KIND_CLONER = BlockKind.CLONER;
+    static final int KIND_INAPP = BlockKind.INAPP;
+    static final int KIND_ADDRESS = BlockKind.ADDRESS;
+    static final int KIND_FOCUS = BlockKind.FOCUS;
+    static final int KIND_BROWSER = BlockKind.BROWSER;
     /** Sistemski prozori koji se pojave preko aplikacije, a ne znače da je korisnik izašao iz nje. */
     private static final Set<String> TRANSPARENT = new HashSet<>();
     /** Navigacija: Čuvar je nikad ne prati, ne čita i ne blokira, osim ako sama ima pravilo. */
@@ -336,6 +325,7 @@ public class GuardService extends AccessibilityService {
         } catch (Throwable error) {
             GuardDiagnostics.report("guardStarted", error);
         }
+        if (foreground != null) foreground.close();
         foreground = new ForegroundApp(this);
         if (usageOk) foreground.refresh(() -> h.post(this::safeCheck));
         updateWatched();
@@ -458,6 +448,10 @@ public class GuardService extends AccessibilityService {
     private void shutdown() {
         running = false;
         h.removeCallbacksAndMessages(null);
+        if (foreground != null) {
+            foreground.close();
+            foreground = null;
+        }
         accountUntilNow(Collections.emptySet());
         hideOverlay();
         if (receiverOn) {
@@ -545,22 +539,12 @@ public class GuardService extends AccessibilityService {
     private boolean callPasses(String pkg, String raw) {
         if (!store.callsPass(pkg)) return false;
         String cls = activityOf.get(raw);
-        if (cls != null && callScreen(cls)) return true;
+        if (cls != null && SystemScreens.callScreen(cls)) return true;
         try {
             return audio != null && audio.getMode() == AudioManager.MODE_IN_COMMUNICATION;
         } catch (Throwable ignored) {
             return false;
         }
-    }
-
-    /** Ekran poziva po imenu (npr. VoipActivityV2, PhoneFragmentActivity, RtcCallActivity), a ne istorija poziva. */
-    static boolean callScreen(String cls) {
-        String n = cls.substring(cls.lastIndexOf('.') + 1).toLowerCase(Locale.ROOT);
-        if (n.contains("log") || n.contains("history") || n.contains("link") || n.contains("setting")
-                || n.contains("info") || n.contains("contact") || n.contains("picker") || n.contains("permission")) {
-            return false;
-        }
-        return n.contains("call") || n.contains("voip") || n.startsWith("phone");
     }
 
     /** Glavna odluka: šta je na ekranu i da li to treba blokirati. */
@@ -667,16 +651,6 @@ public class GuardService extends AccessibilityService {
         currentCall = false;
         if (quiet) {
             // Aplikacija bez pravila: samo se beleži da je napred (za merenje), bez čitanja ekrana i drugih prozora.
-            currentInApp = false;
-            currentHost = null;
-            currentAddress = null;
-            setContentEvents(false);
-            hideOverlay();
-            return;
-        }
-
-        if (store.rulesPaused()) {
-            // Pauza svih pravila do sutra u 06:00: ništa se ne blokira i ne zatvara, vreme se i dalje meri.
             currentInApp = false;
             currentHost = null;
             currentAddress = null;
@@ -890,15 +864,9 @@ public class GuardService extends AccessibilityService {
 
         // Otključavanje dnevnom šifrom važi 5 minuta, a zatim sat vremena nema otključavanja (vidi Store),
         // osim jednog hitnog otključavanja dnevno. Režim i potrošen limit se nikad ne otključavaju.
-        Block show = null;
-        for (Block b : blocks) {
-            if (hard(b.kind) || (store.unlockLeft(b.key) <= 0 && store.emergencyLeft(b.key) <= 0)) {
-                show = b;
-                break;
-            }
-        }
+        Block show = BlockKind.pick(blocks, this::unlockedNow);
         if (show == null && pkg.equals(pausePkg)) {
-            if (store.unlockLeft(appKey) > 0 || store.emergencyLeft(appKey) > 0) {
+            if (unlockedNow(appKey)) {
                 pausePkg = null; // upravo otključano šifrom: bez još jedne pauze
             } else {
                 show = new Block(appKey, KIND_PAUSE, null, false);
@@ -1079,14 +1047,12 @@ public class GuardService extends AccessibilityService {
                 }
             }
         }
-        if (b != null && !hard(b.kind) && (store.unlockLeft(k) > 0 || store.emergencyLeft(k) > 0)) return null;
+        if (b != null && !hard(b.kind) && unlockedNow(k)) return null;
         return b;
     }
 
-    /** Blokade koje se ne otključavaju: vremenski režim, potrošen limit aplikacije, sajta ili ukupni. */
     static boolean hard(int kind) {
-        return kind == KIND_SCHEDULE || kind == KIND_DAY || kind == KIND_NIGHT || kind == KIND_TIME || kind == KIND_SITE_TIME
-                || kind == KIND_OPENS || kind == KIND_BREAK || kind == KIND_FOCUS;
+        return BlockKind.hard(kind);
     }
 
     /** Aplikacija sa pravilom, ili pregledač koji Čuvar ne prati dok postoje pravila za sajtove. */
@@ -1109,7 +1075,7 @@ public class GuardService extends AccessibilityService {
                 Object url = meta.get("org.chromium.webapk.shell_apk.startUrl");
                 if (url == null) url = meta.get("org.chromium.webapk.shell_apk.scope");
                 if (url != null) {
-                    host = Store.hostOf(WebAddress.real(url.toString()));
+                    host = Hosts.hostOf(WebAddress.real(url.toString()));
                     if (host == null) host = "";
                 }
             }
@@ -1122,9 +1088,7 @@ public class GuardService extends AccessibilityService {
 
     /** Aplikacija za kloniranje drugih aplikacija; zaključana dok postoje pravila za aplikacije. */
     private boolean cloner(String p) {
-        boolean known = false;
-        for (String c : CLONERS) known |= p.startsWith(c);
-        return known && !store.guardedApps().isEmpty();
+        return Clones.isCloner(p) && !store.guardedApps().isEmpty();
     }
 
     /**
@@ -1142,15 +1106,9 @@ public class GuardService extends AccessibilityService {
         String out = p;
         Set<String> guarded = store.guardedApps();
         if (!guarded.contains(p) && !exempt().contains(p) && !BrowserMonitor.isBrowser(p)) {
-            String label = appLabel(p).toLowerCase(Locale.ROOT).trim();
+            String label = appLabel(p);
             for (String g : guarded) {
-                if (p.startsWith(g) && p.length() > g.length()) {
-                    out = g;
-                    break;
-                }
-                String gl = appLabel(g).toLowerCase(Locale.ROOT).trim();
-                if (gl.length() >= 4 && !gl.equals(g) && label.length() > gl.length() && label.startsWith(gl)
-                        && label.substring(gl.length()).matches("[\\s\\d()+.-]+")) {
+                if (Clones.isPackageCopy(p, g) || Clones.isLabelCopy(label, g, appLabel(g))) {
                     out = g;
                     break;
                 }
@@ -1229,16 +1187,9 @@ public class GuardService extends AccessibilityService {
                 || (settingsLike(p) && store != null && store.protectNow());
     }
 
-    /** Podešavanja telefona, instalacija i brisanje aplikacija, Play prodavnica i slični sistemski ekrani. */
     private static boolean settingsLike(String p) {
-        return p.contains("settings") || p.contains("packageinstaller") || p.contains("permissioncontroller")
-                || p.contains("securitycenter") || p.contains("safecenter") || p.contains("accessibility")
-                || p.equals("com.android.vending") || p.equals("com.samsung.android.lool");
+        return SystemScreens.settingsLike(p);
     }
-
-    /** Reči sa ekrana za brisanje aplikacije (u instalaciji i Play prodavnici se Čuvar sme samo ažurirati). */
-    private static final String[] UNINSTALL = {"uninstall", "deinstal", "деинстал", "ukloni", "уклони", "obriši", "обриши",
-            "izbriši", "избриши", "delete", "remove"};
 
     /** Da li sistemski ekran prikazuje Čuvara (podaci o aplikaciji, Pristupačnost, brisanje). */
     private boolean guardsSelf(AccessibilityNodeInfo root, String p) {
@@ -1246,12 +1197,12 @@ public class GuardService extends AccessibilityService {
         if (!settingsLike(p)) return false;
         // Korisnik je iz Čuvara otvorio „Pristup korišćenju“ da ga uključi: taj ekran se ne zatvara dva minuta.
         if (SystemClock.elapsedRealtime() < usageSetupUntil && !usageOk) return false;
-        boolean installer = p.contains("packageinstaller") || p.equals("com.android.vending");
+        boolean installer = SystemScreens.installer(p);
         try {
             String label = getString(R.string.app_name);
             if (!mentions(root, label) && !mentions(root, "Чувар")) return false;
             if (!installer) return true;
-            for (String w : UNINSTALL) {
+            for (String w : SystemScreens.UNINSTALL) {
                 List<AccessibilityNodeInfo> n = root.findAccessibilityNodeInfosByText(w);
                 if (n != null && !n.isEmpty()) return true;
             }
@@ -1277,9 +1228,7 @@ public class GuardService extends AccessibilityService {
             CharSequence t = n == null ? null : n.getText();
             if (t == null) t = n == null ? null : n.getContentDescription();
             if (t == null) continue;
-            String s = t.toString().toLowerCase(Locale.ROOT)
-                    .replaceAll("(čuvar|чувар)[a-zа-я]* (ekrana|екрана)", "");
-            if (s.contains("čuvar") || s.contains("чувар")) return true;
+            if (SystemScreens.namesGuard(t.toString())) return true;
         }
         return false;
     }
@@ -1336,19 +1285,9 @@ public class GuardService extends AccessibilityService {
         return out;
     }
 
-    /** Jedno pravilo koje sada blokira aplikaciju ili sajt. */
-    private static final class Block {
-        final String key;
-        final int kind;
-        final DailySchedule.Rule rule;
-        final boolean code;
-
-        Block(String key, int kind, DailySchedule.Rule rule, boolean code) {
-            this.key = key;
-            this.kind = kind;
-            this.rule = rule;
-            this.code = code;
-        }
+    /** Stavka je upravo otključana šifrom ili hitnim otključavanjem. */
+    private boolean unlockedNow(String key) {
+        return store.unlockLeft(key) > 0 || store.emergencyLeft(key) > 0;
     }
 
     static String cooldownText(long left) {
@@ -1362,15 +1301,8 @@ public class GuardService extends AccessibilityService {
      */
     private void warnLimit(String key, String name, int limitMin, long used) {
         long left = limitMin * 60000L - used;
-        if (left <= 0 || left > LIMIT_WARN_MS) return;
-        String day = store.day();
-        if (!day.equals(limitWarnedDay)) {
-            limitWarned.clear();
-            limitWarnedDay = day;
-        }
-        boolean last = left <= 60000L;
-        if (!limitWarned.add(key + (last ? "|1" : "|5"))) return;
-        limitWarned.add(key + "|5");
+        if (left <= 0 || left > LimitWarnings.FIRST_MS) return;
+        if (!limitWarnings.shouldWarn(key, store.day(), left)) return;
         Toast.makeText(this, Ui.cyr("Čuvar: limit ističe za " + Ui.fmt(left + 59999L) + " – " + name),
                 Toast.LENGTH_LONG).show();
     }
