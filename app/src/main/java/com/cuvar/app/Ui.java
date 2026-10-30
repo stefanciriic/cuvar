@@ -396,4 +396,33 @@ final class Ui {
             return null;
         }
     }
+
+    /** Kartica sa više redova odvojenih tankom linijom. */
+    static LinearLayout group(android.content.Context c) {
+        LinearLayout box = Ui.column(c);
+        box.setBackground(Ui.round(Ui.CARD, Ui.dp(c, 18)));
+        box.setClipToOutline(true);
+        return box;
+    }
+
+    static void groupRow(android.content.Context c, LinearLayout group, String title, String sub, View.OnClickListener onClick) {
+        if (group.getChildCount() > 0) {
+            View line = new View(c);
+            line.setBackgroundColor(Ui.LINE);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1);
+            lp.leftMargin = Ui.dp(c, 18);
+            group.addView(line, lp);
+        }
+        LinearLayout row = Ui.row(c);
+        row.setBackground(Ui.pressable(Ui.CARD, Ui.SOFT, 0));
+        int p = Ui.dp(c, 16);
+        row.setPadding(Ui.dp(c, 18), p, p, p);
+        LinearLayout texts = Ui.column(c);
+        texts.addView(Ui.text(c, title, 16, Ui.INK, true));
+        texts.addView(Ui.text(c, sub, 13, Ui.MUTED, false), Ui.fill(c, 2));
+        row.addView(texts, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        row.addView(Ui.text(c, "›", 24, Ui.ACCENT, false), Ui.wrap(c, 12));
+        row.setOnClickListener(onClick);
+        group.addView(row, Ui.fill(c, 0));
+    }
 }

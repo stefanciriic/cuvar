@@ -34,6 +34,7 @@ public class MainActivity extends Activity {
     }
 
     private Store store;
+    private SettingsSheets sheets;
     private boolean dark;
     private LinearLayout nowBox; // sadržaj kartice „Sada“, osvežava se dok je ekran otvoren
     private LinearLayout todaySlot;
@@ -57,6 +58,7 @@ public class MainActivity extends Activity {
         dark = Ui.dark;
         super.onCreate(savedInstanceState);
         store = Store.get(this);
+        sheets = new SettingsSheets(this, store, this::showDashboard);
         Ui.styleWindow(this);
     }
 
@@ -127,7 +129,7 @@ public class MainActivity extends Activity {
         int p = Ui.dp(this, 8);
         gear.setPadding(p, p, p, p);
         gear.setContentDescription("Podešavanja");
-        gear.setOnClickListener(v -> showSettings());
+        gear.setOnClickListener(v -> sheets.showSettings());
         top.addView(gear);
         col.addView(top);
         subtitle = Ui.text(this, sub, 14, Ui.MUTED, false);
@@ -185,27 +187,27 @@ public class MainActivity extends Activity {
         if (pending != null) col.addView(pending, Ui.fill(this, 18));
 
         col.addView(Ui.section(this, "Za ceo telefon"), Ui.fill(this, 24));
-        LinearLayout whole = group();
-        groupRow(whole, "Ukupni dnevni limit", dayLimitSummary(), v -> chooseDayLimit());
-        groupRow(whole, "Fokus · dozvoli samo izabrano", focusSummary(),
+        LinearLayout whole = Ui.group(this);
+        Ui.groupRow(this, whole, "Ukupni dnevni limit", sheets.dayLimitSummary(), v -> sheets.chooseDayLimit());
+        Ui.groupRow(this, whole, "Fokus · dozvoli samo izabrano", focusSummary(),
                 v -> startActivity(new Intent(this, FocusActivity.class)));
-        groupRow(whole, "Noćna blokada", store.nightBlockNow()
+        Ui.groupRow(this, whole, "Noćna blokada", store.nightBlockNow()
                 ? "Uključena · od " + DailyCode.LOCK_HOUR + ":00 do 0" + DailyCode.NIGHT_END_HOUR + ":00 sve iz pravila je zaključano"
                     + (store.nightBlock() ? "" : " · isključuje se od sledećih 06:00")
-                : "Isključena", v -> chooseNight());
-        groupRow(whole, "Zaštita od isključivanja", store.protectNow()
+                : "Isključena", v -> sheets.chooseNight());
+        Ui.groupRow(this, whole, "Zaštita od isključivanja", store.protectNow()
                 ? "Uključena · Čuvar ne može da se isključi ni obriše"
                     + (store.protectSelf() ? "" : " · isključuje se od sledećih 06:00")
-                : "Isključena", v -> chooseProtect());
+                : "Isključena", v -> sheets.chooseProtect());
         col.addView(whole, Ui.fill(this, 8));
 
         int items = store.appListNow().size() + store.siteListNow().size();
         col.addView(Ui.section(this, "Po aplikaciji i sajtu"), Ui.fill(this, 24));
-        LinearLayout rules = group();
-        groupRow(rules, "Aplikacije i sajtovi",
+        LinearLayout rules = Ui.group(this);
+        Ui.groupRow(this, rules, "Aplikacije i sajtovi",
                 items == 0 ? "Zaključaj, postavi dnevni limit ili blokiraj u režimu" : "Šta je kad blokirano · pravila: " + items,
                 v -> startActivity(new Intent(this, RulesActivity.class)));
-        groupRow(rules, "Vremenski režimi", scheduleSummary(),
+        Ui.groupRow(this, rules, "Vremenski režimi", scheduleSummary(),
                 v -> startActivity(new Intent(this, ScheduleActivity.class)));
         col.addView(rules, Ui.fill(this, 8));
 
@@ -357,82 +359,6 @@ public class MainActivity extends Activity {
         return ((ms + 59999L) / 60000L) + " min";
     }
 
-    /** Zupčanik: tema, privatnost i verzija. */
-    private void showSettings() {
-        LinearLayout box = Ui.column(this);
-        LinearLayout g = group();
-        Sheet sheet = new Sheet(this, "Podešavanja").view(box).secondary("Zatvori", null);
-        groupRow(g, "Tema", Ui.THEME_NAMES[Ui.themeChoice(this)], v -> {
-            sheet.dismiss();
-            chooseTheme();
-        });
-        groupRow(g, "Jezik", langName(Ui.langChoice(this)), v -> {
-            sheet.dismiss();
-            chooseScript();
-        });
-        groupRow(g, "Privatnost", "Šta Čuvar vidi i gde se čuva", v -> {
-            sheet.dismiss();
-            showPrivacy();
-        });
-        box.addView(g);
-        TextView version = Ui.text(this, "Verzija " + BuildConfig.VERSION_NAME, 12, Ui.MUTED, false);
-        version.setGravity(Gravity.CENTER);
-        box.addView(version, Ui.fill(this, 14));
-        sheet.show();
-    }
-
-    private void chooseTheme() {
-        LinearLayout box = Ui.column(this);
-        Sheet sheet = new Sheet(this, "Tema").view(box).secondary("Zatvori", null);
-        int current = Ui.themeChoice(this);
-        for (int i = 0; i < Ui.THEME_NAMES.length; i++) {
-            final int choice = i;
-            TextView b = Ui.button(this, Ui.THEME_NAMES[i], i == current);
-            b.setOnClickListener(v -> {
-                sheet.dismiss();
-                if (choice != Ui.themeChoice(this)) {
-                    Ui.setThemeChoice(this, choice);
-                    recreate();
-                }
-            });
-            box.addView(b, Ui.fill(this, i == 0 ? 0 : 10));
-        }
-        sheet.show();
-    }
-
-    private static final String[] LANGS = {Ui.LANG_LATIN, Ui.LANG_CYRILLIC, Ui.LANG_ENGLISH};
-
-    /** Naziv jezika uvek na tom jeziku, da se nađe i kad je izabran pogrešan. */
-    private static String langName(String lang) {
-        if (Ui.LANG_ENGLISH.equals(lang)) return "English";
-        if (Ui.LANG_CYRILLIC.equals(lang)) return "Српски (ћирилица)";
-        return "Srpski (latinica)";
-    }
-
-    private void chooseScript() {
-        LinearLayout box = Ui.column(this);
-        Sheet sheet = new Sheet(this, "Jezik").view(box).secondary("Zatvori", null);
-        String current = Ui.langChoice(this);
-        for (int i = 0; i < LANGS.length; i++) {
-            final String lang = LANGS[i];
-            TextView b = Ui.button(this, "", lang.equals(current));
-            ((Ui.Label) b).setRaw(langName(lang)); // naziv je već na svom jeziku
-            b.setOnClickListener(v -> {
-                sheet.dismiss();
-                if (!lang.equals(Ui.langChoice(this))) {
-                    Ui.setLang(this, lang);
-                    recreate();
-                }
-            });
-            box.addView(b, Ui.fill(this, i == 0 ? 0 : 10));
-        }
-        if (!Lang.english) {
-            box.addView(Ui.text(this, "Nazivi aplikacija i adrese sajtova ostaju latinicom. Adresu sajta možeš da ukucaš i ćirilicom.",
-                    13, Ui.MUTED, false), Ui.fill(this, 12));
-        }
-        sheet.show();
-    }
-
     private void openUsageAccess() {
         GuardService.usageSetupUntil = android.os.SystemClock.elapsedRealtime() + 2 * 60000L;
         try {
@@ -492,156 +418,6 @@ public class MainActivity extends Activity {
         return card;
     }
 
-    private String dayLimitSummary() {
-        int limit = store.dayLimit();
-        if (limit <= 0) return "Zajedničko vreme za sve iz tvojih pravila; kad ga potrošiš, zaključano je do ponoći";
-        String s = DayLimit.label(limit) + " za sve iz tvojih pravila, posle toga ništa ne otključava";
-        if (store.dayLimitNext() == 0) s += " · isključuje se od sutra";
-        return s;
-    }
-
-    /** Izbor ukupnog limita: manji važi odmah, povećanje jednom dnevno za deo limita, isključivanje od sutra. */
-    private void chooseDayLimit() {
-        final int limit = store.dayLimit();
-        boolean offTomorrow = store.dayLimitNext() == 0;
-        LinearLayout box = Ui.column(this);
-        String intro = "Računa se samo vreme u aplikacijama i na sajtovima koji imaju pravilo "
-                + "(zaključani, ograničeni ili u režimu). Mape, pozivi, poruke i sve ostalo bez pravila ne troši limit. "
-                + "Kad se limit potroši, sve zaključane i ograničene aplikacije i sajtovi ostaju zaključani "
-                + "do ponoći: bez dnevne šifre i hitnog otključavanja. Upozorenje stiže "
-                + DayLimit.WARN_MS / 60000L + " min ranije.\n\n";
-        intro += limit > 0
-                ? "Manji limit važi odmah. Povećati se može jednom dnevno, najviše za "
-                        + Math.round(DayLimit.raisePercent(limit)) + " % (što je limit veći, to manje), "
-                        + "i samo dok limit još nije potrošen. "
-                        + "Isključivanje važi tek od sutra."
-                : "Izaberi limit. Posle toga se može smanjiti u svako doba, a povećati jednom dnevno i samo malo.";
-        Sheet sheet = new Sheet(this, "Ukupni dnevni limit").message(intro).view(box).secondary("Zatvori", null);
-
-        if (limit > 0) {
-            box.addView(Sheet.label(this, "TRENUTNI LIMIT"), Ui.fill(this, 0));
-            box.addView(Ui.text(this, DayLimit.label(limit), 28, Ui.INK, true), Ui.fill(this, 2));
-
-            boolean can = store.canRaiseDayLimit();
-            final int add = DayLimit.maxRaise(limit);
-            String raise = can ? "Povećaj za " + Ui.fmt(add * 60000L) + " → " + DayLimit.label(limit + add)
-                    : store.dayLimitHitToday() ? "Limit je potrošen, danas se više ne povećava"
-                    : "Povećanje je danas već iskorišćeno";
-            TextView up = Ui.button(this, raise, can);
-            up.setEnabled(can);
-            up.setAlpha(can ? 1f : 0.5f);
-            up.setOnClickListener(v -> {
-                sheet.dismiss();
-                confirm("Povećati limit?", "Limit ide sa " + DayLimit.label(limit) + " na " + DayLimit.label(limit + add)
-                        + ". Ovo je jedino povećanje danas i ne može se ponoviti do sutra.",
-                        "Povećaj", () -> {
-                            int added = store.raiseDayLimit();
-                            Toast.makeText(this, Ui.cyr(added > 0 ? "Limit je sada " + DayLimit.label(store.dayLimit())
-                                    : "Povećanje je danas već iskorišćeno."), Toast.LENGTH_LONG).show();
-                        });
-            });
-            box.addView(up, Ui.fill(this, 14));
-        }
-
-        boolean header = false;
-        for (final int min : DayLimit.CHOICES) {
-            if (min <= 0 || (limit > 0 && min >= limit)) continue;
-            if (!header && limit > 0) {
-                box.addView(Sheet.label(this, "SMANJI LIMIT (VAŽI ODMAH)"), Ui.fill(this, 18));
-                header = true;
-            }
-            String label = (limit > 0 ? "Smanji na " : "Postavi na ") + DayLimit.label(min)
-                    + (min == DayLimit.SUGGESTED ? " (predlog)" : "");
-            TextView b = Ui.button(this, label, false);
-            final boolean wasFirst = box.getChildCount() == 0;
-            b.setOnClickListener(v -> {
-                sheet.dismiss();
-                Runnable apply = () -> {
-                    if (store.lowerDayLimit(min)) {
-                        Toast.makeText(this, Ui.cyr("Limit je sada " + DayLimit.label(min)), Toast.LENGTH_LONG).show();
-                    }
-                };
-                if (limit <= 0) {
-                    confirm("Uključiti limit od " + DayLimit.label(min) + "?",
-                            "Važi odmah. Posle se može smanjiti u svako doba, a povećati samo jednom dnevno i malo "
-                                    + "(sa " + DayLimit.label(min) + " najviše za " + Ui.fmt(DayLimit.maxRaise(min) * 60000L) + ").",
-                            "Uključi", apply);
-                } else {
-                    confirm("Smanjiti limit na " + DayLimit.label(min) + "?",
-                            "Limit postaje ukupno " + DayLimit.label(min) + " umesto " + DayLimit.label(limit)
-                                    + ". Važi odmah i ne može se vratiti: posle toga se danas "
-                                    + "može povećati najviše za " + Ui.fmt(DayLimit.maxRaise(min) * 60000L)
-                                    + (store.canRaiseDayLimit() ? "." : ", a povećanje je danas već iskorišćeno."),
-                            "Smanji", apply);
-                }
-            });
-            box.addView(b, Ui.fill(this, wasFirst ? 0 : 10));
-        }
-
-        if (limit > 0) {
-            TextView off = Ui.button(this, offTomorrow ? "Ipak ne isključuj sutra" : "Isključi od sutra", false);
-            off.setOnClickListener(v -> {
-                sheet.dismiss();
-                if (offTomorrow) {
-                    store.keepDayLimit();
-                    Toast.makeText(this, Ui.cyr("Limit ostaje uključen."), Toast.LENGTH_LONG).show();
-                } else {
-                    store.turnOffDayLimitTomorrow();
-                    Toast.makeText(this, Ui.cyr("Isključuje se od sutra. Danas ostaje "
-                            + DayLimit.label(limit).toLowerCase(Locale.ROOT) + "."), Toast.LENGTH_LONG).show();
-                }
-                showDashboard();
-            });
-            box.addView(off, Ui.fill(this, 18));
-        }
-        sheet.show();
-    }
-
-    /** Pitanje pre promene limita koja se ne može vratiti; posle potvrde osvežava početni ekran. */
-    private void confirm(String title, String message, String yes, Runnable onYes) {
-        new Sheet(this, title).message(message)
-                .secondary("Otkaži", null)
-                .primary(yes, () -> {
-                    onYes.run();
-                    showDashboard();
-                    return true;
-                })
-                .show();
-    }
-
-    /** Uključivanje važi odmah, isključivanje tek sutra od 06:00. */
-    private void chooseNight() {
-        boolean on = store.nightBlock();
-        Sheet sheet = new Sheet(this, "Noćna blokada").message("Od " + DailyCode.LOCK_HOUR + ":00 do 0"
-                + DailyCode.NIGHT_END_HOUR + ":00 sve aplikacije i sajtovi iz tvojih pravila su zaključani i ne otvaraju se, "
-                + "ni dnevnom šifrom ni hitnim otključavanjem. Pozivi i poruke rade.\n\n"
-                + (on ? "Isključivanje važi tek sutra od 0" + DailyCode.NIGHT_END_HOUR + ":00." : "Uključivanje važi odmah."))
-                .secondary("Zatvori", null);
-        sheet.primary(on ? "Isključi od sutra" : "Uključi", () -> {
-            store.setNightBlock(!on);
-            showDashboard();
-            return true;
-        });
-        sheet.show();
-    }
-
-    /** Zaštita od isključivanja: uključivanje važi odmah, isključivanje tek sutra od 06:00. */
-    private void chooseProtect() {
-        boolean on = store.protectSelf();
-        Sheet sheet = new Sheet(this, "Zaštita od isključivanja").message("Dok je uključena, Čuvar zatvara ekrane telefona "
-                + "na kojima bi mogao da se isključi u Pristupačnosti, zaustavi, obriše mu se podaci ili da se deinstalira. "
-                + "Ažuriranje Čuvara i dalje radi.\n\n"
-                + (on ? "Isključivanje važi tek sutra od 0" + DailyCode.NIGHT_END_HOUR + ":00, pa tek tada Čuvar može da se ukloni."
-                      : "Uključivanje važi odmah, a isključivanje tek sledećeg jutra od 0" + DailyCode.NIGHT_END_HOUR + ":00."))
-                .secondary("Zatvori", null);
-        sheet.primary(on ? "Isključi od sutra" : "Uključi", () -> {
-            store.setProtectSelf(!on);
-            showDashboard();
-            return true;
-        });
-        sheet.show();
-    }
-
     private String scheduleSummary() {
         List<DailySchedule.Rule> rules = store.schedulesNow();
         if (rules.isEmpty()) return "Još nema režima";
@@ -684,35 +460,6 @@ public class MainActivity extends Activity {
         });
         card.addView(cancel, Ui.fill(a, 12));
         return card;
-    }
-
-    /** Kartica sa više redova odvojenih tankom linijom. */
-    private LinearLayout group() {
-        LinearLayout box = Ui.column(this);
-        box.setBackground(Ui.round(Ui.CARD, Ui.dp(this, 18)));
-        box.setClipToOutline(true);
-        return box;
-    }
-
-    private void groupRow(LinearLayout group, String title, String sub, View.OnClickListener onClick) {
-        if (group.getChildCount() > 0) {
-            View line = new View(this);
-            line.setBackgroundColor(Ui.LINE);
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1);
-            lp.leftMargin = Ui.dp(this, 18);
-            group.addView(line, lp);
-        }
-        LinearLayout row = Ui.row(this);
-        row.setBackground(Ui.pressable(Ui.CARD, Ui.SOFT, 0));
-        int p = Ui.dp(this, 16);
-        row.setPadding(Ui.dp(this, 18), p, p, p);
-        LinearLayout texts = Ui.column(this);
-        texts.addView(Ui.text(this, title, 16, Ui.INK, true));
-        texts.addView(Ui.text(this, sub, 13, Ui.MUTED, false), Ui.fill(this, 2));
-        row.addView(texts, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        row.addView(Ui.text(this, "›", 24, Ui.ACCENT, false), Ui.wrap(this, 12));
-        row.setOnClickListener(onClick);
-        group.addView(row, Ui.fill(this, 0));
     }
 
     private View todayCard(boolean enabled) {
@@ -859,16 +606,6 @@ public class MainActivity extends Activity {
         } catch (Throwable t) {
             Toast.makeText(this, Ui.cyr("Otvori Podešavanja → Pristupačnost ručno"), Toast.LENGTH_LONG).show();
         }
-    }
-
-    private void showPrivacy() {
-        new Sheet(this, "Privatnost")
-                .message("Čuvar nema dozvolu za internet i ne šalje nikakve podatke sa telefona. Nema naloga, reklama ni analitike.\n\n"
-                        + "Preko Pristupačnosti dobija naziv otvorene aplikacije i sajta u pregledaču, a kod ugrađenih pregledača proverava ograničen deo ekrana. Iz toga pamti samo "
-                        + "koliko si vremena proveo u kojoj aplikaciji i na kom sajtu, za poslednjih 14 dana, i tvoja pravila.\n\n"
-                        + "Sve je sačuvano samo u memoriji Čuvara na ovom telefonu, ne ulazi u rezervnu kopiju i briše se kad obrišeš aplikaciju.")
-                .secondary("Zatvori", null)
-                .show();
     }
 
     private void showRestrictedHelp() {

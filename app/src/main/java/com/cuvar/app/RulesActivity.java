@@ -268,12 +268,6 @@ public class RulesActivity extends SubActivity {
         return false;
     }
 
-    private static int minLimit(int a, int b) {
-        if (a <= 0) return Math.max(0, b);
-        if (b <= 0) return a;
-        return Math.min(a, b);
-    }
-
     /** "09–17" ili "22:30–06" i dani samo kad nisu svi. */
     private static String shortTime(DailySchedule.Rule r) {
         String t = hm(r.start) + "–" + hm(r.end);

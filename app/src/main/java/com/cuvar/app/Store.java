@@ -554,10 +554,6 @@ final class Store {
         return keysOf(enforcedApps());
     }
 
-    synchronized int appRuleCount() {
-        return apps.length();
-    }
-
     synchronized void setApp(String pkg, boolean lock, int limitMin) {
         setApp(pkg, lock, limitMin, appOpens(pkg));
     }
@@ -873,12 +869,6 @@ final class Store {
         return out;
     }
 
-    /** Da li postoji uključen režim sa dnevnom šifrom. */
-    synchronized boolean usesDailyCode() {
-        for (DailySchedule.Rule r : schedules) if (r.enabled && r.code) return true;
-        return false;
-    }
-
     /** Uključen režim sa dnevnom šifrom koji je upravo aktivan (tada se šifra ne prikazuje), ili null. */
     synchronized DailySchedule.Rule activeCodeRule() {
         Calendar now = calendarNow();
@@ -915,18 +905,37 @@ final class Store {
         return eApps == null ? protectSelf() : eProtect;
     }
 
-    /** Da li postoji ijedno pravilo za sajtove (lista ili uključen režim sa sajtovima). */
-    /** Sve aplikacije koje sada imaju neko pravilo (zaključavanje, limit ili vremenski režim). */
-    synchronized Set<String> guardedApps() {
-        Set<String> out = appKeysNow();
-        for (DailySchedule.Rule r : enforced()) if (r.enabled) out.addAll(r.apps);
-        return out;
+    // Servis ova pravila pita više puta pri svakoj proveri ekrana, a menjaju se retko: računaju se jednom
+    // i brišu kad se važeća pravila promene (saveEnforced). Pre učitavanja važećih pravila (eApps == null) ne pamte se.
+    private Set<String> cacheAppKeys, cacheSiteKeys, cacheGuarded;
+    private Boolean cacheSiteRules;
+
+    private void clearRuleCache() {
+        expanded = null;
+        cacheAppKeys = null;
+        cacheSiteKeys = null;
+        cacheGuarded = null;
+        cacheSiteRules = null;
     }
 
+    /** Sve aplikacije koje sada imaju neko pravilo (zaključavanje, limit ili vremenski režim). */
+    synchronized Set<String> guardedApps() {
+        roll();
+        if (eApps != null && cacheGuarded != null) return new HashSet<>(cacheGuarded);
+        Set<String> out = new HashSet<>(appKeysNow());
+        for (DailySchedule.Rule r : enforced()) if (r.enabled) out.addAll(r.apps);
+        if (eApps != null) cacheGuarded = out;
+        return new HashSet<>(out);
+    }
+
+    /** Da li postoji ijedno pravilo za sajtove (lista ili uključen režim sa sajtovima). */
     synchronized boolean hasSiteRules() {
-        if (!siteKeysNow().isEmpty()) return true;
-        for (DailySchedule.Rule r : enforced()) if (r.enabled && !r.sites.isEmpty()) return true;
-        return false;
+        roll();
+        if (eApps != null && cacheSiteRules != null) return cacheSiteRules;
+        boolean any = !siteKeysNow().isEmpty();
+        for (DailySchedule.Rule r : enforced()) if (r.enabled && !r.sites.isEmpty()) any = true;
+        if (eApps != null) cacheSiteRules = any;
+        return any;
     }
 
     // ---------- Pozivi uvek prolaze ----------
@@ -1127,19 +1136,6 @@ final class Store {
         enforce();
     }
 
-    /** Vraća domen sa liste koji pokriva dati host (npr. m.facebook.com -> facebook.com) ili null. */
-    synchronized String matchSite(String host) {
-        String best = null;
-        for (String d : keysOf(sites)) {
-            if (host.equals(d) || host.endsWith("." + d)) {
-                if (best == null || d.length() > best.length()) {
-                    best = d;
-                }
-            }
-        }
-        return best;
-    }
-
     // ---------- Izmereno vreme ----------
 
     /** Ključ današnjeg dana ("yyyyMMdd") po pouzdanom vremenu, pa pomeranje sata ne vraća dnevne limite. */
@@ -1178,12 +1174,6 @@ final class Store {
         if (changed) sp.edit().putString("usage", usage.toString()).apply();
     }
 
-    synchronized void addUsage(String key, long ms) {
-        if (ms <= 0) return;
-        long end = now();
-        addUsageBetween(key, end - ms, end);
-    }
-
     /** Interval po pouzdanom vremenu: deo pre ponoći pripada prethodnom danu. */
     synchronized void addUsageBetween(String key, long from, long to) {
         if (from >= to) return;
@@ -1219,16 +1209,6 @@ final class Store {
             }
         }
         return out;
-    }
-
-    /** Ključevi poslednjih n dana koji imaju podatke (najstariji prvi); čuva se najviše 14 dana. */
-    synchronized List<String> recentDays(int n) {
-        List<String> days = keysOf(usage);
-        Collections.sort(days);
-        if (days.size() > n) {
-            days = days.subList(days.size() - n, days.size());
-        }
-        return days;
     }
 
     /** Ključevi poslednjih n kalendarskih dana zaključno sa danas (najstariji prvi), i dani bez korišćenja. */
@@ -1451,7 +1431,7 @@ final class Store {
                 .putString("eSchedules", schedulesJson(eSchedules)).putString("eDay", eDay)
                 .putBoolean("eNight", eNight).putBoolean("eProtect", eProtect)
                 .putString("eLinks", new JSONArray(eLinks).toString()).apply();
-        expanded = null;
+        clearRuleCache();
     }
 
     private static JSONArray parseArray(String s) {
@@ -1637,22 +1617,30 @@ final class Store {
 
     /** Sajtovi sa sopstvenim pravilom i povezani sajtovi stavki koje imaju pravilo. */
     private Set<String> siteKeysNow() {
+        roll();
+        if (eApps != null && cacheSiteKeys != null) return cacheSiteKeys;
         Set<String> out = new HashSet<>(keysOf(enforcedSites()));
         for (String p : linksNow()) {
             String pkg = Links.pkgOf(p);
             if (groupLock(pkg, true) || groupLimit(pkg, true) > 0) out.add(Links.domainOf(p));
         }
-        return out;
+        Set<String> result = Collections.unmodifiableSet(out);
+        if (eApps != null) cacheSiteKeys = result;
+        return result;
     }
 
     /** Aplikacije sa sopstvenim pravilom i aplikacije čiji sajt (ili poddomen) ima pravilo. */
     private Set<String> appKeysNow() {
+        roll();
+        if (eApps != null && cacheAppKeys != null) return cacheAppKeys;
         Set<String> out = new HashSet<>(keysOf(enforcedApps()));
         for (String p : linksNow()) {
             String pkg = Links.pkgOf(p);
             if (!coveredSites(pkg, true).isEmpty()) out.add(pkg);
         }
-        return out;
+        Set<String> result = Collections.unmodifiableSet(out);
+        if (eApps != null) cacheAppKeys = result;
+        return result;
     }
 
     /**

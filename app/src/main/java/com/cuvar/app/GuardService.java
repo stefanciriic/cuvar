@@ -1213,15 +1213,6 @@ public class GuardService extends AccessibilityService {
         return false;
     }
 
-    private static boolean hasText(AccessibilityNodeInfo root, String t) {
-        try {
-            List<AccessibilityNodeInfo> n = root.findAccessibilityNodeInfosByText(t);
-            return n != null && !n.isEmpty();
-        } catch (Throwable e) {
-            return false;
-        }
-    }
-
     /** Da li se na ekranu pominje naziv (ali ne „čuvar ekrana“, koji je podešavanje ekrana). */
     private static boolean mentions(AccessibilityNodeInfo root, String name) {
         List<AccessibilityNodeInfo> nodes = root.findAccessibilityNodeInfosByText(name);

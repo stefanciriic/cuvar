@@ -113,7 +113,8 @@ Ceo kod je obična Java, bez dodatnih biblioteka, u
 |------|----------|
 | `GuardService.java` | Servis za Pristupačnost: šta je napred, merenje, odluka o blokadi, zaštita od isključivanja |
 | `Store.java` | Sva podešavanja, izmereno vreme, otključavanja, pouzdan sat, "popuštanje od sutra" |
-| `MainActivity.java` | Početni ekran sa karticama Danas / Pravila / Statistika i podešavanjima |
+| `MainActivity.java` | Početni ekran sa karticama Danas / Pravila / Statistika |
+| `SettingsSheets.java` | Prozori podešavanja (tema, jezik, privatnost) i pravila za ceo telefon (dnevni limit, noć, zaštita) |
 | `RulesActivity.java` | "Aplikacije i sajtovi": lista pravila i prozor za izmenu jedne stavke |
 | `ScheduleActivity.java` | Vremenski režimi |
 | `FocusActivity.java` | Ručni fokus |
