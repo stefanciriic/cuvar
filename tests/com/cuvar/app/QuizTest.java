@@ -81,6 +81,7 @@ public final class QuizTest {
                 }
                 check(Long.parseLong(q.answer) == expect, "Pogrešan rezultat", q.text + " = " + q.answer);
                 check(expect >= 0, "Negativan rezultat", q.text);
+                check(expect <= 200, "Računanje treba da bude lako (rezultat do 200)", q.text);
             }
             if (q.category.equals("Rimski brojevi")) {
                 String rom = q.text.substring(q.text.lastIndexOf(' ') + 1, q.text.length() - 1);

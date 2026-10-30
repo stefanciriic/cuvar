@@ -78,15 +78,14 @@ final class Quiz {
 
     private static Question any(Random r) {
         int roll = r.nextInt(100);
-        // Pitanje treba da bude kratka mentalna pauza, a ne test programiranja.
-        // Java/Claude grupe ostaju u banci za budući namenski izbor, ali nisu
-        // deo podrazumevanog toka otključavanja.
+        // Pitanje treba da bude kratka mentalna pauza: većinom opšta kultura,
+        // malo lakog računanja. Java/Claude grupe nisu u podrazumevanom toku.
         if (english) {
-            if (roll < 40) return math(r);
+            if (roll < 25) return math(r);
         } else {
-            if (roll < 20) return math(r);
-            if (roll < 35) return geography(r);
-            if (roll < 78) return fromBank(r);
+            if (roll < 8) return math(r);
+            if (roll < 22) return geography(r);
+            if (roll < 90) return fromBank(r);
         }
         switch (r.nextInt(5)) {
             case 0: return sequence(r);
@@ -131,9 +130,10 @@ final class Quiz {
 
     // ---------- Računanje ----------
 
+    /** Računanje u glavi: lako ili srednje, bez množenja dvocifrenih brojeva. */
     static Question math(Random r) {
-        int level = r.nextInt(3);
-        String label = "Računanje · " + (level == 0 ? "lako" : level == 1 ? "srednje" : "teško");
+        int level = r.nextInt(5) < 3 ? 0 : 1;
+        String label = "Računanje · " + (level == 0 ? "lako" : "srednje");
         int a, b, c;
         String expr;
         long ans;
@@ -141,10 +141,10 @@ final class Quiz {
         if (level == 0) {
             switch (kind) {
                 case 0:
-                    a = between(r, 2, 60); b = between(r, 2, 40);
+                    a = between(r, 2, 50); b = between(r, 2, 30);
                     expr = a + " + " + b; ans = a + b; break;
                 case 1:
-                    a = between(r, 10, 90); b = between(r, 2, a);
+                    a = between(r, 10, 60); b = between(r, 2, a);
                     expr = a + " − " + b; ans = a - b; break;
                 case 2:
                 case 3:
@@ -154,48 +154,29 @@ final class Quiz {
                     b = between(r, 2, 10); c = between(r, 2, 10);
                     expr = (b * c) + " ÷ " + b; ans = c; break;
             }
-        } else if (level == 1) {
-            switch (kind) {
-                case 0:
-                    a = between(r, 100, 999); b = between(r, 15, 999);
-                    expr = a + " + " + b; ans = a + b; break;
-                case 1:
-                    a = between(r, 200, 999); b = between(r, 15, a);
-                    expr = a + " − " + b; ans = a - b; break;
-                case 2:
-                    a = between(r, 11, 99); b = between(r, 3, 9);
-                    expr = a + " × " + b; ans = (long) a * b; break;
-                case 3:
-                    b = between(r, 3, 12); c = between(r, 6, 25);
-                    expr = (b * c) + " ÷ " + b; ans = c; break;
-                default:
-                    a = between(r, 2, 30); b = between(r, 2, 9); c = between(r, 2, 9);
-                    expr = a + " + " + b + " × " + c; ans = a + (long) b * c; break;
-            }
         } else {
             switch (kind) {
                 case 0:
-                    a = between(r, 12, 49); b = between(r, 11, 29);
-                    expr = a + " × " + b; ans = (long) a * b; break;
+                    a = between(r, 20, 99); b = between(r, 11, 99);
+                    expr = a + " + " + b; ans = a + b; break;
                 case 1:
-                    a = between(r, 3, 9); b = between(r, 12, 30); c = between(r, 2, a * b);
-                    expr = a + " × " + b + " − " + c; ans = (long) a * b - c; break;
+                    a = between(r, 50, 150); b = between(r, 11, a);
+                    expr = a + " − " + b; ans = a - b; break;
                 case 2:
-                    a = between(r, 11, 25);
-                    expr = a + "²"; ans = (long) a * a; break;
+                    a = between(r, 11, 25); b = between(r, 2, 5);
+                    expr = a + " × " + b; ans = (long) a * b; break;
                 case 3:
-                    a = between(r, 5, 40); b = between(r, 5, 40); c = between(r, 3, 9);
-                    expr = "(" + a + " + " + b + ") × " + c; ans = (long) (a + b) * c; break;
-                default:
-                    b = between(r, 3, 9); c = between(r, 12, 99);
+                    b = between(r, 2, 5); c = between(r, 6, 20);
                     expr = (b * c) + " ÷ " + b; ans = c; break;
+                default:
+                    a = between(r, 2, 20); b = between(r, 2, 9); c = between(r, 2, 5);
+                    expr = a + " + " + b + " × " + c; ans = a + (long) b * c; break;
             }
         }
         if (level > 0 && r.nextInt(6) == 0) {
-            int[] pcts = {10, 20, 25, 50, 75};
+            int[] pcts = {10, 50};
             int pct = pcts[r.nextInt(pcts.length)];
-            int base = 4 * between(r, 5, 60); // deljivo sa 4, pa je i 25% i 75% ceo broj
-            if (pct == 10 || pct == 20) base = 10 * between(r, 2, 40);
+            int base = 10 * between(r, 2, 20);
             return new Question(label, "Koliko je " + pct + "% od " + base + "?", null,
                     String.valueOf((long) base * pct / 100));
         }
