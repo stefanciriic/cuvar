@@ -72,7 +72,6 @@ public class GuardService extends AccessibilityService {
     static final int KIND_FOCUS = BlockKind.FOCUS;
     static final int KIND_BROWSER = BlockKind.BROWSER;
     static final int KIND_UNSEEN_SITE = BlockKind.UNSEEN_SITE;
-    static final int KIND_PROXY = BlockKind.PROXY;
     /** Sistemski prozori koji se pojave preko aplikacije, a ne znače da je korisnik izašao iz nje. */
     private static final Set<String> TRANSPARENT = new HashSet<>();
     /** Navigacija: Čuvar je nikad ne prati, ne čita i ne blokira, osim ako sama ima pravilo. */
@@ -847,10 +846,6 @@ public class GuardService extends AccessibilityService {
         if (currentAddress != null && currentAddress.unresolved(SystemClock.elapsedRealtime()) && store.hasSiteRules()) {
             blocks.add(new Block(appKey, unseen(KIND_ADDRESS), null, true));
         }
-        if (web && WebAddress.isProxy(currentHost) && store.hasSiteRules()) {
-            // Kroz proxy ili arhivu bi se otvorio blokiran sajt pod tuđom adresom.
-            blocks.add(new Block("site:" + currentHost, unseen(KIND_PROXY), null, true));
-        }
         if (browsing) for (String domain : store.matchingSitesNow(currentHost)) {
             int siteLimit = store.siteLimitNow(domain);
             if (siteLimit == 0) {
@@ -891,9 +886,6 @@ public class GuardService extends AccessibilityService {
                     secondary.add(new Block("app:" + other.pkg, KIND_FOCUS, null, false));
                 }
                 addSecondarySiteBlocks(secondary, other.pkg, host);
-                if (WebAddress.isProxy(host) && store.hasSiteRules()) {
-                    secondary.add(new Block("site:" + host, unseen(KIND_PROXY), null, true));
-                }
             } else if (store.focusActive() && !exempt().contains(other.pkg)
                     && !store.focusAllowsApp(other.pkg)) {
                 secondary.add(new Block("app:" + other.pkg, KIND_FOCUS, null, false));

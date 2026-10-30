@@ -33,35 +33,7 @@ final class WebAddress {
             {"vm.tiktok.com", "tiktok.com"},
     };
 
-    /**
-     * Sajtovi preko kojih se otvara tuđ sajt pod njihovom adresom (proxy, arhiva, keš stranica).
-     * Ceo naziv ili kraj naziva; uz to i svaki naziv u kome piše "proxy".
-     */
-    private static final String[] PROXIES = {
-            "web.archive.org", "archive.ph", "archive.today", "archive.is", "archive.li", "archive.vn", "archive.md",
-            "webcache.googleusercontent.com", "cachedview.nl", "12ft.io", "croxy.network", "croxy.org",
-            "hide.me", "hidester.com", "blockaway.net", "4everproxy.com", "browse.startpage.com",
-            "genmirror.com", "unblockit.", "unblocked.",
-    };
-
     private WebAddress() { }
-
-    /**
-     * Da li je host proxy ili arhiva kroz koju se gleda drugi sajt. Čuvar tada ne zna koji je sajt
-     * stvarno otvoren, pa se ovakav sajt zaključava dok postoje pravila za sajtove.
-     */
-    static boolean isProxy(String host) {
-        if (host == null) return false;
-        String h = host.toLowerCase(Locale.ROOT);
-        if (h.startsWith("www.")) h = h.substring(4);
-        if (h.contains("proxy")) return true;
-        for (String p : PROXIES) {
-            if (p.endsWith(".") ? (h.startsWith(p) || h.contains("." + p)) : (h.equals(p) || h.endsWith("." + p))) {
-                return true;
-            }
-        }
-        return false;
-    }
 
     /** Adresa kakva se vidi u traci pregledača → adresa sajta koji se zaista gleda. */
     static String real(String text) {

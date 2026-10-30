@@ -26,8 +26,6 @@ final class BlockKind {
      * (aktivan režim ili potrošen limit sajta). Šifra bi tu otvorila i taj sajt, pa se ne otključava.
      */
     static final int UNSEEN_SITE = 17;
-    /** Proxy ili arhiva sajtova (web.archive.org, croxyproxy...), dok postoje pravila za sajtove. */
-    static final int PROXY = 18;
 
     private BlockKind() {
     }

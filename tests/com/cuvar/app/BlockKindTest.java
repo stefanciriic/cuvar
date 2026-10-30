@@ -27,8 +27,6 @@ public final class BlockKindTest {
         check(BlockKind.unseenSite(BlockKind.INAPP, false) == BlockKind.INAPP, "Link u aplikaciji se otvara šifrom");
         check(BlockKind.unseenSite(BlockKind.BROWSER, true) == BlockKind.UNSEEN_SITE, "Dok traje režim sa sajtovima: ne");
         check(BlockKind.unseenSite(BlockKind.ADDRESS, true) == BlockKind.UNSEEN_SITE, "Ni bez pročitane adrese");
-        check(!BlockKind.hard(BlockKind.PROXY), "Proxy se otvara šifrom");
-        check(BlockKind.unseenSite(BlockKind.PROXY, true) == BlockKind.UNSEEN_SITE, "Proxy dok traje režim sa sajtovima: ne");
         BlockKind.Block opera = new BlockKind.Block("app:com.opera.browser", BlockKind.UNSEEN_SITE, null, true);
         check(BlockKind.pick(Arrays.asList(opera), k -> true) == opera, "Otključavanje ne otvara drugi pregledač");
 
