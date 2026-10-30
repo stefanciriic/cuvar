@@ -57,6 +57,8 @@ odložene promene.
 - Pregledač u kome Čuvar ne vidi adresu zaključan je dok postoje pravila za
   sajtove. Isto važi za pregledač unutar aplikacija (link iz Instagrama).
 - Prevodilac, AMP i "ogledala" sajtova (npr. yewtu.be) računaju se kao pravi sajt.
+- Proxy i arhive sajtova (web.archive.org, archive.ph, croxyproxy...) zaključani su
+  dok postoje pravila za sajtove.
 - Podeljeni ekran i plutajući prozor se takođe proveravaju.
 - Zaštita od isključivanja (opciono): zatvara ekrane podešavanja na kojima bi se
   Čuvar mogao isključiti ili obrisati.
