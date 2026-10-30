@@ -320,6 +320,7 @@ public class GuardService extends AccessibilityService {
         }
 
         running = true;
+        LoadMeter.GUARD.start(SystemClock.elapsedRealtime());
         try {
             store.guardStarted();
         } catch (Throwable error) {
@@ -380,6 +381,7 @@ public class GuardService extends AccessibilityService {
         if (event == null) {
             return;
         }
+        LoadMeter.GUARD.event();
         int type = event.getEventType();
         if (type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             CharSequence p = event.getPackageName(), cls = event.getClassName();
@@ -471,12 +473,14 @@ public class GuardService extends AccessibilityService {
         accountUntilNow(null);
         // Muzika se beleži pre nego što se promeni aplikacija napred, da se zna iz koje je krenula.
         if (overlay == null && overlayWindow != null) overlayWindow.noteMusic(rawPkg);
+        long started = System.nanoTime();
         try {
             check();
         } catch (Throwable error) {
             observationValid = false;
             GuardDiagnostics.report("check", error);
         } finally {
+            LoadMeter.GUARD.check(System.nanoTime() - started);
             try {
                 accountUntilNow(usageKeys());
             } catch (Throwable error) {

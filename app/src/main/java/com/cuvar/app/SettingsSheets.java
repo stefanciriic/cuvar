@@ -33,6 +33,10 @@ final class SettingsSheets {
             sheet.dismiss();
             chooseScript();
         });
+        Ui.groupRow(a, g, "Opterećenje telefona", "Koliko Čuvar troši procesor i memoriju", v -> {
+            sheet.dismiss();
+            showLoad();
+        });
         Ui.groupRow(a, g, "Privatnost", "Šta Čuvar vidi i gde se čuva", v -> {
             sheet.dismiss();
             showPrivacy();
@@ -244,6 +248,41 @@ final class SettingsSheets {
             return true;
         });
         sheet.show();
+    }
+
+    /** Merenje na samom telefonu: procesor celog Čuvara, memorija i provere ekrana od pokretanja servisa. */
+    void showLoad() {
+        long now = android.os.SystemClock.elapsedRealtime();
+        long procUp = now - android.os.Process.getStartElapsedRealtime();
+        long cpu = android.os.Process.getElapsedCpuTime();
+        Runtime rt = Runtime.getRuntime();
+        long mb = (rt.totalMemory() - rt.freeMemory()) / (1024 * 1024);
+        StringBuilder sb = new StringBuilder();
+        sb.append("Procesor: ").append(one(LoadMeter.percent(cpu, procUp))).append(" % vremena otkako Čuvar radi (")
+                .append(Ui.fmt(procUp)).append(").\n");
+        sb.append("Memorija: ").append(mb).append(" MB.\n\n");
+        if (GuardService.running) {
+            LoadMeter.Snapshot s = LoadMeter.GUARD.snapshot(now);
+            sb.append("Provera ekrana: ").append(s.checks).append(", ").append(one(s.perMinute())).append(" u minutu.\n");
+            sb.append("Jedna provera traje prosečno ").append(one(s.avgMs())).append(" ms, najduže ")
+                    .append(one(s.maxMs())).append(" ms.\n");
+            sb.append("Događaja Pristupačnosti: ").append(s.events).append(".\n\n");
+        } else {
+            sb.append("Servis Čuvara sada ne radi.\n\n");
+        }
+        sb.append("Ispod 1 % procesora Čuvar skoro ne troši bateriju. Brojevi kreću od nule kad se Čuvar ponovo pokrene.");
+        new Sheet(a, "Opterećenje telefona")
+                .message(sb.toString())
+                .secondary("Zatvori", null)
+                .primary("Osveži", () -> {
+                    showLoad();
+                    return true;
+                })
+                .show();
+    }
+
+    private static String one(double v) {
+        return String.format(Locale.US, "%.1f", v);
     }
 
     void showPrivacy() {
