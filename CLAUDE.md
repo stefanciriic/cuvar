@@ -7,15 +7,9 @@ otključavanje, pitalice pri otključavanju. Glavna logika je u `GuardService`
 prati koja je aplikacija/sajt otvoren, meri vreme i prikazuje blokadu preko svega.
 Pregled funkcija i mapa fajlova: [README.md](README.md).
 
-## Korisnik
-
-- Vlasnik je Stefan. Ne programira: piši mu na srpskom, jednostavno, bez žargona.
-- Ne traži od njega da kuca git ili druge komande; uradi to sam.
-- Želi što stroža pravila za sebe ("što više ograničenja"), ali nikad po cenu da
-  ostane bez telefona ili interneta.
-
 ## Pravila rada
 
+- Odgovori i komentari u kodu su na srpskom.
 - Pre izmena uradi `git pull`. Na repou rade i Claude sesije iz oblaka, pa
   uradi `git pull --rebase` i neposredno pre push-a.
 - Kad je zadatak završen, commituj i pushuj direktno na `main` — bez pravljenja
@@ -97,4 +91,4 @@ Pregled funkcija i mapa fajlova: [README.md](README.md).
   a u `Store`/`GuardService` ostavi samo čitanje, čuvanje i poziv te klase.
 - `tests/README.md` sadrži detaljne scenarije za ručnu proveru na
   telefonu/emulatoru (dnevni limiti, noćni blok, pitalice, vremenski režimi...).
-- Komentari u kodu su kratki i na srpskom.
+- Komentari u kodu su kratki.
