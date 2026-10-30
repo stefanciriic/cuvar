@@ -93,6 +93,12 @@ final class BlockOverlayContent {
                     + "Vrati se nazad i prikaži adresnu traku ili otvori sajt u drugom podržanom pregledaču. "
                     + "Otključavanje dnevnom šifrom važi kao i za pregledač bez dostupne adrese.";
             joke = Jokes.pick(Jokes.SITE);
+        } else if (kind == GuardService.KIND_UNSEEN_SITE) {
+            title = name + " je zaključan";
+            sub = "Ovde Čuvar ne vidi koji je sajt otvoren, a neki sajt je sada blokiran bez otključavanja "
+                    + "(vremenski režim ili potrošen dnevni limit sajta). Zato se ni dnevnom šifrom ne otvara dok to traje. "
+                    + "Koristi Chrome, Samsung Internet, Firefox, Edge, Brave ili Vivaldi.";
+            joke = Jokes.pick(Jokes.SITE);
         } else if (kind == GuardService.KIND_LOCK) {
             title = name + " je zaključan";
             sub = "Otvara se dnevnom šifrom, od " + DailyCode.CHANGE_HOUR + ":00 do " + DailyCode.LOCK_HOUR + ":00. Šifra se vidi u Čuvaru.";
@@ -186,10 +192,12 @@ final class BlockOverlayContent {
 
         LinearLayout actions = Ui.row(c);
         actions.setGravity(Gravity.CENTER);
-        if (isSite || kind == GuardService.KIND_INAPP || kind == GuardService.KIND_ADDRESS) {
+        if (isSite || kind == GuardService.KIND_INAPP || kind == GuardService.KIND_ADDRESS
+                || kind == GuardService.KIND_UNSEEN_SITE) {
             TextView back = overlayButton(c, "Nazad");
             back.setOnClickListener(v -> {
-                if ((key.startsWith("site:") || k == GuardService.KIND_ADDRESS) && host.browserForCurrentBlock() != null) {
+                if ((key.startsWith("site:") || k == GuardService.KIND_ADDRESS || k == GuardService.KIND_UNSEEN_SITE)
+                        && host.browserForCurrentBlock() != null) {
                     host.leaveBlock(key, k);
                 } else {
                     host.overlayGlobalBack();

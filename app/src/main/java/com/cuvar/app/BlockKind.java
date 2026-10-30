@@ -21,6 +21,11 @@ final class BlockKind {
     static final int INAPP = 14;     // pregledač unutar aplikacije (Instagram, Facebook) u kome se ne vidi adresa
     static final int ADDRESS = 15;   // podržan pregledač, ali adresa još nije potvrđena
     static final int FOCUS = 16;     // ručni režim: dozvoljene su samo izabrane aplikacije/sajtovi
+    /**
+     * Pregledač (nepoznat, ugrađen u aplikaciju ili bez pročitane adrese) dok je neki sajt blokiran bez otključavanja
+     * (aktivan režim ili potrošen limit sajta). Šifra bi tu otvorila i taj sajt, pa se ne otključava.
+     */
+    static final int UNSEEN_SITE = 17;
 
     private BlockKind() {
     }
@@ -28,7 +33,15 @@ final class BlockKind {
     /** Blokade koje se ne otključavaju ni šifrom: režim, noć, fokus, potrošen limit, otvaranja, pauza u komadu. */
     static boolean hard(int kind) {
         return kind == SCHEDULE || kind == DAY || kind == NIGHT || kind == TIME || kind == SITE_TIME
-                || kind == OPENS || kind == BREAK || kind == FOCUS;
+                || kind == OPENS || kind == BREAK || kind == FOCUS || kind == UNSEEN_SITE;
+    }
+
+    /**
+     * Blokada pregledača u kome Čuvar ne vidi sajt: obično se otključava šifrom, ali ne dok je neki sajt
+     * blokiran bez otključavanja, jer bi se taj sajt onda otvorio u ovom pregledaču.
+     */
+    static int unseenSite(int softKind, boolean hardSiteBlock) {
+        return hardSiteBlock ? UNSEEN_SITE : softKind;
     }
 
     /** Jedno pravilo koje sada blokira aplikaciju ili sajt. */

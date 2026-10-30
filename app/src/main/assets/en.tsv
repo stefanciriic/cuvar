@@ -676,3 +676,6 @@ Događaja Pristupačnosti: 	Accessibility events:
 Servis Čuvara sada ne radi.	Čuvar's service is not running now.
 Ispod 1 % procesora Čuvar skoro ne troši bateriju. Brojevi kreću od nule kad se Čuvar ponovo pokrene.	Below 1 % CPU Čuvar uses almost no battery. The numbers start from zero when Čuvar restarts.
 Osveži	Refresh
+Ovde Čuvar ne vidi koji je sajt otvoren, a neki sajt je sada blokiran bez otključavanja 	Here Čuvar can't see which site is open, and some site is blocked right now with no unlocking 
+(vremenski režim ili potrošen dnevni limit sajta). Zato se ni dnevnom šifrom ne otvara dok to traje. 	(a time mode or a used-up site daily limit). So it doesn't open even with the daily code while that lasts. 
+Koristi Chrome, Samsung Internet, Firefox, Edge, Brave ili Vivaldi.	Use Chrome, Samsung Internet, Firefox, Edge, Brave or Vivaldi.

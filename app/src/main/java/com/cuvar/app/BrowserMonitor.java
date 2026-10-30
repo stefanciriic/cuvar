@@ -90,6 +90,11 @@ final class BrowserMonitor {
         return webApps;
     }
 
+    /** Nova ili ažurirana aplikacija: spisak pregledača se pravi ponovo odmah, ne tek za 5 minuta. */
+    void resetApps() {
+        webApps = null;
+    }
+
     boolean isUnknownBrowser(String pkg, boolean hasSiteRules) {
         return hasSiteRules && !isBrowser(pkg) && !context.getPackageName().equals(pkg) && webApps().contains(pkg);
     }

@@ -841,6 +841,21 @@ final class Store {
     }
 
     /** Režim koji trenutno blokira host (i poddomene), ili null. */
+    /**
+     * Da li je neki sajt sada blokiran bez otključavanja: uključen režim sa sajtovima upravo traje
+     * ili je dnevni limit nekog sajta potrošen. Tada se ni pregledač u kome Čuvar ne vidi sajt ne otključava.
+     */
+    synchronized boolean hardSiteBlockNow() {
+        Calendar now = calendarNow();
+        int m = minuteOf(now), d = dayOf(now);
+        for (DailySchedule.Rule r : enforced()) if (!r.sites.isEmpty() && r.active(m, d)) return true;
+        for (String dom : siteKeysNow()) {
+            int limit = siteLimitNow(dom);
+            if (limit > 0 && usedShared("site:" + dom) >= limit * 60000L) return true;
+        }
+        return false;
+    }
+
     synchronized DailySchedule.Rule scheduleBlockingSite(String host) {
         Calendar now = calendarNow();
         DailySchedule.Rule r = DailySchedule.blockingSite(enforced(), host, minuteOf(now), dayOf(now));

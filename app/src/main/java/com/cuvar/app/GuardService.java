@@ -71,6 +71,7 @@ public class GuardService extends AccessibilityService {
     static final int KIND_ADDRESS = BlockKind.ADDRESS;
     static final int KIND_FOCUS = BlockKind.FOCUS;
     static final int KIND_BROWSER = BlockKind.BROWSER;
+    static final int KIND_UNSEEN_SITE = BlockKind.UNSEEN_SITE;
     /** Sistemski prozori koji se pojave preko aplikacije, a ne znače da je korisnik izašao iz nje. */
     private static final Set<String> TRANSPARENT = new HashSet<>();
     /** Navigacija: Čuvar je nikad ne prati, ne čita i ne blokira, osim ako sama ima pravilo. */
@@ -242,6 +243,30 @@ public class GuardService extends AccessibilityService {
         }
     };
 
+    /**
+     * Instalirana ili ažurirana aplikacija: spiskovi pregledača, aplikacija sa ikonom i kopija se odmah osvežavaju.
+     * Inače bi novi pregledač do 5 minuta radio kao obična aplikacija, bez pravila za sajtove.
+     */
+    private final BroadcastReceiver packageReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            try {
+                if (browserMonitor != null) browserMonitor.resetApps();
+                launcherApps = null;
+                webApkHosts.clear();
+                clones = null;
+                android.net.Uri data = intent == null ? null : intent.getData();
+                if (data != null) forgetTracked(data.getSchemeSpecificPart());
+                if (store != null) updateWatched();
+                h.removeCallbacks(recheckSoon);
+                h.postDelayed(recheckSoon, 300);
+            } catch (Throwable error) {
+                GuardDiagnostics.report("packageAdded", error);
+            }
+        }
+    };
+    private boolean packageReceiverOn;
+
     /** Da li je korisnik uključio Čuvara u Pristupačnosti. */
     static boolean isEnabled(Context c) {
         if (running) {
@@ -317,6 +342,20 @@ public class GuardService extends AccessibilityService {
             receiverOn = true;
         } catch (Throwable error) {
             GuardDiagnostics.report("screenReceiver", error);
+        }
+        try {
+            IntentFilter pf = new IntentFilter();
+            pf.addAction(Intent.ACTION_PACKAGE_ADDED);
+            pf.addAction(Intent.ACTION_PACKAGE_REPLACED);
+            pf.addDataScheme("package");
+            if (Build.VERSION.SDK_INT >= 33) {
+                registerReceiver(packageReceiver, pf, Context.RECEIVER_NOT_EXPORTED);
+            } else {
+                registerReceiver(packageReceiver, pf);
+            }
+            packageReceiverOn = true;
+        } catch (Throwable error) {
+            GuardDiagnostics.report("packageReceiver", error);
         }
 
         running = true;
@@ -462,6 +501,13 @@ public class GuardService extends AccessibilityService {
             } catch (Throwable ignored) {
             }
             receiverOn = false;
+        }
+        if (packageReceiverOn) {
+            try {
+                unregisterReceiver(packageReceiver);
+            } catch (Throwable ignored) {
+            }
+            packageReceiverOn = false;
         }
         if (store != null) {
             store.flush();
@@ -781,7 +827,7 @@ public class GuardService extends AccessibilityService {
             }
         }
         if (unknownBrowser(pkg)) {
-            blocks.add(new Block(appKey, KIND_BROWSER, null, true));
+            blocks.add(new Block(appKey, unseen(KIND_BROWSER), null, true));
         }
         if (cloner(pkg)) {
             blocks.add(new Block(appKey, KIND_CLONER, null, true));
@@ -795,10 +841,10 @@ public class GuardService extends AccessibilityService {
         }
         if ((inApp || apkHost != null) && currentHost == null && store.hasSiteRules()) {
             // Adresa se ne vidi, a postoje pravila za sajtove: bez ovoga bi se blokiran sajt otvorio preko linka u aplikaciji.
-            blocks.add(new Block(appKey, KIND_INAPP, null, true));
+            blocks.add(new Block(appKey, unseen(KIND_INAPP), null, true));
         }
         if (currentAddress != null && currentAddress.unresolved(SystemClock.elapsedRealtime()) && store.hasSiteRules()) {
-            blocks.add(new Block(appKey, KIND_ADDRESS, null, true));
+            blocks.add(new Block(appKey, unseen(KIND_ADDRESS), null, true));
         }
         if (browsing) for (String domain : store.matchingSitesNow(currentHost)) {
             int siteLimit = store.siteLimitNow(domain);
@@ -825,12 +871,12 @@ public class GuardService extends AccessibilityService {
                 BrowserAddressState address = browserMonitor.readAddress(other.root, id, activityOf.get(other.rawPkg));
                 host = address.host();
                 if (address.unresolved(SystemClock.elapsedRealtime()) && store.hasSiteRules()) {
-                    secondary.add(new Block("app:" + other.pkg, KIND_ADDRESS, null, true));
+                    secondary.add(new Block("app:" + other.pkg, unseen(KIND_ADDRESS), null, true));
                 }
             } else if (embedded) {
                 host = browserMonitor.inAppHost(other.root);
                 if (host == null && store.hasSiteRules()) {
-                    secondary.add(new Block("app:" + other.pkg, KIND_INAPP, null, true));
+                    secondary.add(new Block("app:" + other.pkg, unseen(KIND_INAPP), null, true));
                 }
             }
             if (host != null) {
@@ -864,7 +910,7 @@ public class GuardService extends AccessibilityService {
                 blocks.removeIf(b -> exitingKey.equals(b.key)
                         // U adresnoj traci se kratko pojavi i „nepoznata adresa”; ne prikazuj drugi overlay
                         // dok isti browser otvara neutralnu stranicu.
-                        || (b.kind == KIND_ADDRESS && ("app:" + exitingBrowser).equals(b.key)));
+                        || ((b.kind == KIND_ADDRESS || b.kind == KIND_UNSEEN_SITE) && ("app:" + exitingBrowser).equals(b.key)));
             }
         }
 
@@ -1047,7 +1093,7 @@ public class GuardService extends AccessibilityService {
                 if (store.appLockNow(p) || timeUp || codeRule != null) {
                     b = new Block(k, timeUp ? KIND_TIME : codeRule != null ? KIND_CODE : KIND_LOCK, null, true);
                 } else if (unknownBrowser(p)) {
-                    b = new Block(k, KIND_BROWSER, null, true);
+                    b = new Block(k, unseen(KIND_BROWSER), null, true);
                 } else if (cloner(p)) {
                     b = new Block(k, KIND_CLONER, null, true);
                 }
@@ -1055,6 +1101,11 @@ public class GuardService extends AccessibilityService {
         }
         if (b != null && !hard(b.kind) && unlockedNow(k)) return null;
         return b;
+    }
+
+    /** Vrsta blokade za pregledač u kome Čuvar ne vidi sajt (vidi BlockKind.unseenSite). */
+    private int unseen(int softKind) {
+        return BlockKind.unseenSite(softKind, store.hardSiteBlockNow());
     }
 
     static boolean hard(int kind) {
@@ -1236,6 +1287,10 @@ public class GuardService extends AccessibilityService {
      * Meri se samo vreme aplikacija koje imaju ikonicu u meniju. Sistemski prozori bez ikonice
      * (biometrija, dozvole, instalacija) ne ulaze u statistiku ni u limite.
      */
+    private static synchronized void forgetTracked(String pkg) {
+        if (pkg != null) TRACKED.remove(pkg);
+    }
+
     static synchronized boolean tracked(Context c, String pkg) {
         Boolean t = TRACKED.get(pkg);
         if (t == null) {
@@ -1317,7 +1372,7 @@ public class GuardService extends AccessibilityService {
 
     /** Blokada se odnosi na stranicu u pregledaču koji je na ekranu (sajt ili nepotvrđena adresa). */
     private boolean inBrowserPage(String key, int kind) {
-        return (key.startsWith("site:") || kind == KIND_ADDRESS) && browserForCurrentBlock() != null;
+        return (key.startsWith("site:") || kind == KIND_ADDRESS || kind == KIND_UNSEEN_SITE) && browserForCurrentBlock() != null;
     }
 
     String browserForCurrentBlock() {
