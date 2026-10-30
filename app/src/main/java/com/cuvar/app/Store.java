@@ -55,6 +55,8 @@ final class Store {
     private String eDay;
     private boolean eNight;
     private boolean eProtect;
+    /** Aplikacije koje noćna blokada ne zaključava, kako sada važi. */
+    private final Set<String> eNightFree = new HashSet<>();
     private boolean dirty;
     private long lastSave;
     private final CodeAttempts codeTries = new CodeAttempts();
@@ -991,6 +993,26 @@ final class Store {
         enforce();
     }
 
+    /** Podešene aplikacije bez noćne blokade. */
+    synchronized Set<String> nightFree() {
+        return new HashSet<>(sp.getStringSet("nightFree", Collections.emptySet()));
+    }
+
+    /** Izuzetak od noćne blokade važi tek od sutra u 06:00, a vraćanje blokade odmah. */
+    synchronized void setNightFree(String pkg, boolean free) {
+        Set<String> next = nightFree();
+        if (free) next.add(pkg); else next.remove(pkg);
+        sp.edit().putStringSet("nightFree", next).apply();
+        enforce();
+    }
+
+    /** Da li noćna blokada sada zaključava ovu aplikaciju. */
+    synchronized boolean nightBlocksApp(String pkg) {
+        if (!nightActive()) return false;
+        roll();
+        return !(eApps == null ? nightFree() : eNightFree).contains(pkg);
+    }
+
     /** Da li noćna blokada upravo traje: od 22:00 do 06:00 sve iz pravila je zaključano. */
     synchronized boolean nightActive() {
         boolean on = nightBlockNow();
@@ -1420,6 +1442,8 @@ final class Store {
         eSites = parse(sp.getString("eSites", "{}"));
         eNight = sp.getBoolean("eNight", true);
         eProtect = sp.getBoolean("eProtect", false);
+        eNightFree.clear();
+        eNightFree.addAll(sp.getStringSet("eNightFree", Collections.emptySet()));
         parseSchedules(sp.getString("eSchedules", "[]"), eSchedules);
         eLinks.clear();
         JSONArray el = parseArray(sp.getString("eLinks", null));
@@ -1435,6 +1459,8 @@ final class Store {
         for (DailySchedule.Rule r : schedules) eSchedules.add(copy(r));
         eNight = nightBlock();
         eProtect = protectSelf();
+        eNightFree.clear();
+        eNightFree.addAll(nightFree());
         eLinks.clear();
         eLinks.addAll(linkPairs());
         eDay = rulesDay();
@@ -1445,6 +1471,7 @@ final class Store {
         sp.edit().putString("eApps", eApps.toString()).putString("eSites", eSites.toString())
                 .putString("eSchedules", schedulesJson(eSchedules)).putString("eDay", eDay)
                 .putBoolean("eNight", eNight).putBoolean("eProtect", eProtect)
+                .putStringSet("eNightFree", new HashSet<>(eNightFree))
                 .putString("eLinks", new JSONArray(eLinks).toString()).apply();
         clearRuleCache();
     }
@@ -1478,6 +1505,9 @@ final class Store {
         }
         eNight = eNight || nightBlock();
         eProtect = eProtect || protectSelf();
+        Set<String> free = RuleMerge.stricterExempt(eNightFree, nightFree());
+        eNightFree.clear();
+        eNightFree.addAll(free);
         eLinks.addAll(linkPairs());
         JSONObject na = new JSONObject();
         Set<String> keys = new HashSet<>(keysOf(eApps));
@@ -1749,6 +1779,12 @@ final class Store {
         if (eApps == null) return out;
         if (eNight && !nightBlock()) out.add("Noćna blokada se isključuje");
         if (eProtect && !protectSelf()) out.add("Zaštita Čuvara od isključivanja se isključuje");
+        for (String pkg : nightFree()) {
+            if (eNightFree.contains(pkg)) continue;
+            String name = pkg;
+            try { name = Translit.keep(pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()); } catch (Exception ignored) { }
+            out.add(name + ": bez noćne blokade");
+        }
         List<String> want = linkPairs();
         for (String p : eLinks) {
             if (want.contains(p)) continue;
@@ -1833,6 +1869,7 @@ final class Store {
         }
         sp.edit().putString("apps", apps.toString()).putString("sites", sites.toString()).putString("links", links.toString())
                 .putString("schedules", schedulesJson()).putBoolean("night", eNight).putBoolean("protect", eProtect)
+                .putStringSet("nightFree", new HashSet<>(eNightFree))
                 .apply();
         copyToEnforced();
     }

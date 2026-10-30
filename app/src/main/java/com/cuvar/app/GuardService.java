@@ -789,7 +789,7 @@ public class GuardService extends AccessibilityService {
         if (store.nightActive() && !exempt().contains(pkg)) {
             String site = web ? store.siteGuarded(currentHost) : null;
             if (guarded(pkg)) {
-                blocks.add(new Block(appKey, KIND_NIGHT, null, false));
+                if (store.nightBlocksApp(pkg)) blocks.add(new Block(appKey, KIND_NIGHT, null, false));
             } else if (site != null) {
                 blocks.add(new Block("site:" + site, KIND_NIGHT, null, false));
             }
@@ -1078,7 +1078,7 @@ public class GuardService extends AccessibilityService {
         int dayLimit = store.dayLimit();
         if (guarded(p) && DayLimit.reached(dayLimit, store.guardedToday())) {
             b = new Block(k, KIND_DAY, null, false);
-        } else if (guarded(p) && store.nightActive()) {
+        } else if (guarded(p) && store.nightBlocksApp(p)) {
             b = new Block(k, KIND_NIGHT, null, false);
         } else if (store.sessionBreakLeft(p) > 0) {
             b = new Block(k, KIND_BREAK, null, false);

@@ -26,7 +26,8 @@ ne čita poruke ni sadržaj stranica. Detalji su u [PRIVACY.md](PRIVACY.md).
 
 - Ukupni dnevni limit: zajedničko vreme svih aplikacija i sajtova sa pravilom.
 - Noćna blokada od 22:00 do 06:00: sve što ima pravilo je zaključano, bez
-  otključavanja. Pozivi i SMS rade.
+  otključavanja. Pozivi i SMS rade. Pojedina aplikacija može da se izuzme
+  ("Bez noćne blokade", važi od sutra u 06:00).
 - Vremenski režimi: izabrane aplikacije i sajtovi su blokirani u zadatom periodu
   i danima (npr. radno vreme). Režim može da traži dnevnu šifru van perioda.
 - Fokus: ručno pokrenut period u kome rade samo izabrane aplikacije i sajtovi.

@@ -30,6 +30,13 @@ final class RuleMerge {
     }
 
     /** Da li pravilo aplikacije uopšte nešto ograničava (inače se ne čuva). */
+    /** Izuzeci (npr. bez noćne blokade): novi izuzetak čeka sutra, a skidanje izuzetka važi odmah. */
+    static java.util.Set<String> stricterExempt(java.util.Set<String> now, java.util.Set<String> wanted) {
+        java.util.Set<String> out = new java.util.HashSet<>(now);
+        out.retainAll(wanted);
+        return out;
+    }
+
     static boolean anyAppRule(boolean lock, int limit, int opens, int session) {
         return lock || limit > 0 || opens > 0 || session > 0;
     }

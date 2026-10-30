@@ -679,3 +679,6 @@ Osveži	Refresh
 Ovde Čuvar ne vidi koji je sajt otvoren, a neki sajt je sada blokiran bez otključavanja 	Here Čuvar can't see which site is open, and some site is blocked right now with no unlocking 
 (vremenski režim ili potrošen dnevni limit sajta). Zato se ni dnevnom šifrom ne otvara dok to traje. 	(a time mode or a used-up site daily limit). So it doesn't open even with the daily code while that lasts. 
 Koristi Chrome, Samsung Internet, Firefox, Edge, Brave ili Vivaldi.	Use Chrome, Samsung Internet, Firefox, Edge, Brave or Vivaldi.
+Bez noćne blokade	No night block
+Od 22:00 do 06:00 ostaje otvorena, ako je ne zaključava nešto drugo. Uključivanje važi od sutra u 06:00	Stays open from 22:00 to 06:00 unless something else locks it. Turning this on applies from 06:00 tomorrow
+: bez noćne blokade	: no night block

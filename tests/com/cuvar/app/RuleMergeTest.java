@@ -6,6 +6,10 @@ public final class RuleMergeTest {
 
     public static void main(String[] args) {
         check(RuleMerge.stricterLimit(0, 0) == 0, "Oba bez limita");
+        java.util.Set<String> noFree = new java.util.HashSet<>(), wa = new java.util.HashSet<>(java.util.Arrays.asList("com.whatsapp"));
+        check(RuleMerge.stricterExempt(noFree, wa).isEmpty(), "Novi izuzetak od noći čeka sutra");
+        check(RuleMerge.stricterExempt(wa, noFree).isEmpty(), "Skidanje izuzetka važi odmah");
+        check(RuleMerge.stricterExempt(wa, wa).equals(wa), "Isti izuzetak ostaje");
         check(RuleMerge.stricterLimit(0, 30) == 30, "Novi limit važi odmah");
         check(RuleMerge.stricterLimit(30, 0) == 30, "Brisanje limita čeka sutra");
         check(RuleMerge.stricterLimit(30, 60) == 30, "Povećanje čeka sutra");

@@ -430,6 +430,11 @@ public class RulesActivity extends SubActivity {
                 "Glasovni i video pozivi rade i noću i preko limita, a poruke ostaju zaključane");
         calls.setChecked(store.callsPass(pkg));
         box.addView(calls, Ui.fill(this, 14));
+        final boolean wasFree = store.nightFree().contains(pkg);
+        CheckRow night = new CheckRow(this, null, "Bez noćne blokade",
+                "Od 22:00 do 06:00 ostaje otvorena, ako je ne zaključava nešto drugo. Uključivanje važi od sutra u 06:00");
+        night.setChecked(wasFree);
+        box.addView(night, Ui.fill(this, 14));
         box.addView(Ui.text(this, "Danas korišćeno: " + Ui.fmt(store.usedShared(pkg)) + ", otvoreno "
                 + Ui.count(store.opensToday("app:" + pkg), "put", "puta", "puta"), 13, Ui.MUTED, false),
                 Ui.fill(this, 8));
@@ -453,6 +458,7 @@ public class RulesActivity extends SubActivity {
                     boolean adding = wantLock || wantLimit > 0 || wantOpens > 0 || wantSession > 0;
                     for (CheckRow r : rows) adding |= r.isChecked();
                     if (calls.isChecked() != store.callsPass(pkg)) store.setCallsPass(pkg, calls.isChecked());
+                    if (night.isChecked() != wasFree) store.setNightFree(pkg, night.isChecked());
                     saveGuarding(pkg, label, adding, () -> {
                         if (!java.util.Objects.equals(wantSite, dom)) store.setLink(pkg, wantSite);
                         saveRules(rules, rows, pkg, false);
