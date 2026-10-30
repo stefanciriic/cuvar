@@ -469,6 +469,8 @@ public class GuardService extends AccessibilityService {
     void safeCheck() {
         // Settle the OLD app/site before check() changes the observed context or shows a block.
         accountUntilNow(null);
+        // Muzika se beleži pre nego što se promeni aplikacija napred, da se zna iz koje je krenula.
+        if (overlay == null && overlayWindow != null) overlayWindow.noteMusic(rawPkg);
         try {
             check();
         } catch (Throwable error) {

@@ -15,9 +15,10 @@ final class GuardOverlayWindow {
     private final WindowManager windows;
     private final AudioManager audio;
     private AudioFocusRequest silence;
-    /** Aplikacija koja je bila napred kad je poslednji put proverena muzika, i da li je muzika tada svirala. */
-    private String musicFront;
+    /** Da li je muzika svirala pri poslednjoj proveri, i koja je aplikacija bila napred kad je muzika krenula. */
     private boolean musicPlaying;
+    private String musicOwner;
+    private boolean musicSeen;
 
     GuardOverlayWindow(Context context) {
         windows = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
@@ -25,16 +26,20 @@ final class GuardOverlayWindow {
     }
 
     /**
-     * Beleži da li muzika svira dok nema ekrana blokade. Muzika koja je svirala dok je napred bila neka druga
-     * aplikacija (npr. Spotify u pozadini) ne pripada zaključanoj aplikaciji, pa je ekran blokade ne prekida.
+     * Beleži da li muzika svira dok nema ekrana blokade. Muzika koja je krenula dok je napred bila neka druga
+     * aplikacija (npr. Spotify u pozadini) ne pripada zaključanoj aplikaciji, pa je ekran blokade ne prekida,
+     * ni kad limit istekne dok se aplikacija koristi uz tu muziku.
      */
     void noteMusic(String front) {
+        boolean playing;
         try {
-            musicPlaying = audio != null && audio.isMusicActive();
-            musicFront = front;
+            playing = audio != null && audio.isMusicActive();
         } catch (Throwable error) {
-            musicPlaying = false;
+            playing = false;
         }
+        musicOwner = MusicOwner.next(!musicSeen, musicPlaying, playing, musicOwner, front);
+        musicPlaying = playing;
+        musicSeen = true;
     }
 
     void show(View view, boolean catchBack, String front) {
@@ -46,8 +51,7 @@ final class GuardOverlayWindow {
                 PixelFormat.TRANSLUCENT);
         params.gravity = Gravity.TOP | Gravity.START;
         windows.addView(view, params);
-        boolean otherMusic = musicPlaying && front != null && !front.equals(musicFront);
-        if (!otherMusic) silenceMedia();
+        if (!MusicOwner.belongsToOther(musicPlaying, musicOwner, front)) silenceMedia();
     }
 
     void hide(View view) {
