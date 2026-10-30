@@ -93,6 +93,12 @@ final class BlockOverlayContent {
                     + "Vrati se nazad i prikaži adresnu traku ili otvori sajt u drugom podržanom pregledaču. "
                     + "Otključavanje dnevnom šifrom važi kao i za pregledač bez dostupne adrese.";
             joke = Jokes.pick(Jokes.SITE);
+        } else if (kind == GuardService.KIND_PROXY) {
+            title = name + " je zaključan";
+            sub = "Preko ovog sajta (proxy ili arhiva) otvaraju se drugi sajtovi pod njegovom adresom, pa Čuvar ne vidi "
+                    + "koji je sajt stvarno otvoren. Zaključan je dok imaš pravila za sajtove. Otvara se dnevnom šifrom, od "
+                    + DailyCode.CHANGE_HOUR + ":00 do " + DailyCode.LOCK_HOUR + ":00.";
+            joke = Jokes.pick(Jokes.SITE);
         } else if (kind == GuardService.KIND_UNSEEN_SITE) {
             title = name + " je zaključan";
             sub = "Ovde Čuvar ne vidi koji je sajt otvoren, a neki sajt je sada blokiran bez otključavanja "

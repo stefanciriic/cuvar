@@ -679,3 +679,5 @@ Osveži	Refresh
 Ovde Čuvar ne vidi koji je sajt otvoren, a neki sajt je sada blokiran bez otključavanja 	Here Čuvar can't see which site is open, and some site is blocked right now with no unlocking 
 (vremenski režim ili potrošen dnevni limit sajta). Zato se ni dnevnom šifrom ne otvara dok to traje. 	(a time mode or a used-up site daily limit). So it doesn't open even with the daily code while that lasts. 
 Koristi Chrome, Samsung Internet, Firefox, Edge, Brave ili Vivaldi.	Use Chrome, Samsung Internet, Firefox, Edge, Brave or Vivaldi.
+Preko ovog sajta (proxy ili arhiva) otvaraju se drugi sajtovi pod njegovom adresom, pa Čuvar ne vidi 	Through this site (proxy or archive) other sites open under its address, so Čuvar can't see 
+koji je sajt stvarno otvoren. Zaključan je dok imaš pravila za sajtove. Otvara se dnevnom šifrom, od 	which site is really open. It stays locked while you have site rules. It opens with the daily code, from 

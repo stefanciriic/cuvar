@@ -113,8 +113,17 @@ final class BrowserMonitor {
         }
         List<AccessibilityNodeInfo> nodes = root.findAccessibilityNodeInfosByViewId(id);
         if (nodes == null || nodes.isEmpty()) {
-            if (BrowserAddressState.isInternalScreen(activity)) state.internalScreen();
-            else state.missing(SystemClock.elapsedRealtime());
+            if (BrowserAddressState.isInternalScreen(activity)) {
+                state.internalScreen();
+            } else if (state.host() == null) {
+                // Traka nije pod poznatim imenom (npr. kartica otvorena iz druge aplikacije, nova verzija pregledača):
+                // adresa se traži u gornjem delu prozora, bez čitanja stranice.
+                String host = inAppHost(root);
+                if (host != null) state.readable(host);
+                else state.missing(SystemClock.elapsedRealtime());
+            } else {
+                state.missing(SystemClock.elapsedRealtime());
+            }
             return state;
         }
         AccessibilityNodeInfo node = nodes.get(0);

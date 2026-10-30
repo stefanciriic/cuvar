@@ -20,6 +20,15 @@ public final class WebAddressTest {
         eq("translate.google.com", "translate.google.com", "Prevodilac sam ostaje");
         eq("notfb.com", "notfb.com", "Samo tačan domen");
         check(WebAddress.real(null) == null, "Prazno");
+        check(WebAddress.isProxy("web.archive.org"), "Arhiva");
+        check(WebAddress.isProxy("www.croxyproxy.com"), "Naziv sa proxy");
+        check(WebAddress.isProxy("archive.ph"), "archive.ph");
+        check(WebAddress.isProxy("unblockit.foo"), "unblockit.*");
+        check(WebAddress.isProxy("webcache.googleusercontent.com"), "Google keš");
+        check(!WebAddress.isProxy("rik.parlament.gov.rs"), "Obican sajt nije proxy");
+        check(!WebAddress.isProxy("notarchive.org"), "Samo tačan domen");
+        check(!WebAddress.isProxy("www.reddit.com"), "Reddit nije proxy");
+        check(!WebAddress.isProxy(null), "Prazno nije proxy");
         System.out.println("Prošlo: " + checks + " provera.");
     }
 
