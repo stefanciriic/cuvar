@@ -173,6 +173,7 @@ public class StatsActivity extends SubActivity {
 
         long avg = Math.max(0, avgOf(dayKeys));
         body.addView(summaryCard(grandTotal, avg), Ui.fill(this, 14));
+        body.addView(unlocksCard(), Ui.fill(this, 16));
         body.addView(donutCard(pm, perApp, colored, grandTotal), Ui.fill(this, 16));
         if (days > 1) {
             body.addView(columnsCard(dayKeys, appsPerDay, colored, avg), Ui.fill(this, 16));
@@ -320,6 +321,61 @@ public class StatsActivity extends SubActivity {
         card.addView(tiles, Ui.fill(this, 14));
         card.addView(Ui.text(this, change, 14, changeColor, true), Ui.fill(this, 12));
         return card;
+    }
+
+    /** Nedeljni izveštaj o otključavanju: niz dana bez otključavanja, ovih i prethodnih 7 dana. */
+    private View unlocksCard() {
+        Map<String, Integer> counts = store.unlockDays();
+        String today = store.day();
+        String since = store.unlockSince();
+        int streak = UnlockStreak.current(counts, today, since);
+        int best = UnlockStreak.best(counts, today, since);
+        int week = UnlockStreak.week(counts, today, since, 0);
+        int before = UnlockStreak.week(counts, today, since, 1);
+        int clean = UnlockStreak.cleanDaysThisWeek(counts, today, since);
+        Integer todayCount = counts.get(today);
+
+        LinearLayout card = Ui.card(this);
+        TextView eyebrow = Ui.text(this, "NEDELJA BEZ OTKLJUČAVANJA", 12, Ui.MUTED, true);
+        eyebrow.setLetterSpacing(0.15f);
+        card.addView(eyebrow);
+        String head = streak > 0
+                ? Ui.count(streak, "dan", "dana", "dana") + " zaredom bez otključavanja"
+                : "Danas otključano " + Ui.count(todayCount == null ? 0 : todayCount, "put", "puta", "puta");
+        card.addView(Ui.text(this, head, 22, streak > 0 ? Charts.good() : Ui.INK, true), Ui.fill(this, 4));
+
+        LinearLayout tiles = Ui.row(this);
+        tiles.setGravity(Gravity.TOP);
+        // Brojanje je počelo pre manje od 7 dana: svi zapisi su iz ovih dana.
+        tiles.addView(tile("Otključavanja, 7 dana", String.valueOf(week < 0 ? sumAll(counts) : week)),
+                tileParams(false));
+        tiles.addView(tile("Prethodnih 7 dana", before < 0 ? "–" : String.valueOf(before)), tileParams(true));
+        card.addView(tiles, Ui.fill(this, 14));
+
+        String change;
+        int color = Ui.MUTED;
+        if (week >= 0 && before >= 0 && week < before) {
+            change = "▼ " + (before - week) + " manje nego prethodne nedelje";
+            color = Charts.good();
+        } else if (week >= 0 && before >= 0 && week > before) {
+            change = "▲ " + (week - before) + " više nego prethodne nedelje";
+            color = Ui.ACCENT;
+        } else if (before < 0) {
+            change = "Za poređenje sa prethodnom nedeljom treba još podataka.";
+        } else {
+            change = "Isto kao prethodne nedelje";
+        }
+        card.addView(Ui.text(this, change, 14, color, true), Ui.fill(this, 12));
+        card.addView(Ui.text(this, "Bez otključavanja " + clean + " od " + UnlockStreak.countedThisWeek(today, since)
+                + " dana · najbolji niz "
+                + Ui.count(best, "dan", "dana", "dana"), 13, Ui.MUTED, false), Ui.fill(this, 6));
+        return card;
+    }
+
+    private static int sumAll(Map<String, Integer> counts) {
+        int n = 0;
+        for (Integer v : counts.values()) n += v;
+        return n;
     }
 
     private View tile(String label, String value) {

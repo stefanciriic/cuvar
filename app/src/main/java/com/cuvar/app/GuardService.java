@@ -50,6 +50,10 @@ public class GuardService extends AccessibilityService {
     static volatile boolean running;
 
     private static final long TICK_MS = 5000L;
+    private static final long LIMIT_WARN_MS = 5 * 60000L;
+    private final Set<String> limitWarned = new HashSet<>();
+    private String limitWarnedDay;
+    private final Map<String, String> webApkHosts = new HashMap<>();
     /** Povratak u istu aplikaciju za manje od ovoga ne računa se kao novo otvaranje. */
     private static final long OPEN_GRACE_MS = 15000L;
 
@@ -167,6 +171,7 @@ public class GuardService extends AccessibilityService {
         @Override
         public void run() {
             updateWatched();
+            if (overlay == null) overlayWindow.noteMusic(rawPkg);
             // Dok je navigacija napred bez „Pristupa korišćenju“, njen prozor se ne čita ni povremeno;
             // prelazak u drugu aplikaciju javlja ta aplikacija.
             if (usageOk || !(currentQuiet && overlay == null && handsOff(rawPkg))) safeCheck();
@@ -273,6 +278,7 @@ public class GuardService extends AccessibilityService {
         super.onServiceConnected();
         Ui.loadScript(this);
         store = Store.get(this);
+        store.unlockSince(); // otključavanja se broje od prvog pokretanja ove verzije
         browserMonitor = new BrowserMonitor(this);
         overlayWindow = new GuardOverlayWindow(this);
         pauseOverlayContent = new PauseOverlayContent(this, h, store, new PauseOverlayContent.Actions() {
@@ -708,6 +714,7 @@ public class GuardService extends AccessibilityService {
 
         String urlBarId = BrowserMonitor.addressViewId(pkg);
         boolean inApp = urlBarId == null && inAppBrowser(raw);
+        String apkHost = urlBarId == null && !inApp ? webApkHost(raw) : null;
         if (inApp != currentInApp) {
             currentInApp = inApp;
             currentHost = null;
@@ -723,8 +730,10 @@ public class GuardService extends AccessibilityService {
         } else if (inApp && !root.getPackageName().toString().equals(getPackageName())) {
             String host = browserMonitor.inAppHost(root);
             currentHost = host;
+        } else if (apkHost != null) {
+            currentHost = apkHost.isEmpty() ? null : apkHost;
         }
-        boolean browsing = urlBarId != null || inApp;
+        boolean browsing = urlBarId != null || inApp || apkHost != null;
         if (browsing && currentHost != null) visibleHosts.add(currentHost);
 
         // Sva pravila koja sada važe, od najstrožeg: ukupni dnevni limit (zajedničko vreme pod pravilima),
@@ -783,6 +792,7 @@ public class GuardService extends AccessibilityService {
             boolean lock = store.appLockNow(pkg);
             int limit = store.appLimitNow(pkg);
             boolean timeUp = limit > 0 && store.usedShared(pkg) >= limit * 60000L;
+            if (limit > 0 && !timeUp) warnLimit(appKey, appLabel(pkg), limit, store.usedShared(pkg));
             // Van perioda režim sa dnevnom šifrom drži svoje aplikacije zaključane, a umesto PIN-a traži šifru.
             DailySchedule.Rule codeRule = store.codeRuleForApp(pkg);
             if (lock || timeUp || codeRule != null) {
@@ -803,7 +813,7 @@ public class GuardService extends AccessibilityService {
                         KIND_CODE, null, true));
             }
         }
-        if (inApp && currentHost == null && store.hasSiteRules()) {
+        if ((inApp || apkHost != null) && currentHost == null && store.hasSiteRules()) {
             // Adresa se ne vidi, a postoje pravila za sajtove: bez ovoga bi se blokiran sajt otvorio preko linka u aplikaciji.
             blocks.add(new Block(appKey, KIND_INAPP, null, true));
         }
@@ -816,6 +826,8 @@ public class GuardService extends AccessibilityService {
                 blocks.add(new Block("site:" + domain, KIND_SITE, null, true));
             } else if (siteLimit > 0 && store.usedShared("site:" + domain) >= siteLimit * 60000L) {
                 blocks.add(new Block("site:" + domain, KIND_SITE_TIME, null, true));
+            } else if (siteLimit > 0) {
+                warnLimit("site:" + domain, domain, siteLimit, store.usedShared("site:" + domain));
             }
         }
 
@@ -1082,6 +1094,32 @@ public class GuardService extends AccessibilityService {
         return store.appGuarded(p) || unknownBrowser(p) || cloner(p);
     }
 
+    /**
+     * Sajt „instaliran kao aplikacija“ iz pregledača (WebAPK, npr. YouTube na početnom ekranu iz Chrome-a):
+     * host njegove početne adrese, "" kad se adresa ne zna, null kad nije takva aplikacija.
+     */
+    private String webApkHost(String p) {
+        if (p == null || p.equals(getPackageName()) || BrowserMonitor.isBrowser(p)) return null;
+        if (webApkHosts.containsKey(p)) return webApkHosts.get(p);
+        String host = null;
+        try {
+            android.os.Bundle meta = getPackageManager()
+                    .getApplicationInfo(p, PackageManager.GET_META_DATA).metaData;
+            if (meta != null) {
+                Object url = meta.get("org.chromium.webapk.shell_apk.startUrl");
+                if (url == null) url = meta.get("org.chromium.webapk.shell_apk.scope");
+                if (url != null) {
+                    host = Store.hostOf(WebAddress.real(url.toString()));
+                    if (host == null) host = "";
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        if (host == null && (p.startsWith("org.chromium.webapk.") || p.contains(".webapk."))) host = "";
+        webApkHosts.put(p, host);
+        return host;
+    }
+
     /** Aplikacija za kloniranje drugih aplikacija; zaključana dok postoje pravila za aplikacije. */
     private boolean cloner(String p) {
         boolean known = false;
@@ -1147,6 +1185,7 @@ public class GuardService extends AccessibilityService {
         if (raw.equals(getPackageName()) || BrowserMonitor.isBrowser(raw) || store.focusActive()) return false;
         if (settingsLike(raw) && store.protectNow()) return false;
         if (inAppBrowser(raw)) return false;
+        if (webApkHost(raw) != null && store.hasSiteRules()) return false;
         String p = cloneOf(raw);
         return p.equals(raw) && !guarded(p);
     }
@@ -1317,6 +1356,25 @@ public class GuardService extends AccessibilityService {
         return "Otključavanje je iskorišćeno. Sledeće je moguće za " + min + " min.";
     }
 
+    /**
+     * Upozorenje 5 i 1 min pre isteka limita aplikacije ili sajta, jednom po pragu u danu,
+     * da se stigne završiti bez naglog prekida.
+     */
+    private void warnLimit(String key, String name, int limitMin, long used) {
+        long left = limitMin * 60000L - used;
+        if (left <= 0 || left > LIMIT_WARN_MS) return;
+        String day = store.day();
+        if (!day.equals(limitWarnedDay)) {
+            limitWarned.clear();
+            limitWarnedDay = day;
+        }
+        boolean last = left <= 60000L;
+        if (!limitWarned.add(key + (last ? "|1" : "|5"))) return;
+        limitWarned.add(key + "|5");
+        Toast.makeText(this, Ui.cyr("Čuvar: limit ističe za " + Ui.fmt(left + 59999L) + " – " + name),
+                Toast.LENGTH_LONG).show();
+    }
+
     String appLabel(String pkg) {
         try {
             PackageManager pm = getPackageManager();
@@ -1444,7 +1502,7 @@ public class GuardService extends AccessibilityService {
             // zatvorio karticu bez istorije i izašao iz aplikacije umesto da te vrati na početnu stranu.
             boolean catchBack = inBrowserPage(key, kind);
             if (catchBack) v = backCatcher(v, key, kind);
-            overlayWindow.show(v, catchBack);
+            overlayWindow.show(v, catchBack, rawPkg);
             overlay = v;
             overlayKey = key;
             overlayKind = kind;

@@ -15,13 +15,29 @@ final class GuardOverlayWindow {
     private final WindowManager windows;
     private final AudioManager audio;
     private AudioFocusRequest silence;
+    /** Aplikacija koja je bila napred kad je poslednji put proverena muzika, i da li je muzika tada svirala. */
+    private String musicFront;
+    private boolean musicPlaying;
 
     GuardOverlayWindow(Context context) {
         windows = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
         audio = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
     }
 
-    void show(View view, boolean catchBack) {
+    /**
+     * Beleži da li muzika svira dok nema ekrana blokade. Muzika koja je svirala dok je napred bila neka druga
+     * aplikacija (npr. Spotify u pozadini) ne pripada zaključanoj aplikaciji, pa je ekran blokade ne prekida.
+     */
+    void noteMusic(String front) {
+        try {
+            musicPlaying = audio != null && audio.isMusicActive();
+            musicFront = front;
+        } catch (Throwable error) {
+            musicPlaying = false;
+        }
+    }
+
+    void show(View view, boolean catchBack, String front) {
         WindowManager.LayoutParams params = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT,
@@ -30,7 +46,8 @@ final class GuardOverlayWindow {
                 PixelFormat.TRANSLUCENT);
         params.gravity = Gravity.TOP | Gravity.START;
         windows.addView(view, params);
-        silenceMedia();
+        boolean otherMusic = musicPlaying && front != null && !front.equals(musicFront);
+        if (!otherMusic) silenceMedia();
     }
 
     void hide(View view) {

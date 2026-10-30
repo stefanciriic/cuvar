@@ -10,3 +10,5 @@ app/src/main/java/com/cuvar/app/BrowserAddressState.java
 app/src/main/java/com/cuvar/app/Links.java
 app/src/main/java/com/cuvar/app/Translit.java
 app/src/main/java/com/cuvar/app/Lang.java
+app/src/main/java/com/cuvar/app/WebAddress.java
+app/src/main/java/com/cuvar/app/UnlockStreak.java

@@ -283,6 +283,47 @@ final class Store {
             return;
         }
         saveUnlock(key, 0);
+        countUnlock();
+    }
+
+    // ---------- Otključavanja po danima (za niz dana bez otključavanja) ----------
+
+    /** Upisuje jedno otključavanje (šifrom ili hitno) u današnji dan; čuva se 70 dana. */
+    private void countUnlock() {
+        unlockSince();
+        JSONObject o = parse(sp.getString("unlockDays", "{}"));
+        String d = day();
+        try {
+            o.put(d, o.optInt(d, 0) + 1);
+        } catch (JSONException e) {
+            return;
+        }
+        List<String> days = keysOf(o);
+        Collections.sort(days);
+        while (days.size() > 70) o.remove(days.remove(0));
+        sp.edit().putString("unlockDays", o.toString()).apply();
+    }
+
+    /** Broj otključavanja po danu ("yyyyMMdd"). */
+    synchronized Map<String, Integer> unlockDays() {
+        JSONObject o = parse(sp.getString("unlockDays", "{}"));
+        Map<String, Integer> out = new HashMap<>();
+        for (String k : keysOf(o)) out.put(k, o.optInt(k, 0));
+        return out;
+    }
+
+    /** Dan od kada se broje otključavanja; prvi poziv ga postavlja na danas. */
+    synchronized String unlockSince() {
+        String s = sp.getString("unlockSince", null);
+        if (s == null) {
+            s = day();
+            sp.edit().putString("unlockSince", s).apply();
+        }
+        return s;
+    }
+
+    synchronized int unlockStreak() {
+        return UnlockStreak.current(unlockDays(), day(), unlockSince());
     }
 
     /** Koliko je još ostalo od 5 minuta korišćenja (0 ako nije otključano). */
@@ -413,6 +454,7 @@ final class Store {
             return false;
         }
         saveEmergency();
+        countUnlock();
         return true;
     }
 

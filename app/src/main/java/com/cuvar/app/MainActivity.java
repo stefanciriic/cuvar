@@ -344,6 +344,10 @@ public class MainActivity extends Activity {
         nowLine("Hitno otključavanje", store.emergencyAvailable()
                 ? "Dostupno još jednom danas."
                 : "Danas je iskorišćeno. Novo je posle ponoći.", Ui.MUTED);
+        int streak = store.unlockStreak();
+        if (streak > 0) {
+            nowLine("Niz bez otključavanja", Ui.count(streak, "dan", "dana", "dana") + " zaredom.", Ui.MUTED);
+        }
     }
 
     private View nowLine(String title, String detail, int color) {

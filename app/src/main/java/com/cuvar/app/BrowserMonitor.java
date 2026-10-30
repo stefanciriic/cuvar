@@ -121,7 +121,7 @@ final class BrowserMonitor {
             CharSequence text = node.getText();
             String value = text == null ? "" : text.toString();
             if (BrowserAddressState.isInternalAddress(value)) state.internalScreen();
-            else state.readable(Store.hostOf(value));
+            else state.readable(Store.hostOf(WebAddress.real(value)));
         }
         return state;
     }
@@ -160,6 +160,6 @@ final class BrowserMonitor {
     private static String addHost(CharSequence value) {
         if (value == null || value.length() > 200) return null;
         String text = value.toString().trim();
-        return looksLikeDomain(text) ? Store.hostOf(text) : null;
+        return looksLikeDomain(text) ? Store.hostOf(WebAddress.real(text)) : null;
     }
 }
