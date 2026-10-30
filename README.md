@@ -198,7 +198,8 @@ proveru na telefonu su u [tests/README.md](tests/README.md).
   ili obrisati. Zaštita od isključivanja to otežava, ali ne sprečava potpuno
   (npr. Safe Mode).
 - Adresa se čita samo u poznatim pregledačima (Chrome, Brave, Edge, Vivaldi,
-  Samsung Internet, Firefox, Kiwi). Ostali pregledači su zaključani dok postoje
+  Samsung Internet, Firefox, Kiwi; Opera, Opera Mini, DuckDuckGo i Firefox Focus
+  još nisu probani na telefonu). Ostali pregledači su zaključani dok postoje
   pravila za sajtove.
 - Pravila važe za ceo sajt, ne za deo sajta (npr. samo youtube.com/shorts).
 - Dok traje poziv u aplikaciji sa "Pozivi uvek prolaze", cela ta aplikacija je

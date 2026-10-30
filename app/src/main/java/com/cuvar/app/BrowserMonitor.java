@@ -37,6 +37,13 @@ final class BrowserMonitor {
         browsers.put("com.chrome.dev", "com.chrome.dev:id/url_bar");
         browsers.put("com.chrome.canary", "com.chrome.canary:id/url_bar");
         browsers.put("com.kiwibrowser.browser", "com.kiwibrowser.browser:id/url_bar");
+        // Adrese za ove pregledače nisu proverene na telefonu; ako se ne nađu, važi isto što i bez pročitane adrese.
+        browsers.put("org.mozilla.firefox_beta", "org.mozilla.firefox_beta:id/mozac_browser_toolbar_url_view");
+        browsers.put("org.mozilla.fenix", "org.mozilla.fenix:id/mozac_browser_toolbar_url_view");
+        browsers.put("org.mozilla.focus", "org.mozilla.focus:id/mozac_browser_toolbar_url_view");
+        browsers.put("com.opera.browser", "com.opera.browser:id/url_field");
+        browsers.put("com.opera.mini.native", "com.opera.mini.native:id/url_field");
+        browsers.put("com.duckduckgo.mobile.android", "com.duckduckgo.mobile.android:id/omnibarTextInput");
         BROWSERS = Collections.unmodifiableMap(browsers);
         BROWSER_PACKAGES = Collections.unmodifiableSet(new LinkedHashSet<>(browsers.keySet()));
     }
