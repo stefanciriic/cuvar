@@ -15,6 +15,7 @@ import java.util.Random;
 
 /** Builds the guarded app and site lock screen and its unlock interactions. */
 final class BlockOverlayContent {
+    private static final Random RANDOM = new Random();
     private final GuardService host;
 
     BlockOverlayContent(GuardService host) {
@@ -256,7 +257,9 @@ final class BlockOverlayContent {
     /** Pitanje pre šifre. Tačan odgovor vodi dalje, a pogrešan traži više tačnih zaredom. */
     private void showQuiz(final LinearLayout area, final Runnable onPass, String notice) {
         final Context c = host;
-        if (Ui.CHALLENGE_NUMBERS.equals(Ui.unlockChallenge(c))) {
+        String ch = Ui.unlockChallenge(c);
+        // Nasumično se bira na početku otključavanja (notice == null), posle odgovora ostaju pitanja.
+        if (Ui.CHALLENGE_NUMBERS.equals(ch) || Ui.CHALLENGE_MIX.equals(ch) && notice == null && RANDOM.nextBoolean()) {
             showNumbers(area, onPass, null);
             return;
         }
@@ -301,7 +304,7 @@ final class BlockOverlayContent {
     private void showNumbers(final LinearLayout area, final Runnable onPass, String notice) {
         final Context c = host;
         area.removeAllViews();
-        final NumberGame game = new NumberGame(new Random(), SystemClock.elapsedRealtime());
+        final NumberGame game = new NumberGame(RANDOM, SystemClock.elapsedRealtime());
 
         TextView head = Ui.text(c, "Tapni brojeve od 1 do " + NumberGame.SIZE + " redom", 20, 0xFFFFFFFF, true);
         head.setGravity(Gravity.CENTER);

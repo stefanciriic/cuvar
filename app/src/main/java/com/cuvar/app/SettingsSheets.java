@@ -105,7 +105,9 @@ final class SettingsSheets {
     }
 
     static String challengeName(String challenge) {
-        return Ui.CHALLENGE_NUMBERS.equals(challenge) ? "Igrica: brojevi redom" : "Pitalice";
+        if (Ui.CHALLENGE_NUMBERS.equals(challenge)) return "Igrica: brojevi redom";
+        if (Ui.CHALLENGE_MIX.equals(challenge)) return "Nasumično: igrica ili pitalice";
+        return "Pitalice";
     }
 
     /** Pitalice ili igrica pre unosa šifre. */
@@ -113,7 +115,7 @@ final class SettingsSheets {
         LinearLayout box = Ui.column(a);
         Sheet sheet = new Sheet(a, "Pre otključavanja").view(box).secondary("Zatvori", null);
         String current = Ui.unlockChallenge(a);
-        String[] all = {Ui.CHALLENGE_QUIZ, Ui.CHALLENGE_NUMBERS};
+        String[] all = {Ui.CHALLENGE_QUIZ, Ui.CHALLENGE_NUMBERS, Ui.CHALLENGE_MIX};
         for (int i = 0; i < all.length; i++) {
             final String ch = all[i];
             TextView b = Ui.button(a, challengeName(ch), ch.equals(current));

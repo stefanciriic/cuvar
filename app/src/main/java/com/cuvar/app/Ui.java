@@ -177,12 +177,14 @@ final class Ui {
     static final String LANG_CYRILLIC = "sr-Cyrl";
     static final String LANG_ENGLISH = "en";
 
-    /** Šta se rešava pre šifre: pitalice ili igrica „Brojevi redom“. */
+    /** Šta se rešava pre šifre: pitalice, igrica „Brojevi redom“ ili nasumično jedno od toga. */
     static final String CHALLENGE_QUIZ = "quiz";
     static final String CHALLENGE_NUMBERS = "numbers";
+    static final String CHALLENGE_MIX = "mix";
 
     static String unlockChallenge(Context c) {
-        return CHALLENGE_NUMBERS.equals(prefs(c).getString("challenge", null)) ? CHALLENGE_NUMBERS : CHALLENGE_QUIZ;
+        String ch = prefs(c).getString("challenge", null);
+        return CHALLENGE_NUMBERS.equals(ch) || CHALLENGE_MIX.equals(ch) ? ch : CHALLENGE_QUIZ;
     }
 
     static void setUnlockChallenge(Context c, String challenge) {
