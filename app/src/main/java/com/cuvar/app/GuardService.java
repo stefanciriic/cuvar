@@ -127,6 +127,8 @@ public class GuardService extends AccessibilityService {
     }; // paket -> poslednji prikazan ekran (aktivnost)
     /** Do kada sme da se otvori ekran „Pristup korišćenju“ iako je zaštita uključena (korisnik je tapnuo dugme u Čuvaru). */
     static volatile long usageSetupUntil;
+    /** Korisnik je iz Statistike otvorio „Pristup obaveštenjima“: taj ekran se ne zatvara dva minuta. */
+    static volatile long notifSetupUntil;
     /** Aplikacije koje otvaraju linkove u svom pregledaču. */
     private static final String[] IN_APP_APPS = {"com.instagram.android", "com.instagram.lite", "com.facebook.katana",
             "com.facebook.lite", "com.facebook.orca", "com.facebook.mlite", "com.zhiliaoapp.musically", "com.ss.android.ugc.trill",
@@ -1254,6 +1256,7 @@ public class GuardService extends AccessibilityService {
         if (!settingsLike(p)) return false;
         // Korisnik je iz Čuvara otvorio „Pristup korišćenju“ da ga uključi: taj ekran se ne zatvara dva minuta.
         if (SystemClock.elapsedRealtime() < usageSetupUntil && !usageOk) return false;
+        if (SystemClock.elapsedRealtime() < notifSetupUntil && !NotificationCounter.granted(this)) return false;
         boolean installer = SystemScreens.installer(p);
         try {
             String label = getString(R.string.app_name);

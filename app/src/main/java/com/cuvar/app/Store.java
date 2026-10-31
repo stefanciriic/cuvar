@@ -287,6 +287,25 @@ final class Store {
         sp.edit().putString("unlockDays", o.toString()).apply();
     }
 
+    /** Jedna primljena notifikacija od aplikacije (samo paket, bez teksta). */
+    synchronized void countNotification(String pkg) {
+        Map<String, Map<String, Integer>> d = NotifCounts.decode(sp.getString("notifDays", ""));
+        NotifCounts.add(d, day(), pkg);
+        SharedPreferences.Editor ed = sp.edit().putString("notifDays", NotifCounts.encode(d));
+        if (!sp.contains("notifSince")) ed.putString("notifSince", day());
+        ed.apply();
+    }
+
+    /** Notifikacije po danu ("yyyyMMdd") i aplikaciji, poslednjih 14 dana. */
+    synchronized Map<String, Map<String, Integer>> notifDays() {
+        return NotifCounts.decode(sp.getString("notifDays", ""));
+    }
+
+    /** Dan od kog se notifikacije broje, ili null ako još nijedna nije izbrojana. */
+    synchronized String notifSince() {
+        return sp.getString("notifSince", null);
+    }
+
     /** Broj otključavanja po danu ("yyyyMMdd"). */
     synchronized Map<String, Integer> unlockDays() {
         JSONObject o = parse(sp.getString("unlockDays", "{}"));

@@ -25,3 +25,4 @@ app/src/main/java/com/cuvar/app/SystemScreens.java
 app/src/main/java/com/cuvar/app/Clones.java
 app/src/main/java/com/cuvar/app/MusicOwner.java
 app/src/main/java/com/cuvar/app/LoadMeter.java
+app/src/main/java/com/cuvar/app/NotifCounts.java

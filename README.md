@@ -132,6 +132,7 @@ Ceo kod je obična Java, bez dodatnih biblioteka, u
 | `DomainRules.java`, `Links.java` | Domeni i poddomeni, veza aplikacija ↔ sajt |
 | `Quiz.java`, `QuizBank.java`, `Jokes.java` | Pitalice i šaljive poruke |
 | `UnlockStreak.java` | Niz dana bez otključavanja |
+| `NotifCounts.java`, `NotificationCounter.java` | Broj primljenih notifikacija po danu i aplikaciji (samo paket, bez teksta) za Statistiku |
 | `Lang.java`, `Translit.java`, `app/src/main/assets/en.tsv` | Engleski prevod i ćirilica |
 | `Ui.java`, `Sheet.java`, `CheckRow.java`, `PinPad.java`, `SubActivity.java` | Zajednički delovi interfejsa |
 | `GuardDiagnostics.java` | Lokalni zapis grešaka (bez adresa i sadržaja) |
