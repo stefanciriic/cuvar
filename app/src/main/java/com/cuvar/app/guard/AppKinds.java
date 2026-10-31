@@ -1,7 +1,6 @@
 package com.cuvar.app.guard;
 
 import com.cuvar.app.GuardService;
-import com.cuvar.app.NotificationCounter;
 import com.cuvar.app.R;
 import com.cuvar.app.web.BrowserMonitor;
 import com.cuvar.app.web.Hosts;
@@ -180,7 +179,6 @@ public final class AppKinds {
         if (!settingsLike(p)) return false;
         // Korisnik je iz Čuvara otvorio „Pristup korišćenju“ da ga uključi: taj ekran se ne zatvara dva minuta.
         if (SystemClock.elapsedRealtime() < GuardService.usageSetupUntil && !svc.usageOk) return false;
-        if (SystemClock.elapsedRealtime() < GuardService.notifSetupUntil && !NotificationCounter.granted(svc)) return false;
         boolean installer = SystemScreens.installer(p);
         try {
             String label = svc.getString(R.string.app_name);

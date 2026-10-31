@@ -77,7 +77,7 @@ Pregled funkcija i mapa fajlova: [README.md](README.md).
 
 - Kod je podeljen u pakete po ulozi (`data`, `rules`, `guard`, `web`, `unlock`, `ui`,
   `i18n`); pravila i "gde ide nova klasa" su u [ARCHITECTURE.md](ARCHITECTURE.md).
-  Komponente iz manifesta (`GuardService`, `NotificationCounter`, aktivnosti) se
+  Komponente iz manifesta (`GuardService`, aktivnosti) se
   ne premeštaju iz `com.cuvar.app`: promena imena klase gasi Pristupačnost posle
   ažuriranja.
 - Gradle projekat, modul `app/`. `applicationId com.cuvar.app`, `minSdk 26`,

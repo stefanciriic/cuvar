@@ -92,6 +92,7 @@ public final class Store {
         loadEnforced();
         dayLimits.countOnlyGuarded(c);
         if (sp.contains("pin")) sp.edit().remove("pin").apply(); // PIN više ne postoji, otključava samo dnevna šifra
+        if (sp.contains("notifDays")) sp.edit().remove("notifDays").remove("notifSince").apply(); // brojanje notifikacija je uklonjeno
     }
 
     static JSONObject parse(String s) {

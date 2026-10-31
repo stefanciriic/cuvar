@@ -130,7 +130,6 @@ public class GuardService extends AccessibilityService {
     /** Do kada sme da se otvori ekran „Pristup korišćenju“ iako je zaštita uključena (korisnik je tapnuo dugme u Čuvaru). */
     public static volatile long usageSetupUntil;
     /** Korisnik je iz Statistike otvorio „Pristup obaveštenjima“: taj ekran se ne zatvara dva minuta. */
-    public static volatile long notifSetupUntil;
     private ForegroundApp foreground;
     private AudioManager audio;
     public boolean currentCall;     // napred je ekran poziva aplikacije kojoj pozivi uvek prolaze

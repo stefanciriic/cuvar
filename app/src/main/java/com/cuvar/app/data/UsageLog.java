@@ -1,6 +1,5 @@
 package com.cuvar.app.data;
 
-import com.cuvar.app.rules.NotifCounts;
 import com.cuvar.app.rules.UsageCalendar;
 import com.cuvar.app.ui.Ui;
 
@@ -29,31 +28,6 @@ public final class UsageLog {
 
     JSONObject usage;  // dan -> {ključ: ms}
     JSONObject opens;  // dan -> {"app:paket" ili "try:ključ": koliko puta}
-
-    /** Jedna primljena notifikacija od aplikacije (samo paket, bez teksta). */
-    public void countNotification(String pkg) {
-        synchronized (store) {
-            Map<String, Map<String, Integer>> d = NotifCounts.decode(store.sp.getString("notifDays", ""));
-            NotifCounts.add(d, store.day(), pkg);
-            SharedPreferences.Editor ed = store.sp.edit().putString("notifDays", NotifCounts.encode(d));
-            if (!store.sp.contains("notifSince")) ed.putString("notifSince", store.day());
-            ed.apply();
-        }
-    }
-
-    /** Notifikacije po danu ("yyyyMMdd") i aplikaciji, poslednjih 14 dana. */
-    public Map<String, Map<String, Integer>> notifDays() {
-        synchronized (store) {
-            return NotifCounts.decode(store.sp.getString("notifDays", ""));
-        }
-    }
-
-    /** Dan od kog se notifikacije broje, ili null ako još nijedna nije izbrojana. */
-    public String notifSince() {
-        synchronized (store) {
-            return store.sp.getString("notifSince", null);
-        }
-    }
 
     void prune() {
         List<String> days = Store.keysOf(usage);

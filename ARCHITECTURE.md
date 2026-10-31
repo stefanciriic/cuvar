@@ -35,9 +35,9 @@ com.cuvar.app            Komponente iz AndroidManifest-a (aktivnosti, servisi)
 
 | Paket | Klase |
 |---|---|
-| `com.cuvar.app` | `MainActivity`, `RulesActivity`, `ScheduleActivity`, `FocusActivity`, `StatsActivity`, `SubActivity`, `GuardService`, `NotificationCounter` |
-| `data` | `Store` (ulaz: `Store.get(c)`, pravila aplikacija i sajtova, popuštanje od sutra) i njegovi delovi: `Clock` (pouzdano vreme), `Unlocks` (šifra, otključavanje, hitno), `Modes` (vremenski režimi), `DayLimits` (ukupni dnevni limit), `UsageLog` (izmereno vreme, otvaranja, notifikacije), `Sessions` (korišćenje u komadu), `Focus`, `GuardLog` (kad Čuvar nije radio) |
-| `rules` | `BlockKind`, `CodeAttempts`, `DailyCode`, `DailySchedule`, `DayLimit`, `DomainRules`, `LimitWarnings`, `NotifCounts`, `RuleMerge`, `SessionLimit`, `TrustedClock`, `UnlockCost`, `UnlockStreak`, `UnlockTimer`, `UsageCalendar`, `UsageTracker` |
+| `com.cuvar.app` | `MainActivity`, `RulesActivity`, `ScheduleActivity`, `FocusActivity`, `StatsActivity`, `SubActivity`, `GuardService` |
+| `data` | `Store` (ulaz: `Store.get(c)`, pravila aplikacija i sajtova, popuštanje od sutra) i njegovi delovi: `Clock` (pouzdano vreme), `Unlocks` (šifra, otključavanje, hitno), `Modes` (vremenski režimi), `DayLimits` (ukupni dnevni limit), `UsageLog` (izmereno vreme, otvaranja), `Sessions` (korišćenje u komadu), `Focus`, `GuardLog` (kad Čuvar nije radio) |
+| `rules` | `BlockKind`, `CodeAttempts`, `DailyCode`, `DailySchedule`, `DayLimit`, `DomainRules`, `LimitWarnings`, `RuleMerge`, `SessionLimit`, `TrustedClock`, `UnlockCost`, `UnlockStreak`, `UnlockTimer`, `UsageCalendar`, `UsageTracker` |
 | `guard` | delovi servisa: `BlockScreen` (prikaz i sakrivanje blokade, „nazad“), `AppKinds` (vrsta aplikacije napred: bez pravila, kopija, WebAPK, izuzeta, podešavanja), `UsageAccounting` (upis vremena, upozorenja pred limit); ostalo: `BlockOverlayContent`, `Clones`, `ForegroundApp`, `GuardDiagnostics`, `GuardOverlayWindow`, `LoadMeter`, `MusicOwner`, `PauseOverlayContent`, `SystemScreens` |
 | `web` | `BrowserWindows` (prozori na ekranu, glavni prozor pregledača), `BrowserAddressState`, `BrowserMonitor`, `Hosts`, `Links`, `WebAddress` |
 | `unlock` | `Jokes`, `NumberGame`, `NumberGameView`, `PinPad`, `Quiz`, `QuizBank` |
@@ -49,7 +49,7 @@ com.cuvar.app            Komponente iz AndroidManifest-a (aktivnosti, servisi)
 1. **Komponente iz manifesta ostaju u `com.cuvar.app`.** Android pamti uključen
    servis za Pristupačnost po punom imenu klase (`com.cuvar.app.GuardService`).
    Ako se klasa premesti, posle ažuriranja Pristupačnost je isključena i telefon
-   je bez zaštite. Isto važi za `NotificationCounter` i aktivnosti (prečice, dozvole).
+   je bez zaštite. Isto važi za aktivnosti (prečice, dozvole).
 2. **`rules` ne zavisi od Android-a ni od drugih paketa.** Svaka klasa u `rules`
    (i ostale čiste klase iz `tests/sources.txt`) mora da se kompajlira bez SDK-a.
    Novu logiku piši ovde, sa testom u `tests/com/cuvar/app/`.

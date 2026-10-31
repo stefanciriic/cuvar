@@ -6,7 +6,6 @@ import com.cuvar.app.data.Store;
 import com.cuvar.app.data.UsageLog;
 import com.cuvar.app.i18n.Translit;
 import com.cuvar.app.rules.DailySchedule;
-import com.cuvar.app.rules.NotifCounts;
 import com.cuvar.app.rules.UnlockStreak;
 import com.cuvar.app.ui.Charts;
 import com.cuvar.app.ui.Ui;
@@ -185,7 +184,6 @@ public class StatsActivity extends SubActivity {
         long avg = Math.max(0, avgOf(dayKeys));
         body.addView(summaryCard(grandTotal, avg), Ui.fill(this, 14));
         body.addView(unlocksCard(), Ui.fill(this, 16));
-        body.addView(notificationsCard(pm), Ui.fill(this, 16));
         body.addView(donutCard(pm, perApp, colored, grandTotal), Ui.fill(this, 16));
         if (days > 1) {
             body.addView(columnsCard(dayKeys, appsPerDay, colored, avg), Ui.fill(this, 16));
@@ -381,79 +379,6 @@ public class StatsActivity extends SubActivity {
         card.addView(Ui.text(this, "Bez otključavanja " + clean + " od " + UnlockStreak.countedThisWeek(today, since)
                 + " dana · najbolji niz "
                 + Ui.count(best, "dan", "dana", "dana"), 13, Ui.MUTED, false), Ui.fill(this, 6));
-        return card;
-    }
-
-    private boolean notifAsked;
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-        // Posle uključivanja „Pristupa obaveštenjima“ kartica odmah pokazuje brojanje.
-        if (notifAsked) {
-            notifAsked = false;
-            render();
-        }
-    }
-
-    /** Primljene notifikacije: danas, 7 dana i prethodnih 7, i aplikacije koje ih najviše šalju. */
-    private View notificationsCard(PackageManager pm) {
-        LinearLayout card = Ui.card(this);
-        card.addView(eyebrow("Notifikacije"));
-        if (!NotificationCounter.granted(this)) {
-            card.addView(Ui.text(this, "Koliko notifikacija stiže", 20, Ui.INK, true), Ui.fill(this, 4));
-            card.addView(Ui.text(this, "Uključi „Pristup obaveštenjima“ za Čuvara. Čuvar samo broji koliko notifikacija stiže "
-                    + "i od koje aplikacije; tekst ne čita i notifikacije ne dira.", 14, Ui.MUTED, false), Ui.fill(this, 8));
-            TextView open = Ui.button(this, "Uključi brojanje", true);
-            open.setOnClickListener(v -> {
-                notifAsked = true;
-                GuardService.notifSetupUntil = android.os.SystemClock.elapsedRealtime() + 2 * 60000L;
-                try {
-                    startActivity(new Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"));
-                } catch (Throwable t) {
-                    startActivity(new Intent(android.provider.Settings.ACTION_SETTINGS));
-                }
-            });
-            card.addView(open, Ui.fill(this, 14));
-            return card;
-        }
-
-        Map<String, Map<String, Integer>> days = store.usageLog.notifDays();
-        Map<String, Integer> perDay = NotifCounts.perDay(days);
-        String today = store.day();
-        String since = store.usageLog.notifSince();
-        if (since == null) since = today;
-        Integer t = perDay.get(today);
-        int todayCount = t == null ? 0 : t;
-        int week = UnlockStreak.week(perDay, today, since, 0);
-        int before = UnlockStreak.week(perDay, today, since, 1);
-
-        card.addView(Ui.text(this, "Danas " + Ui.count(todayCount, "notifikacija", "notifikacije", "notifikacija"),
-                22, Ui.INK, true), Ui.fill(this, 4));
-        LinearLayout tiles = Ui.row(this);
-        tiles.setGravity(Gravity.TOP);
-        tiles.addView(tile("Notifikacije, 7 dana", String.valueOf(week < 0 ? sumAll(perDay) : week)), tileParams(false));
-        tiles.addView(tile("Prethodnih 7 dana", before < 0 ? "–" : String.valueOf(before)), tileParams(true));
-        card.addView(tiles, Ui.fill(this, 14));
-
-        List<Map.Entry<String, Integer>> top = NotifCounts.topApps(days, today, 7);
-        if (top.isEmpty()) {
-            card.addView(Ui.text(this, "Još nijedna notifikacija nije izbrojana.", 14, Ui.MUTED, false), Ui.fill(this, 12));
-            return card;
-        }
-        card.addView(Ui.text(this, "Najviše šalju (7 dana)", 13, Ui.MUTED, true), Ui.fill(this, 14));
-        int shown = 0;
-        for (Map.Entry<String, Integer> e : top) {
-            if (shown == 5) break;
-            String label = labelOf(pm, e.getKey());
-            if (label == null) continue;
-            LinearLayout line = Ui.row(this);
-            TextView name = Ui.text(this, label, 15, Ui.INK, false);
-            line.addView(name, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-            line.addView(Ui.text(this, String.valueOf(e.getValue()), 15, Ui.INK, true));
-            card.addView(line, Ui.fill(this, 8));
-            shown++;
-        }
         return card;
     }
 
