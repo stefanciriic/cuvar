@@ -125,6 +125,12 @@ final class SettingsSheets {
             });
             box.addView(b, Ui.fill(a, i == 0 ? 0 : 10));
         }
+        TextView play = Ui.button(a, "Probaj igricu", false);
+        play.setOnClickListener(v -> {
+            sheet.dismiss();
+            NumberGameView.practice(a);
+        });
+        box.addView(play, Ui.fill(a, 18));
         box.addView(Ui.text(a, "Brojevi redom: tapni brojeve od 1 do " + NumberGame.SIZE + " redom za "
                 + NumberGame.TIME_MS / 1000 + " s. Pogrešan broj ili isteklo vreme vraća na početak.",
                 13, Ui.MUTED, false), Ui.fill(a, 12));
