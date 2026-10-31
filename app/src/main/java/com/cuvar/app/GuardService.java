@@ -848,6 +848,8 @@ public class GuardService extends AccessibilityService {
                 screen.cooldownLabel.setText(BlockScreen.cooldownText(coolLeft));
             }
         } else {
+            // Poruka „sajt je blokiran“ ostaje i kad je pregledač već vraćen na dozvoljenu stranicu, dok se ne zatvori.
+            if (screen.holdsNotice(pkg)) return;
             screen.hideOverlay();
             screen.overlayFailures = 0;
             screen.overlayRetryAt = 0L;

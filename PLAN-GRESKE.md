@@ -187,8 +187,8 @@ Pre toga promeniti pravilo "bez Kotlina" u CLAUDE.md.
   250 ms). Sada: prva promena se proverava odmah, događaji na 100 ms; izmereno ~0,25 s (0,1–0,6 s).
 - Dok Chrome prikazuje svoj prozor preko stranice (npr. ponuda za obaveštenja), blokada se nije pojavila
   ~7 s, a pojavila se čim je prozor zatvoren. Uzrok nije potvrđen; treba ponoviti danju i ispitati.
-- Sistemsko dugme HOME ne skida blokadu: dok je blokada prikazana, aktivan prozor je Čuvarov, pa se ponovo
-  proverava aplikacija ispod (Chrome). Blokada ostaje preko početnog ekrana dok se ne pritisne "Zatvori".
-  Izlaz postoji, ali je nezgodno. Staro ponašanje (od 06.10.2026).
+- Sistemsko dugme HOME nije skidalo blokadu sajta (ekran je uzimao fokus, pa se ponovo proveravao Chrome ispod).
+  Rešeno novim ponašanjem: blokiran sajt se vraća nazad u istoj kartici, a poruka ne uzima fokus.
+  Ostaje za nepotvrđenu adresu i ponovljeni pokušaj (stari izlaz preko početne stranice).
 - Plutajuće dugme sa katancem je Android-ova prečica za Pristupačnost, ne Čuvarovo dugme. Proveriti da li
   tap na nju isključuje Čuvara (zaobilaženje) i da li zaštita treba to da spreči.

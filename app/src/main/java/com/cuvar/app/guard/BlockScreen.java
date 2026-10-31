@@ -29,6 +29,14 @@ public final class BlockScreen {
     public TextView cooldownLabel;  // odbrojavanje do sledećeg mogućeg otključavanja
     public int overlayFailures;
     public long overlayRetryAt;
+    // Blokiran sajt: pregledač je odmah vraćen nazad, a ekran blokade samo javlja šta se desilo (samo „Zatvori“).
+    private String noticeKey;       // sajt za koji je prikazana takva poruka
+    private String noticeBrowser;   // pregledač u kome je vraćeno nazad
+    private String backedKey;       // sajt za koji je poslednji put pritisnuto nazad
+    private long backedAt;
+    private static final long BACK_RETRY_MS = 10000L;
+    // Kad nazad izađe iz pregledača (sajt otvoren iz druge aplikacije), poruka ipak ostaje bar ovoliko.
+    private static final long NOTICE_MIN_MS = 3000L;
 
     public static String cooldownText(long left) {
         long min = (left + 59999L) / 60000L;
@@ -38,6 +46,20 @@ public final class BlockScreen {
     /** Blokada se odnosi na stranicu u pregledaču koji je na ekranu (sajt ili nepotvrđena adresa). */
     private boolean inBrowserPage(String key, int kind) {
         return (ItemKey.isSite(key) || kind == GuardService.KIND_ADDRESS || kind == GuardService.KIND_UNSEEN_SITE) && browserForCurrentBlock() != null;
+    }
+
+    /** Blokiran sajt u pravom pregledaču (ne nepotvrđena adresa ni pregledač u aplikaciji): vraća se nazad. */
+    public boolean sitePage(String key, int kind) {
+        return ItemKey.isSite(key) && inBrowserPage(key, kind);
+    }
+
+    /**
+     * Da li ekran sa porukom o vraćenom sajtu treba da ostane: dok se ne pritisne „Zatvori“ ili ne izađe iz
+     * pregledača, a prvih NOTICE_MIN_MS i van njega (nazad je možda zatvorilo karticu i vratilo u drugu aplikaciju).
+     */
+    public boolean holdsNotice(String front) {
+        if (overlay == null || noticeKey == null || !noticeKey.equals(overlayKey)) return false;
+        return (front != null && front.equals(noticeBrowser)) || SystemClock.elapsedRealtime() - backedAt < NOTICE_MIN_MS;
     }
 
     public String browserForCurrentBlock() {
@@ -71,6 +93,14 @@ public final class BlockScreen {
     }
 
     private void leave(String key, int kind) {
+        if (key.equals(noticeKey)) {
+            // Pregledač je već vraćen na prethodnu stranicu: samo se skloni ekran. Ako se sajt ipak i dalje vidi
+            // (nazad nije imalo kuda), sledeća blokada ga sklanja početnom stranom (BACK_RETRY_MS).
+            hideOverlay();
+            svc.h.removeCallbacks(svc.recheckSoon);
+            svc.h.postDelayed(svc.recheckSoon, 300);
+            return;
+        }
         boolean sitePage = inBrowserPage(key, kind);
         String browser = sitePage ? browserForCurrentBlock() : null;
         if (sitePage) {
@@ -168,9 +198,22 @@ public final class BlockScreen {
         hideOverlay();
         try {
             View v = svc.blockOverlayContent.build(key, kind, rule, cooling, code);
+            boolean notice = false;
+            String browser = browserForCurrentBlock();
+            long now = SystemClock.elapsedRealtime();
+            if (sitePage(key, kind) && !(key.equals(backedKey) && now - backedAt < BACK_RETRY_MS)) {
+                // Pregledač se odmah vraća na prethodnu stranicu u istoj kartici, bez nove kartice.
+                svc.performGlobalAction(GuardService.GLOBAL_ACTION_BACK);
+                backedKey = key;
+                backedAt = now;
+                notice = true;
+                // Posle NOTICE_MIN_MS nova provera skida poruku ako pregledač više nije napred.
+                svc.h.postDelayed(svc::safeCheck, NOTICE_MIN_MS + 100L);
+            }
             // Kod sajta u pregledaču naš ekran hvata i sistemsko „nazad“: inače bi ga dobio pregledač,
             // zatvorio karticu bez istorije i izašao iz aplikacije umesto da te vrati na početnu stranu.
-            boolean catchBack = inBrowserPage(key, kind);
+            // Poruka posle vraćanja nazad ne uzima fokus: „nazad“ i početni ekran rade normalno.
+            boolean catchBack = inBrowserPage(key, kind) && !notice;
             if (catchBack) v = backCatcher(v, key, kind);
             svc.overlayWindow.show(v, catchBack, svc.rawPkg);
             overlay = v;
@@ -179,6 +222,8 @@ public final class BlockScreen {
             svc.overlayRule = rule;
             overlayCooling = cooling;
             overlayCode = code;
+            noticeKey = notice ? key : null;
+            noticeBrowser = notice ? browser : null;
             overlayFailures = 0;
             overlayRetryAt = 0L;
         } catch (Throwable t) {
@@ -198,6 +243,8 @@ public final class BlockScreen {
         if (overlay != null) {
             svc.overlayWindow.hide(overlay);
             overlay = null;
+            noticeKey = null;
+            noticeBrowser = null;
             overlayKey = null;
             overlayKind = 0;
             svc.overlayRule = null;

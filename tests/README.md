@@ -185,14 +185,18 @@ Provera na telefonu:
 ## Pregledač ne zastaje
 
 1. U Chrome-u skroluj dugačku stranicu: skrolovanje je glatko kao bez Čuvara.
-2. Otvori blokiran sajt: blokada se pojavi za oko jednu sekundu.
+2. Otvori blokiran sajt: blokada se pojavi za oko četvrt sekunde (emulator: 0,1–0,6 s).
 
-## Blokiran sajt u pregledaču: izlaz ostaje u pregledaču
+## Blokiran sajt u pregledaču: vraća se nazad u istoj kartici
 
-1. U Chrome-u otvori blokiran sajt (npr. instagram.com, i tokom noćnog režima).
-2. Na ekranu za blokadu povuci sistemsko „nazad“: Chrome ostaje otvoren, kartica ide na google.com.
-3. Ponovi sa dugmadima „Zatvori“ i „Nazad“ i sa „Ne“ posle „Ipak želim da otključam“: isti ishod.
-4. Zaključana aplikacija (nije sajt): „Zatvori“ i dalje vodi na početni ekran telefona.
+1. U Chrome-u otvori dozvoljen sajt, pa u istoj kartici ukucaj blokiran (npr. instagram.com, i tokom noćnog režima).
+2. Chrome se sam vrati na prethodnu stranicu, a preko nje je ekran blokade samo sa „Zatvori“ (bez „Nazad“).
+   „Zatvori“ samo skloni ekran: ispod je prethodna stranica, broj kartica se ne menja.
+3. HOME dok je ekran blokade gore: ekran nestaje, vidi se početni ekran.
+4. Blokiran sajt otvoren iz druge aplikacije (nova kartica bez istorije): nazad zatvara karticu, poruka ostaje oko
+   3 s. Ako se sajt posle „Zatvori“ ipak i dalje vidi, sledeći „Zatvori“ otvara početnu stranicu (google.com).
+5. Otključavanje šifrom (17–22) radi preko istog ekrana; posle toga sajt treba ponovo otvoriti.
+6. Zaključana aplikacija (nije sajt): „Zatvori“ i dalje vodi na početni ekran telefona.
 
 ## Aplikacija bez pravila se uopšte ne čita (Mape)
 

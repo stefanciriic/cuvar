@@ -220,8 +220,9 @@ public final class BlockOverlayContent {
 
         LinearLayout actions = Ui.row(c);
         actions.setGravity(Gravity.CENTER);
-        if (isSite || kind == GuardService.KIND_INAPP || kind == GuardService.KIND_ADDRESS
-                || kind == GuardService.KIND_UNSEEN_SITE) {
+        // Blokiran sajt u pregledaču je već vraćen nazad (BlockScreen), pa ima samo „Zatvori“.
+        if ((isSite || kind == GuardService.KIND_INAPP || kind == GuardService.KIND_ADDRESS
+                || kind == GuardService.KIND_UNSEEN_SITE) && !host.screen.sitePage(key, kind)) {
             TextView back = overlayButton(c, "Nazad");
             back.setOnClickListener(Safe.click("overlayBack", v -> {
                 if ((ItemKey.isSite(key) || k == GuardService.KIND_ADDRESS || k == GuardService.KIND_UNSEEN_SITE)
