@@ -28,7 +28,8 @@ public final class LangTest {
                 "Longest session in minutes, then a break of 15 min (0 = none)");
         eq("WhatsApp", "WhatsApp");
 
-        // Tekst u kodu bez prevoda: samo upozorenje, da build ne stane.
+        // Tekst u kodu bez prevoda ruši test. Ne proverava se: komentar, poruka izuzetka i red označen sa
+        // "// bez prevoda" (tekst koji se ne prikazuje, npr. reči za prepoznavanje sistemskih ekrana).
         Pattern lit = Pattern.compile("\"((?:[^\"\\\\\\n]|\\\\.)*)\"");
         int missing = 0;
         for (java.nio.file.Path p : (Iterable<java.nio.file.Path>) Files.walk(Paths.get("app/src/main/java/com/cuvar/app")).filter(f -> f.toString().endsWith(".java"))::iterator) {
@@ -36,13 +37,15 @@ public final class LangTest {
             if (name.equals("QuizBank.java") || name.equals("Translit.java") || name.equals("Lang.java")) continue;
             for (String line : Files.readAllLines(p, StandardCharsets.UTF_8)) {
                 String t = line.trim();
-                if (t.startsWith("//") || t.startsWith("*") || t.contains("GuardDiagnostics") || t.contains("Pattern.")) continue;
-                Matcher m = lit.matcher(line);
+                if (t.startsWith("//") || t.startsWith("*") || t.startsWith("/*") || t.contains("GuardDiagnostics")
+                        || t.contains("Pattern.") || t.contains("// bez prevoda") || t.contains("Exception(\"")) continue;
+                String code = line.replaceAll("\\s//\\s.*$", ""); // komentar na kraju reda
+                Matcher m = lit.matcher(code);
                 while (m.find()) {
                     String s = Lang.unescape(m.group(1));
                     if (!s.matches(".*[čćšžđČĆŠŽĐ].*") && !(s.contains(" ") && s.matches(".*[a-z]{3}.*"))) continue;
                     if (s.matches(".*\\b(EEE|HH|yyyy)\\b.*")) continue;
-                    if (Lang.translate(s).equals(s) && !s.equals("Čuvar")) {
+                    if (Lang.translate(s).equals(s) && !Lang.known(s) && !s.equalsIgnoreCase("Čuvar")) {
                         missing++;
                         System.out.println("Bez engleskog prevoda (" + name + "): " + s);
                     }
@@ -50,6 +53,7 @@ public final class LangTest {
             }
         }
         System.out.println("LangTest: " + checks + " provera prošlo, bez prevoda: " + missing);
+        if (missing > 0) throw new AssertionError(missing + " tekstova nema red u app/src/main/assets/en.tsv (skill novi-tekst)");
     }
 
     private static void eq(String sr, String en) {

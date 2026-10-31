@@ -87,6 +87,11 @@ public final class Ui {
         return c.getApplicationContext().getSharedPreferences("ui", Context.MODE_PRIVATE);
     }
 
+    /** Pokreće čitanje podešavanja izgleda u pozadini (Android ih učitava na svojoj niti), pre prvog ekrana. */
+    public static void warmUp(Context c) {
+        prefs(c);
+    }
+
     public static int themeChoice(Context c) {
         return prefs(c).getInt("theme", THEME_SYSTEM);
     }

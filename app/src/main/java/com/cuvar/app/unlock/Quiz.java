@@ -196,7 +196,7 @@ public final class Quiz {
             Collections.shuffle(others, r);
             choices.addAll(others.subList(0, 3));
             Collections.shuffle(choices, r);
-            return new Question("Geografija", "Na kom kontinentu je država " + c[0] + "?", choices, c[2]);
+            return new Question("Geografija", "Na kom kontinentu je država " + c[0] + "?", choices, c[2]); // bez prevoda: samo na srpskom (Quiz.english)
         }
         boolean reverse = kind >= 2;
         int field = reverse ? 0 : 1;
@@ -219,9 +219,9 @@ public final class Quiz {
             if (!choices.contains(o)) choices.add(o);
         }
         Collections.shuffle(choices, r);
-        String text = reverse ? c[1] + " je glavni grad koje države?"
-                : "Država: " + c[0] + ". Koji je njen glavni grad?";
-        return new Question("Glavni gradovi", text, choices, c[field]);
+        String text = reverse ? c[1] + " je glavni grad koje države?" // bez prevoda: samo na srpskom
+                : "Država: " + c[0] + ". Koji je njen glavni grad?"; // bez prevoda
+        return new Question("Glavni gradovi", text, choices, c[field]); // bez prevoda
     }
 
     // ---------- Ostalo nasumično ----------

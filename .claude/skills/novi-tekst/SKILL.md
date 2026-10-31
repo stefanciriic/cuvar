@@ -18,5 +18,7 @@ prave pri prikazu.
      razmacima na krajevima tačno kao u kodu (`"Danas "` + broj).
    - Množina preko `Ui.count(n, "dan", "dana", "dana")`: svaki oblik ima svoj red
      ako već ne postoji.
-4. `tools/check.sh --no-build` ispisuje broj tekstova bez prevoda; ne sme da
-   poraste. Spisak: `java -cp "${TMPDIR:-/tmp}/cuvar-check" com.cuvar.app.LangTest | grep 'Bez engleskog'`.
+4. `tools/check.sh --no-build`: `LangTest` pada ako bilo koji tekst nema red u en.tsv. Kad je
+   engleski isti (`" min"`), red je i dalje potreban (srpski, TAB, isti tekst). Tekst koji se ne prikazuje
+   (reči za prepoznavanje sistemskih ekrana, pitalice samo na srpskom) označi na kraju reda sa
+   `// bez prevoda: razlog`. Spisak: `java -cp "${TMPDIR:-/tmp}/cuvar-check" com.cuvar.app.LangTest | grep 'Bez engleskog'`.

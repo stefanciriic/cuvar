@@ -145,6 +145,9 @@ koji je podrazumevani telefon ili SMS, izuzima poznate aplikacije za telefon i S
 Na emulatoru: namerna greška u ekranu "Pravila" ga je zatvorila bez pada; ekrani Pravila, Fokus i Statistika
 rade. `StrictMode` je našao samo prvo čitanje podešavanja na glavnoj niti pri pokretanju (~0,9 s na
 emulatoru): moguće buduće ubrzanje, nije greška. Nije probano na telefonu.
+Dopuna 31.10.2026: `CuvarApp` učitava `Store` na pozadinskoj niti i ranije pokreće čitanje podešavanja izgleda;
+`StrictMode` sada ne nalazi čitanje diska na glavnoj niti (bilo 4). Na emulatoru je razlika u vremenu
+pokretanja (~600–700 ms) manja od šuma merenja; korist se očekuje na sporijim telefonima.
 
 - `SubActivity`/aktivnosti: zaštita pri crtanju. Kad pukne, kratka poruka i povratak, ne pad procesa.
 - Prolaz kroz svih 86 `catch` blokova: prijava ili komentar.

@@ -6,8 +6,10 @@ import java.io.Reader;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Engleski prevod pri prikazu. Tekst Čuvara se u kodu piše na srpskom, a prevodi su u assets/en.tsv:
@@ -21,6 +23,8 @@ public final class Lang {
 
     private static volatile Map<String, String> exact = Collections.emptyMap();
     private static volatile List<String> parts = Collections.emptyList();
+    // redovi u kojima je engleski isti (" min", "Period: "): ne menjaju tekst, ali znači da su provereni
+    private static volatile Set<String> same = Collections.emptySet();
 
     private Lang() {
     }
@@ -32,6 +36,7 @@ public final class Lang {
     /** Učitava „srpski<TAB>engleski“ redove; # na početku reda je komentar. */
     public static void load(Reader in) throws IOException {
         Map<String, String> map = new HashMap<>();
+        Set<String> sameRows = new HashSet<>();
         BufferedReader r = new BufferedReader(in);
         String line;
         while ((line = r.readLine()) != null) {
@@ -40,13 +45,19 @@ public final class Lang {
             if (tab <= 0) continue;
             String sr = unescape(line.substring(0, tab));
             String en = unescape(line.substring(tab + 1));
-            if (!sr.equals(en)) map.put(sr, en);
+            if (!sr.equals(en)) map.put(sr, en); else sameRows.add(sr);
         }
         List<String> keys = new ArrayList<>();
         for (String k : map.keySet()) if (hasLetter(k)) keys.add(k);
         keys.sort((a, b) -> b.length() - a.length());
         exact = map;
         parts = keys;
+        same = sameRows;
+    }
+
+    /** Da li tekst ima red u en.tsv (i kad je engleski isti). */
+    public static boolean known(String sr) {
+        return exact.containsKey(sr) || same.contains(sr);
     }
 
     public static String get(String sr) {

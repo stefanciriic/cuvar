@@ -5,8 +5,8 @@ import java.util.Locale;
 /** Prepoznavanje sistemskih ekrana po imenu paketa, aktivnosti ili tekstu (bez čitanja sadržaja aplikacija). */
 public final class SystemScreens {
     /** Reči sa ekrana za brisanje aplikacije (u instalaciji i Play prodavnici se Čuvar sme samo ažurirati). */
-    public static final String[] UNINSTALL = {"uninstall", "deinstal", "деинстал", "ukloni", "уклони", "obriši", "обриши",
-            "izbriši", "избриши", "delete", "remove"};
+    public static final String[] UNINSTALL = {"uninstall", "deinstal", "деинстал", "ukloni", "уклони", "obriši", "обриши", // bez prevoda: reči sa sistemskog ekrana
+            "izbriši", "избриши", "delete", "remove"}; // bez prevoda
 
     private SystemScreens() {
     }
@@ -35,7 +35,7 @@ public final class SystemScreens {
 
     /** Da li tekst sa ekrana pominje Čuvara (ali ne „čuvar ekrana“, koji je podešavanje ekrana). */
     public static boolean namesGuard(String text) {
-        String s = text.toLowerCase(Locale.ROOT).replaceAll("(čuvar|чувар)[a-zа-я]* (ekrana|екрана)", "");
-        return s.contains("čuvar") || s.contains("чувар");
+        String s = text.toLowerCase(Locale.ROOT).replaceAll("(čuvar|чувар)[a-zа-я]* (ekrana|екрана)", ""); // bez prevoda: prepoznavanje ekrana
+        return s.contains("čuvar") || s.contains("чувар"); // bez prevoda: ime na sistemskom ekranu
     }
 }
