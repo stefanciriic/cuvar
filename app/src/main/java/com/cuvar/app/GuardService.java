@@ -1,6 +1,8 @@
 package com.cuvar.app;
 
 import com.cuvar.app.rules.ItemKey;
+import com.cuvar.app.rules.BlockRules;
+import com.cuvar.app.guard.GuardFacts;
 import com.cuvar.app.data.AppLabels;
 import com.cuvar.app.data.Store;
 import com.cuvar.app.web.BrowserWindows;
@@ -94,6 +96,7 @@ public class GuardService extends AccessibilityService {
     public final BrowserWindows windows = new BrowserWindows(this);
     public final AppKinds kinds = new AppKinds(this);
     public final UsageAccounting accounting = new UsageAccounting(this);
+    private final GuardFacts facts = new GuardFacts(this);
     public final BlockScreen screen = new BlockScreen(this);
     public final Handler h = new Handler(Looper.getMainLooper());
     public Store store;
@@ -700,12 +703,9 @@ public class GuardService extends AccessibilityService {
         boolean browsing = urlBarId != null || inApp || apkHost != null;
         if (browsing && currentHost != null) visibleHosts.add(currentHost);
 
-        // Sva pravila koja sada važe, od najstrožeg: ukupni dnevni limit (zajedničko vreme pod pravilima),
-        // noć, ručni fokus, vremenski režim, pa aplikacija i sajt.
+        // Sva pravila koja sada važe, od najstrožeg (vidi BlockRules).
         // Otključavanje jedne stavke ne otvara ostale (otključan pregledač ne otvara blokiran sajt).
-        List<Block> blocks = new ArrayList<>();
         String appKey = ItemKey.app(pkg);
-        boolean web = browsing && currentHost != null;
         int dayLimit = store.dayLimits.dayLimit();
         if (dayLimit > 0) {
             long used = store.dayLimits.guardedToday();
@@ -714,121 +714,31 @@ public class GuardService extends AccessibilityService {
                 Ui.toast(this, "Čuvar: do dnevnog limita ostalo je " + Ui.fmt(left) + ".");
             }
             if (DayLimit.reached(dayLimit, used)) store.dayLimits.markDayLimitHit();
-            if (DayLimit.reached(dayLimit, used) && !kinds.exempt().contains(pkg)) {
-                String site = web ? store.siteGuarded(currentHost) : null;
-                if (kinds.guarded(pkg)) {
-                    blocks.add(new Block(appKey, KIND_DAY, null, false));
-                } else if (site != null) {
-                    blocks.add(new Block(ItemKey.site(site), KIND_DAY, null, false));
-                }
-            }
         }
-        if (store.nightActive() && !kinds.exempt().contains(pkg)) {
-            String site = web ? store.siteGuarded(currentHost) : null;
-            if (kinds.guarded(pkg)) {
-                if (store.nightBlocksApp(pkg)) blocks.add(new Block(appKey, KIND_NIGHT, null, false));
-            } else if (site != null) {
-                blocks.add(new Block(ItemKey.site(site), KIND_NIGHT, null, false));
-            }
-        }
-        if (store.focus.focusActive() && !kinds.exempt().contains(pkg)
-                && !store.focus.focusAllowsApp(pkg)
-                && !(web && store.focus.focusAllowsSite(currentHost))) {
-            blocks.add(new Block(appKey, KIND_FOCUS, null, false));
-        }
-        if (pkg.equals(opensBlocked)) {
-            blocks.add(new Block(appKey, KIND_OPENS, null, false));
-        }
-        if (store.sessions.sessionBreakLeft(pkg) > 0) {
-            blocks.add(new Block(appKey, KIND_BREAK, null, false));
-        }
-        DailySchedule.Rule rule = store.modes.scheduleBlockingApp(pkg);
-        if (rule != null) {
-            blocks.add(new Block(appKey, KIND_SCHEDULE, rule, false));
-        }
-        DailySchedule.Rule siteRule = web ? store.modes.scheduleBlockingSite(currentHost) : null;
-        if (siteRule != null) {
-            blocks.add(new Block(ItemKey.site(DailySchedule.matchDomain(currentHost, siteRule.sites)),
-                    KIND_SCHEDULE, siteRule, false));
-        }
-        if (rule == null) {
-            boolean lock = store.appLockNow(pkg);
-            int limit = store.appLimitNow(pkg);
-            boolean timeUp = limit > 0 && store.usedShared(pkg) >= limit * 60000L;
-            if (limit > 0 && !timeUp) accounting.warnLimit(appKey, appLabel(pkg), limit, store.usedShared(pkg));
-            // Van perioda režim sa dnevnom šifrom drži svoje aplikacije zaključane, a umesto PIN-a traži šifru.
-            DailySchedule.Rule codeRule = store.modes.codeRuleForApp(pkg);
-            if (lock || timeUp || codeRule != null) {
-                int k = timeUp ? KIND_TIME : codeRule != null ? KIND_CODE : KIND_LOCK;
-                blocks.add(new Block(appKey, k, null, true));
-            }
-        }
-        if (kinds.unknownBrowser(pkg)) {
-            blocks.add(new Block(appKey, unseen(KIND_BROWSER), null, true));
-        }
-        if (kinds.cloner(pkg)) {
-            blocks.add(new Block(appKey, KIND_CLONER, null, true));
-        }
-        if (web && siteRule == null) {
-            DailySchedule.Rule codeRule = store.modes.codeRuleForSite(currentHost);
-            if (codeRule != null) {
-                blocks.add(new Block(ItemKey.site(DailySchedule.matchDomain(currentHost, codeRule.sites)),
-                        KIND_CODE, null, true));
-            }
-        }
-        if ((inApp || apkHost != null) && currentHost == null && store.hasSiteRules()) {
-            // Adresa se ne vidi, a postoje pravila za sajtove: bez ovoga bi se blokiran sajt otvorio preko linka u aplikaciji.
-            blocks.add(new Block(appKey, unseen(KIND_INAPP), null, true));
-        }
-        if (currentAddress != null && currentAddress.unresolved(SystemClock.elapsedRealtime()) && store.hasSiteRules()) {
-            blocks.add(new Block(appKey, unseen(KIND_ADDRESS), null, true));
-        }
-        if (browsing) for (String domain : store.matchingSitesNow(currentHost)) {
-            int siteLimit = store.siteLimitNow(domain);
-            if (siteLimit == 0) {
-                blocks.add(new Block(ItemKey.site(domain), KIND_SITE, null, true));
-            } else if (siteLimit > 0 && store.usedShared(ItemKey.site(domain)) >= siteLimit * 60000L) {
-                blocks.add(new Block(ItemKey.site(domain), KIND_SITE_TIME, null, true));
-            } else if (siteLimit > 0) {
-                accounting.warnLimit(ItemKey.site(domain), domain, siteLimit, store.usedShared(ItemKey.site(domain)));
-            }
-        }
+        boolean unresolved = currentAddress != null && currentAddress.unresolved(SystemClock.elapsedRealtime());
+        List<Block> blocks = BlockRules.front(facts, new BlockRules.Front(pkg, currentHost, browsing,
+                inApp || apkHost != null, pkg.equals(opensBlocked), unresolved));
 
-        // Inspect every visible window even while another rule wins, so all visible sites are timed.
-        List<Block> secondary = new ArrayList<>();
+        // Svaki prozor na ekranu se proverava i kad druga blokada pobeđuje, da se izmeri vreme svih vidljivih sajtova.
+        List<BlockRules.Window> others = new ArrayList<>();
         for (BrowserWindows.AppWindow other : windows.otherAppWindows()) {
             if (BrowserWindows.isSameBrowserWindow(other, raw, urlBarId, addressRoot)) continue;
-            Block b = appOnlyBlock(other.pkg);
-            if (b != null) secondary.add(b);
             String id = BrowserMonitor.addressViewId(other.pkg);
             boolean embedded = id == null && kinds.inAppBrowser(other.rawPkg);
             if (id != null || embedded) secondaryContentPackages.add(other.rawPkg);
             String host = null;
+            boolean addressUnknown = false;
             if (id != null) {
                 BrowserAddressState address = browserMonitor.readAddress(other.root, id, activityOf.get(other.rawPkg));
                 host = address.host();
-                if (address.unresolved(SystemClock.elapsedRealtime()) && store.hasSiteRules()) {
-                    secondary.add(new Block(ItemKey.app(other.pkg), unseen(KIND_ADDRESS), null, true));
-                }
+                addressUnknown = address.unresolved(SystemClock.elapsedRealtime());
             } else if (embedded) {
                 host = browserMonitor.inAppHost(other.root);
-                if (host == null && store.hasSiteRules()) {
-                    secondary.add(new Block(ItemKey.app(other.pkg), unseen(KIND_INAPP), null, true));
-                }
             }
-            if (host != null) {
-                visibleHosts.add(host);
-                if (store.focus.focusActive() && !kinds.exempt().contains(other.pkg)
-                        && !store.focus.focusAllowsApp(other.pkg) && !store.focus.focusAllowsSite(host)) {
-                    secondary.add(new Block(ItemKey.app(other.pkg), KIND_FOCUS, null, false));
-                }
-                addSecondarySiteBlocks(secondary, other.pkg, host);
-            } else if (store.focus.focusActive() && !kinds.exempt().contains(other.pkg)
-                    && !store.focus.focusAllowsApp(other.pkg)) {
-                secondary.add(new Block(ItemKey.app(other.pkg), KIND_FOCUS, null, false));
-            }
+            if (host != null) visibleHosts.add(host);
+            others.add(new BlockRules.Window(other.pkg, host, addressUnknown, embedded && host == null));
         }
-        blocks.addAll(secondary);
+        blocks.addAll(BlockRules.windows(facts, others, this::unlockedNow));
         setContentEvents(wantsContent(pkg) || inApp || !secondaryContentPackages.isEmpty());
 
         // Back dismisses the current blocked URL while the browser opens a neutral page. Ignore that site
@@ -902,70 +812,6 @@ public class GuardService extends AccessibilityService {
         } catch (Throwable error) {
             GuardDiagnostics.report("contentEvents", error);
         }
-    }
-
-    private void addSecondarySiteBlocks(List<Block> blocks, String pkg, String host) {
-        String guardedSite = store.siteGuarded(host);
-        if (guardedSite != null && !kinds.exempt().contains(pkg)) {
-            if (DayLimit.reached(store.dayLimits.dayLimit(), store.dayLimits.guardedToday())) {
-                blocks.add(new Block(ItemKey.site(guardedSite), KIND_DAY, null, false));
-            }
-            if (store.nightActive()) blocks.add(new Block(ItemKey.site(guardedSite), KIND_NIGHT, null, false));
-        }
-        DailySchedule.Rule rule = store.modes.scheduleBlockingSite(host);
-        if (rule != null) {
-            blocks.add(new Block(ItemKey.site(DailySchedule.matchDomain(host, rule.sites)), KIND_SCHEDULE, rule, false));
-        } else {
-            DailySchedule.Rule codeRule = store.modes.codeRuleForSite(host);
-            if (codeRule != null) {
-                blocks.add(new Block(ItemKey.site(DailySchedule.matchDomain(host, codeRule.sites)), KIND_CODE, null, true));
-            }
-        }
-        for (String domain : store.matchingSitesNow(host)) {
-            int limit = store.siteLimitNow(domain);
-            if (limit == 0) blocks.add(new Block(ItemKey.site(domain), KIND_SITE, null, true));
-            else if (limit > 0 && store.usedShared(ItemKey.site(domain)) >= limit * 60000L) {
-                blocks.add(new Block(ItemKey.site(domain), KIND_SITE_TIME, null, true));
-            }
-        }
-    }
-
-    /** Blokada aplikacije koja je na ekranu, ali nije u fokusu (bez sajtova i broja otvaranja), ili null. */
-    private Block appOnlyBlock(String p) {
-        if (kinds.exempt().contains(p)) return null;
-        String k = ItemKey.app(p);
-        Block b = null;
-        int dayLimit = store.dayLimits.dayLimit();
-        if (kinds.guarded(p) && DayLimit.reached(dayLimit, store.dayLimits.guardedToday())) {
-            b = new Block(k, KIND_DAY, null, false);
-        } else if (kinds.guarded(p) && store.nightBlocksApp(p)) {
-            b = new Block(k, KIND_NIGHT, null, false);
-        } else if (store.sessions.sessionBreakLeft(p) > 0) {
-            b = new Block(k, KIND_BREAK, null, false);
-        } else {
-            DailySchedule.Rule rule = store.modes.scheduleBlockingApp(p);
-            if (rule != null) {
-                b = new Block(k, KIND_SCHEDULE, rule, false);
-            } else {
-                int limit = store.appLimitNow(p);
-                boolean timeUp = limit > 0 && store.usedShared(p) >= limit * 60000L;
-                DailySchedule.Rule codeRule = store.modes.codeRuleForApp(p);
-                if (store.appLockNow(p) || timeUp || codeRule != null) {
-                    b = new Block(k, timeUp ? KIND_TIME : codeRule != null ? KIND_CODE : KIND_LOCK, null, true);
-                } else if (kinds.unknownBrowser(p)) {
-                    b = new Block(k, unseen(KIND_BROWSER), null, true);
-                } else if (kinds.cloner(p)) {
-                    b = new Block(k, KIND_CLONER, null, true);
-                }
-            }
-        }
-        if (b != null && !hard(b.kind) && unlockedNow(k)) return null;
-        return b;
-    }
-
-    /** Vrsta blokade za pregledač u kome Čuvar ne vidi sajt (vidi BlockKind.unseenSite). */
-    private int unseen(int softKind) {
-        return BlockKind.unseenSite(softKind, store.modes.hardSiteBlockNow());
     }
 
     public static boolean hard(int kind) {

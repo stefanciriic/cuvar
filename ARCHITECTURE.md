@@ -37,8 +37,8 @@ com.cuvar.app            Komponente iz AndroidManifest-a (aktivnosti, servisi)
 |---|---|
 | `com.cuvar.app` | `MainActivity`, `RulesActivity`, `ScheduleActivity`, `FocusActivity`, `StatsActivity`, `SubActivity`, `GuardService` |
 | `data` | `Store` (ulaz: `Store.get(c)`, pravila aplikacija i sajtova, popuštanje od sutra) i njegovi delovi: `Clock` (pouzdano vreme), `Unlocks` (šifra, otključavanje, hitno), `Modes` (vremenski režimi), `DayLimits` (ukupni dnevni limit), `UsageLog` (izmereno vreme, otvaranja), `Sessions` (korišćenje u komadu), `Focus`, `GuardLog` (kad Čuvar nije radio), `AppLabels` (naziv aplikacije) |
-| `rules` | `BlockKind`, `CodeAttempts`, `DailyCode`, `DailySchedule`, `DayLimit`, `DomainRules`, `LimitWarnings`, `RuleMerge`, `SessionLimit`, `TrustedClock`, `UnlockCost`, `UnlockStreak`, `UnlockTimer`, `UsageCalendar`, `UsageTracker` |
-| `guard` | delovi servisa: `BlockScreen` (prikaz i sakrivanje blokade, „nazad“), `AppKinds` (vrsta aplikacije napred: bez pravila, kopija, WebAPK, izuzeta, podešavanja), `UsageAccounting` (upis vremena, upozorenja pred limit); ostalo: `BlockOverlayContent`, `Clones`, `ForegroundApp`, `GuardDiagnostics`, `GuardOverlayWindow`, `LoadMeter`, `MusicOwner`, `PauseOverlayContent`, `SystemScreens` |
+| `rules` | `AppRule` (pravilo aplikacije, spajanje „strože od dva“), `BlockKind`, `BlockRules` (koja blokada sada važi), `CodeAttempts`, `DailyCode`, `DailySchedule`, `DayLimit`, `DomainRules`, `ItemKey` (ključevi "app:" i "site:"), `LimitWarnings`, `RuleMerge`, `SessionLimit`, `TrustedClock`, `UnlockCost`, `UnlockStreak`, `UnlockTimer`, `UsageCalendar`, `UsageTracker` |
+| `guard` | delovi servisa: `BlockScreen` (prikaz i sakrivanje blokade, „nazad“), `AppKinds` (vrsta aplikacije napred: bez pravila, kopija, WebAPK, izuzeta, podešavanja), `UsageAccounting` (upis vremena, upozorenja pred limit), `GuardFacts` (pravila iz `Store`-a za `BlockRules`); ostalo: `BlockOverlayContent`, `Clones`, `ForegroundApp`, `GuardDiagnostics`, `GuardOverlayWindow`, `LoadMeter`, `MusicOwner`, `PauseOverlayContent`, `SystemScreens` |
 | `web` | `BrowserWindows` (prozori na ekranu, glavni prozor pregledača), `BrowserAddressState`, `BrowserMonitor`, `Hosts`, `Links`, `WebAddress` |
 | `unlock` | `Jokes`, `NumberGame`, `NumberGameView`, `PinPad`, `Quiz`, `QuizBank` |
 | `ui` | `AppPicker`, `Charts`, `CheckRow`, `SettingsSheets`, `Sheet`, `Ui` |
@@ -93,16 +93,17 @@ Pravila aplikacija i sajtova i mehanizam "popuštanje od sutra" (`enforce()`,
 
 ## Kako je podeljen `GuardService`
 
-`GuardService` (~1.000 redova) ostaje u `com.cuvar.app` i drži životni ciklus servisa,
+`GuardService` (~850 redova) ostaje u `com.cuvar.app` i drži životni ciklus servisa,
 događaje i glavnu proveru `check()`. Njegovi delovi su polja servisa:
 `svc.screen` (`BlockScreen`), `svc.kinds` (`AppKinds`), `svc.accounting`
 (`UsageAccounting`), `svc.windows` (`BrowserWindows`). Stanje koje delovi dele
 (`currentPkg`, `rawPkg`, `overlayRule`...) je zato `public` u servisu. Menja ga samo
 servis i njegovi delovi, nikad ekrani.
 
-## Sledeći korak
+## Odluka o blokadi
 
-`check()` u `GuardService`-u ima ~350 redova. Odluka "koja blokada sada važi" treba
-da postane čista klasa u `rules` (sa testom), a `check()` samo da skuplja stanje i
-prikazuje rezultat. To menja ponašanje ako se pogreši, pa ide posebno i uz proveru
-na telefonu.
+`check()` skuplja stanje (šta je napred, koji sajt, drugi prozori) i prikazuje rezultat.
+Odluku "koje blokade sada važe i kojim redom" donosi `rules.BlockRules` (test:
+`BlockRulesTest`); pravila čita preko `BlockRules.Facts`, koje u servisu daje
+`guard.GuardFacts`. Redosled u listi je bitan: `BlockKind.pick` prikazuje prvu
+blokadu koja važi. Novo pravilo blokade ide u `BlockRules`, sa testom.
