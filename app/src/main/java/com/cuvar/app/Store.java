@@ -1173,6 +1173,31 @@ final class Store {
         enforce();
     }
 
+    /** PRIVREMENO (31.10.2026, na zahtev): „Ukloni iz pravila“ važi odmah, a ne od sutra u 06:00. */
+    static final boolean REMOVE_NOW = true;
+
+    /** Skida aplikaciju i sajtove iz svih pravila i režima, i iz onoga što važi sada (i usred režima). */
+    synchronized void removeNow(String pkg, java.util.Collection<String> domains) {
+        if (pkg != null) {
+            apps.remove(pkg);
+            if (eApps != null) eApps.remove(pkg);
+        }
+        for (String d : domains) {
+            sites.remove(d);
+            if (eSites != null) eSites.remove(d);
+        }
+        for (List<DailySchedule.Rule> list : java.util.Arrays.asList(schedules, eSchedules)) {
+            for (DailySchedule.Rule r : list) {
+                if (pkg != null) r.apps.remove(pkg);
+                r.sites.removeAll(domains);
+            }
+        }
+        sp.edit().putString("apps", apps.toString()).putString("sites", sites.toString())
+                .putString("schedules", schedulesJson()).apply();
+        if (eApps != null) saveEnforced();
+        enforce();
+    }
+
     // ---------- Izmereno vreme ----------
 
     /** Ključ današnjeg dana ("yyyyMMdd") po pouzdanom vremenu, pa pomeranje sata ne vraća dnevne limite. */

@@ -379,6 +379,10 @@ public class RulesActivity extends SubActivity {
         }
     }
 
+    private void removedToast() {
+        Toast.makeText(this, Ui.cyr("Uklonjeno iz pravila. Važi odmah."), Toast.LENGTH_LONG).show();
+    }
+
     private boolean saveRules(List<DailySchedule.Rule> rules, List<CheckRow> rows, String key, boolean site) {
         boolean ok = true;
         for (int i = 0; i < rules.size(); i++) {
@@ -490,6 +494,14 @@ public class RulesActivity extends SubActivity {
                 });
         if (store.hasAppRule(pkg) || !in.isEmpty() || !siteRules.isEmpty()) {
             sheet.danger("Ukloni iz pravila", () -> {
+                if (Store.REMOVE_NOW) {
+                    Set<String> doms = new HashSet<>(siteRules);
+                    for (DailySchedule.Rule r : rules) for (String x : r.sites) if (dom != null && Links.covers(dom, x)) doms.add(x);
+                    store.removeNow(pkg, doms);
+                    removedToast();
+                    render();
+                    return true;
+                }
                 for (DailySchedule.Rule r : rules) {
                     if (r.apps.contains(pkg) && !store.setScheduleApp(r.id, pkg, false)) busy();
                     for (String x : r.sites) if (dom != null && Links.covers(dom, x) && !store.setScheduleSite(r.id, x, false)) busy();
@@ -553,6 +565,12 @@ public class RulesActivity extends SubActivity {
                 });
         if (current >= 0 || !in.isEmpty()) {
             sheet.danger("Ukloni iz pravila", () -> {
+                if (Store.REMOVE_NOW) {
+                    store.removeNow(null, java.util.Collections.singleton(domain));
+                    removedToast();
+                    render();
+                    return true;
+                }
                 for (DailySchedule.Rule r : rules) if (in.contains(r.id) && !store.setScheduleSite(r.id, domain, false)) busy();
                 if (current >= 0) store.removeSite(domain);
                 pendingToast();
