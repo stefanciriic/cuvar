@@ -1173,7 +1173,7 @@ final class Store {
         enforce();
     }
 
-    /** PRIVREMENO (31.10.2026, na zahtev): „Ukloni iz pravila“ važi odmah, a ne od sutra u 06:00. */
+    /** PRIVREMENO (31.10.2026, na zahtev): skidanje aplikacije ili sajta iz pravila i režima važi odmah, a ne od sutra u 06:00. */
     static final boolean REMOVE_NOW = true;
 
     /** Skida aplikaciju i sajtove iz svih pravila i režima, i iz onoga što važi sada (i usred režima). */
@@ -1539,6 +1539,7 @@ final class Store {
         keys.addAll(keysOf(apps));
         for (String pkg : keys) {
             JSONObject e = eApps.optJSONObject(pkg), d = apps.optJSONObject(pkg);
+            if (REMOVE_NOW && d == null) continue;
             boolean lock = (e != null && e.optBoolean("lock", false)) || (d != null && d.optBoolean("lock", false));
             int limit = RuleMerge.stricterLimit(e == null ? 0 : e.optInt("limit", 0), d == null ? 0 : d.optInt("limit", 0));
             int max = RuleMerge.stricterLimit(e == null ? 0 : e.optInt("opens", 0), d == null ? 0 : d.optInt("opens", 0));
@@ -1554,6 +1555,7 @@ final class Store {
         keys.addAll(keysOf(sites));
         for (String dom : keys) {
             JSONObject e = eSites.optJSONObject(dom), d = sites.optJSONObject(dom);
+            if (REMOVE_NOW && d == null) continue;
             int a = e == null ? RuleMerge.NO_SITE : e.optInt("limit", 0), b = d == null ? RuleMerge.NO_SITE : d.optInt("limit", 0);
             int limit = RuleMerge.stricterSite(a, b);
             try {
@@ -1562,6 +1564,15 @@ final class Store {
             }
         }
         List<DailySchedule.Rule> nr = DailySchedule.tighten(eSchedules, schedules);
+        if (REMOVE_NOW) {
+            // Stavka skinuta iz režima ne čeka 06:00.
+            for (DailySchedule.Rule r : nr) {
+                DailySchedule.Rule d = rule(r.id);
+                if (d == null) continue;
+                r.apps.retainAll(d.apps);
+                r.sites.retainAll(d.sites);
+            }
+        }
         eApps = na;
         eSites = ns;
         eSchedules.clear();
