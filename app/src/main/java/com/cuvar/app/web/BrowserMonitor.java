@@ -121,6 +121,18 @@ public final class BrowserMonitor {
             state = new BrowserAddressState();
             addresses.put(key, state);
         }
+        try {
+            readInto(state, root, id, activity);
+        } catch (Throwable error) {
+            // Zastareo čvor ili pregledač upravo menja ekran: adresa je nepoznata (posle kratkog čekanja
+            // blokira se kao nepotvrđena), a provera ne pada.
+            GuardDiagnostics.report("readAddress", error);
+            state.missing(SystemClock.elapsedRealtime());
+        }
+        return state;
+    }
+
+    private void readInto(BrowserAddressState state, AccessibilityNodeInfo root, String id, String activity) {
         List<AccessibilityNodeInfo> nodes = root.findAccessibilityNodeInfosByViewId(id);
         if (nodes == null || nodes.isEmpty()) {
             if (BrowserAddressState.isInternalScreen(activity)) {
@@ -134,7 +146,7 @@ public final class BrowserMonitor {
             } else {
                 state.missing(SystemClock.elapsedRealtime());
             }
-            return state;
+            return;
         }
         AccessibilityNodeInfo node = nodes.get(0);
         if (node == null) {
@@ -147,18 +159,18 @@ public final class BrowserMonitor {
             if (BrowserAddressState.isInternalAddress(value)) state.internalScreen();
             else state.readable(Hosts.hostOf(WebAddress.real(value)));
         }
-        return state;
     }
 
     /** Reads only a small visible toolbar area, never the WebView page content. */
     public String inAppHost(AccessibilityNodeInfo root) {
-        android.graphics.Rect bounds = new android.graphics.Rect();
-        root.getBoundsInScreen(bounds);
-        int limitY = bounds.top + Math.max(bounds.height() / 4, Ui.dp(context, 160));
-        ArrayDeque<AccessibilityNodeInfo> queue = new ArrayDeque<>();
-        queue.add(root);
-        int seen = 0;
+        if (root == null) return null;
         try {
+            android.graphics.Rect bounds = new android.graphics.Rect();
+            root.getBoundsInScreen(bounds);
+            int limitY = bounds.top + Math.max(bounds.height() / 4, Ui.dp(context, 160));
+            ArrayDeque<AccessibilityNodeInfo> queue = new ArrayDeque<>();
+            queue.add(root);
+            int seen = 0;
             while (!queue.isEmpty() && seen++ < 300) {
                 AccessibilityNodeInfo node = queue.poll();
                 if (node == null) continue;

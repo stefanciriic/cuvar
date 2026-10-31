@@ -121,7 +121,14 @@ R10 i R12 su već bili rešeni (unos broja i `queryPending` u `finally`). Na emu
 - Unos brojeva preko jedne metode koja vraća podrazumevanu vrednost umesto izuzetka, sa testom.
 - `ForegroundApp`: `queryPending.set(false)` u `finally`.
 
-### Faza 4: čitanje pregledača i podataka (R11, R16)
+### Faza 4: čitanje pregledača i podataka (R11, R16) — urađeno 31.10.2026
+
+Urađeno: `BrowserMonitor.readAddress` i `inAppHost` hvataju grešku čvora; adresa je tada "nepoznata" i posle
+kratkog čekanja se blokira kao nepotvrđena (greška ne otvara sajt). `BrowserWindows` je već bio zaštićen.
+Oštećena podešavanja (pogrešni tipovi, prekinut JSON, `null`) probana na emulatoru: nema pada.
+Poznato ponašanje: pokvareno pravilo jedne aplikacije čita se kao "nema pravila" i važi odmah. To je
+namerno bezbednije (pokvaren podatak ne sme da zaključa telefon), a podatke piše samo Čuvar. Test na računaru za
+JSON nije dodat: `org.json` je deo Androida i nije dostupan čistim testovima.
 
 - Pregled `BrowserMonitor` i `BrowserWindows`: lokalni `try` oko čitanja čvorova; ako čitanje ne
   uspe, adresa je "nepoznata" (postojeći put `addressUnresolved`), a ne pad.

@@ -102,6 +102,7 @@ public final class BrowserWindows {
                 if (w != null && w.getType() == AccessibilityWindowInfo.TYPE_APPLICATION) n++;
             }
         } catch (Throwable ignored) {
+            // bez spiska prozora vraća 0, isto kao jedna aplikacija na ekranu (uobičajen slučaj)
         }
         return n;
     }
