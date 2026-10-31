@@ -1,9 +1,10 @@
 package com.cuvar.app;
 
+import com.cuvar.app.data.AppLabels;
 import com.cuvar.app.data.Store;
 import com.cuvar.app.data.Sessions;
-import com.cuvar.app.i18n.Translit;
 import com.cuvar.app.rules.DailySchedule;
+import com.cuvar.app.ui.AppPicker;
 import com.cuvar.app.ui.CheckRow;
 import com.cuvar.app.ui.Sheet;
 import com.cuvar.app.ui.Ui;
@@ -12,12 +13,7 @@ import com.cuvar.app.web.Links;
 
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.content.pm.ResolveInfo;
 import android.graphics.drawable.Drawable;
-import android.os.Bundle;
-import android.text.Editable;
-import android.text.InputType;
-import android.text.TextWatcher;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.ImageView;
@@ -134,7 +130,7 @@ public class RulesActivity extends SubActivity {
         if (apps.isEmpty() && sites.isEmpty()) empty("Van režima ništa nije zaključano ni ograničeno.");
         LinearLayout group = null;
         List<String[]> sorted = new ArrayList<>();
-        for (String pkg : apps) sorted.add(new String[]{pkg, appLabel(pm, pkg)});
+        for (String pkg : apps) sorted.add(new String[]{pkg, AppLabels.of(pm, pkg)});
         sorted.sort((x, y) -> x[1].compareToIgnoreCase(y[1]));
         for (String[] x : sorted) {
             Drawable icon = null;
@@ -242,14 +238,14 @@ public class RulesActivity extends SubActivity {
         if (r == null) return out;
         Set<String> covered = new HashSet<>();
         for (String pkg : r.apps) {
-            out.add(appLabel(pm, pkg));
+            out.add(AppLabels.of(pm, pkg));
             String dom = store.linkedSite(pkg);
             if (dom != null) covered.add(dom);
         }
         for (String s : r.sites) {
             if (coveredBy(s, covered)) continue;
             String pkg = installedApp(pm, s);
-            out.add(pkg == null ? s : appLabel(pm, pkg));
+            out.add(pkg == null ? s : AppLabels.of(pm, pkg));
         }
         return out;
     }
@@ -351,14 +347,6 @@ public class RulesActivity extends SubActivity {
 
     private void empty(String text) {
         content.addView(Ui.text(this, text, 13, Ui.MUTED, false), Ui.fill(this, 10));
-    }
-
-    private static String appLabel(PackageManager pm, String pkg) {
-        try {
-            return Translit.keep(pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString());
-        } catch (Exception e) {
-            return pkg;
-        }
     }
 
     // ---------- Izmena ----------
@@ -544,7 +532,7 @@ public class RulesActivity extends SubActivity {
     private void editSite(String domain) {
         String app = installedApp(getPackageManager(), domain);
         if (app != null) {
-            editApp(app, appLabel(getPackageManager(), app));
+            editApp(app, AppLabels.of(getPackageManager(), app));
             return;
         }
         List<DailySchedule.Rule> rules = store.modes.schedules();
@@ -632,60 +620,20 @@ public class RulesActivity extends SubActivity {
 
     private void pickApp() {
         Toast.makeText(this, Ui.cyr("Učitavam aplikacije…"), Toast.LENGTH_SHORT).show();
-        new Thread(() -> {
-            List<String[]> items = new ArrayList<>();
-            List<Drawable> icons = new ArrayList<>();
-            try {
-                PackageManager pm = getPackageManager();
-                Intent intent = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER);
-                Set<String> seen = new HashSet<>();
-                List<ResolveInfo> found = pm.queryIntentActivities(intent, 0);
-                found.sort((a, b) -> Translit.keep(a.loadLabel(pm).toString()).compareToIgnoreCase(Translit.keep(b.loadLabel(pm).toString())));
-                for (ResolveInfo info : found) {
-                    if (info.activityInfo == null) continue;
-                    String pkg = info.activityInfo.packageName;
-                    if (pkg.equals(getPackageName()) || !seen.add(pkg)) continue;
-                    items.add(new String[]{pkg, Translit.keep(info.loadLabel(pm).toString())});
-                    Drawable d = null;
-                    try { d = info.loadIcon(pm); } catch (Throwable ignored) { }
-                    icons.add(d);
-                }
-            } catch (Exception ignored) { }
-            runOnUiThread(() -> {
-                if (isFinishing() || isDestroyed()) return;
-                showAppPicker(items, icons);
-            });
-        }).start();
+        AppPicker.load(this, this::showAppPicker);
     }
 
-    private void showAppPicker(List<String[]> items, List<Drawable> icons) {
+    private void showAppPicker(List<AppPicker.App> items) {
         LinearLayout box = Ui.column(this);
-        EditText search = Sheet.input(this, "Pretraži aplikacije", false);
-        search.setInputType(InputType.TYPE_CLASS_TEXT);
-        box.addView(search);
+        List<CheckRow> rows = AppPicker.addList(this, box, items, null);
         Sheet sheet = new Sheet(this, "Izaberi aplikaciju").view(box).secondary("Otkaži", null);
-        List<View> rows = new ArrayList<>();
         for (int i = 0; i < items.size(); i++) {
-            String[] it = items.get(i);
-            CheckRow row = new CheckRow(this, icons.get(i), it[1], null);
-            row.setListener(checked -> {
+            AppPicker.App app = items.get(i);
+            rows.get(i).setListener(checked -> {
                 sheet.dismiss();
-                editApp(it[0], it[1]);
+                editApp(app.pkg, app.label);
             });
-            rows.add(row);
-            box.addView(row, Ui.fill(this, 6));
         }
-        search.addTextChangedListener(new TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) { }
-            @Override public void onTextChanged(CharSequence s, int a, int b, int c) { }
-            @Override public void afterTextChanged(Editable s) {
-                String q = Translit.toLatin(s.toString().trim()).toLowerCase(Locale.ROOT);
-                for (int i = 0; i < rows.size(); i++) {
-                    boolean show = q.isEmpty() || items.get(i)[1].toLowerCase(Locale.ROOT).contains(q);
-                    rows.get(i).setVisibility(show ? View.VISIBLE : View.GONE);
-                }
-            }
-        });
         sheet.show();
     }
 }

@@ -1,12 +1,12 @@
 package com.cuvar.app;
 
+import com.cuvar.app.data.AppLabels;
 import com.cuvar.app.guard.UsageAccounting;
 
 import com.cuvar.app.data.Store;
 import com.cuvar.app.data.Unlocks;
 import com.cuvar.app.guard.ForegroundApp;
 import com.cuvar.app.i18n.Lang;
-import com.cuvar.app.i18n.Translit;
 import com.cuvar.app.rules.DailyCode;
 import com.cuvar.app.rules.DailySchedule;
 import com.cuvar.app.rules.DayLimit;
@@ -329,13 +329,13 @@ public class MainActivity extends Activity {
         List<String> over = new ArrayList<>();
         PackageManager pm = getPackageManager();
         for (String pkg : store.appsOverLimit()) {
-            String label = labelOf(pm, pkg);
+            String label = AppLabels.orNull(pm, pkg);
             over.add(label == null ? pkg : label);
         }
         over.addAll(store.sitesOverLimit());
         List<String> rest = new ArrayList<>();
         for (String pkg : store.sessions.appsOnBreak()) {
-            String label = labelOf(pm, pkg);
+            String label = AppLabels.orNull(pm, pkg);
             rest.add((label == null ? pkg : label) + " još " + minutes(store.sessions.sessionBreakLeft(pkg)));
         }
         if (!rest.isEmpty()) {
@@ -492,7 +492,7 @@ public class MainActivity extends Activity {
                     || !UsageAccounting.tracked(this, key)) {
                 continue;
             }
-            String label = labelOf(pm, key);
+            String label = AppLabels.orNull(pm, key);
             if (label == null) {
                 continue;
             }
@@ -552,14 +552,6 @@ public class MainActivity extends Activity {
         bar.addView(new View(this), new LinearLayout.LayoutParams(0, hgt, 1f - frac));
         box.addView(bar, Ui.fill(this, 6));
         return box;
-    }
-
-    private static String labelOf(PackageManager pm, String pkg) {
-        try {
-            return Translit.keep(pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString());
-        } catch (Throwable t) {
-            return null;
-        }
     }
 
     private String homePackage() {

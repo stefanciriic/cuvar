@@ -1,10 +1,9 @@
 package com.cuvar.app;
 
+import com.cuvar.app.data.AppLabels;
 import com.cuvar.app.guard.UsageAccounting;
 
-import com.cuvar.app.data.Store;
 import com.cuvar.app.data.UsageLog;
-import com.cuvar.app.i18n.Translit;
 import com.cuvar.app.rules.DailySchedule;
 import com.cuvar.app.rules.UnlockStreak;
 import com.cuvar.app.ui.Charts;
@@ -174,11 +173,11 @@ public class StatsActivity extends SubActivity {
         }
 
         // Aplikacije sa bojom: prvih 5 po vremenu u periodu, ostale idu u „Ostalo“ (isto u krugu i kolonama).
-        List<Row> top = topRows(perApp, k -> labelOf(pm, k), Integer.MAX_VALUE);
+        List<Row> top = topRows(perApp, k -> AppLabels.orNull(pm, k), Integer.MAX_VALUE);
         List<String> colored = new ArrayList<>();
         for (Map.Entry<String, Long> e : sortedEntries(perApp)) {
             if (colored.size() == TOP) break;
-            if (labelOf(pm, e.getKey()) != null) colored.add(e.getKey());
+            if (AppLabels.orNull(pm, e.getKey()) != null) colored.add(e.getKey());
         }
 
         long avg = Math.max(0, avgOf(dayKeys));
@@ -432,7 +431,7 @@ public class StatsActivity extends SubActivity {
         card.addView(donut, Ui.fill(this, 12));
 
         for (int i = 0; i < colored.size(); i++) {
-            String name = labelOf(pm, colored.get(i));
+            String name = AppLabels.orNull(pm, colored.get(i));
             long ms = perApp.get(colored.get(i));
             card.addView(legendRow(Charts.color(i, false), name, ms, total), Ui.fill(this, i == 0 ? 16 : 10));
             desc.append(", ").append(name).append(' ').append(Ui.fmt(ms));
@@ -629,14 +628,6 @@ public class StatsActivity extends SubActivity {
                 return "Produktivnost";
             default:
                 return "Ostalo";
-        }
-    }
-
-    private static String labelOf(PackageManager pm, String pkg) {
-        try {
-            return Translit.keep(pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString());
-        } catch (Throwable t) {
-            return null;
         }
     }
 

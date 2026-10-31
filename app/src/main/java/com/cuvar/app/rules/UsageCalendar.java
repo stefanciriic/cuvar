@@ -10,7 +10,8 @@ import java.util.TimeZone;
 public final class UsageCalendar {
     private UsageCalendar() { }
 
-    private static String dayKey(Calendar c) {
+    /** Ključ dana "yyyyMMdd" za dati kalendar. */
+    public static String dayKey(Calendar c) {
         return String.format(Locale.US, "%04d%02d%02d",
                 c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH));
     }

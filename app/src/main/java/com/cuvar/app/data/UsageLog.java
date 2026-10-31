@@ -3,7 +3,6 @@ package com.cuvar.app.data;
 import com.cuvar.app.rules.UsageCalendar;
 import com.cuvar.app.ui.Ui;
 
-import android.content.SharedPreferences;
 import android.os.SystemClock;
 
 import java.text.SimpleDateFormat;
@@ -108,8 +107,7 @@ public final class UsageLog {
             c.add(Calendar.DAY_OF_MONTH, -(n - 1));
             List<String> out = new ArrayList<>();
             for (int i = 0; i < n; i++) {
-                out.add(String.format(Locale.US, "%04d%02d%02d",
-                        c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH)));
+                out.add(UsageCalendar.dayKey(c));
                 c.add(Calendar.DAY_OF_MONTH, 1);
             }
             return out;

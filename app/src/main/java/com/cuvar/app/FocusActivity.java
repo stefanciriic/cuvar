@@ -1,42 +1,27 @@
 package com.cuvar.app;
 
-import com.cuvar.app.i18n.Translit;
+import com.cuvar.app.ui.AppPicker;
 import com.cuvar.app.ui.CheckRow;
 import com.cuvar.app.ui.Sheet;
 import com.cuvar.app.ui.Ui;
 import com.cuvar.app.web.Hosts;
 
-import android.content.Intent;
-import android.content.pm.PackageManager;
-import android.content.pm.ResolveInfo;
-import android.graphics.drawable.Drawable;
 import android.os.Bundle;
-import android.text.Editable;
 import android.text.InputType;
-import android.text.TextWatcher;
-import android.view.View;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 
 /** Ručno pokrenut režim u kome su dozvoljene samo izabrane aplikacije i sajtovi. */
 public class FocusActivity extends SubActivity {
 
-    private static final class Item {
-        public String pkg;
-        public String label;
-        public Drawable icon;
-    }
-
-    private final List<Item> apps = new ArrayList<>();
+    private final List<AppPicker.App> apps = new ArrayList<>();
     private final Set<String> selectedApps = new HashSet<>();
     private final Set<String> selectedSites = new HashSet<>();
     private int durationMin = 25;
@@ -157,31 +142,11 @@ public class FocusActivity extends SubActivity {
     }
 
     private void loadApps() {
-        new Thread(() -> {
-            List<Item> out = new ArrayList<>();
-            try {
-                PackageManager pm = getPackageManager();
-                Intent i = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER);
-                Set<String> seen = new HashSet<>();
-                for (ResolveInfo ri : pm.queryIntentActivities(i, 0)) {
-                    if (ri.activityInfo == null) continue;
-                    String pkg = ri.activityInfo.packageName;
-                    if (pkg == null || pkg.equals(getPackageName()) || !seen.add(pkg)) continue;
-                    Item item = new Item();
-                    item.pkg = pkg;
-                    CharSequence label = Translit.keep(String.valueOf(ri.loadLabel(pm)));
-                    item.label = label == null ? pkg : label.toString();
-                    try { item.icon = ri.loadIcon(pm); } catch (Throwable ignored) { }
-                    out.add(item);
-                }
-            } catch (Throwable ignored) { }
-            Collections.sort(out, (a, b) -> a.label.compareToIgnoreCase(b.label));
-            runOnUiThread(() -> {
-                apps.clear();
-                apps.addAll(out);
-                if (appButton != null) appButton.setText(appSummary());
-            });
-        }).start();
+        AppPicker.load(this, out -> {
+            apps.clear();
+            apps.addAll(out);
+            if (appButton != null) appButton.setText(appSummary());
+        });
     }
 
     private void showAppPicker() {
@@ -190,33 +155,17 @@ public class FocusActivity extends SubActivity {
             return;
         }
         LinearLayout box = Ui.column(this);
-        EditText search = Sheet.input(this, "Pretraži aplikacije", false);
-        search.setInputType(InputType.TYPE_CLASS_TEXT);
-        box.addView(search);
         TextView count = Ui.text(this, "Izabrano: " + selectedApps.size(), 14, Ui.ACCENT, true);
-        box.addView(count, Ui.fill(this, 10));
-        List<CheckRow> rows = new ArrayList<>();
-        for (Item item : apps) {
-            CheckRow row = new CheckRow(this, item.icon, item.label, null);
-            row.setChecked(selectedApps.contains(item.pkg));
+        List<CheckRow> rows = AppPicker.addList(this, box, apps, count);
+        for (int i = 0; i < apps.size(); i++) {
+            String pkg = apps.get(i).pkg;
+            CheckRow row = rows.get(i);
+            row.setChecked(selectedApps.contains(pkg));
             row.setListener(checked -> {
-                if (checked) selectedApps.add(item.pkg); else selectedApps.remove(item.pkg);
+                if (checked) selectedApps.add(pkg); else selectedApps.remove(pkg);
                 count.setText("Izabrano: " + selectedApps.size());
             });
-            rows.add(row);
-            box.addView(row, Ui.fill(this, 6));
         }
-        search.addTextChangedListener(new TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence s, int st, int c, int a) { }
-            @Override public void onTextChanged(CharSequence s, int st, int b, int c) { }
-            @Override public void afterTextChanged(Editable s) {
-                String q = Translit.toLatin(s.toString().trim()).toLowerCase(Locale.ROOT);
-                for (int i = 0; i < rows.size(); i++) {
-                    rows.get(i).setVisibility(q.isEmpty() || apps.get(i).label.toLowerCase(Locale.ROOT).contains(q)
-                            ? View.VISIBLE : View.GONE);
-                }
-            }
-        });
         new Sheet(this, "Dozvoljene aplikacije").message("Tokom fokusa ostale aplikacije se zaključavaju.")
                 .view(box).secondary("Zatvori", null)
                 .primary("Sačuvaj izbor", () -> {

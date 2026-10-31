@@ -2,14 +2,9 @@ package com.cuvar.app.web;
 
 import com.cuvar.app.i18n.Translit;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.List;
 import java.util.Locale;
-import java.util.Set;
 
-/** Host iz ukucane ili pročitane adrese i glavni domen hosta. */
+/** Host iz ukucane ili pročitane adrese. */
 public final class Hosts {
     private Hosts() {
     }
@@ -52,41 +47,5 @@ public final class Hosts {
             s = s.substring(0, s.length() - 1);
         }
         return s.isEmpty() ? null : s;
-    }
-
-    /** Drugi nivo ispod državnog domena, npr. "co" u "bbc.co.uk" ili "org" u "nesto.org.rs". */
-    private static final Set<String> SECOND_LEVEL = new HashSet<>(Arrays.asList(
-            "co", "com", "org", "net", "edu", "gov", "ac", "in", "or", "ne", "go"));
-
-    /**
-     * Glavni domen hosta, da se poddomeni sabiraju zajedno:
-     * "m.youtube.com" -> "youtube.com", "news.bbc.co.uk" -> "bbc.co.uk". Null ako ne liči na domen.
-     */
-    public static String mainDomain(String host) {
-        if (host == null || host.indexOf('.') < 0 || !host.matches("[\\p{L}\\p{N}.-]+")) {
-            return null;
-        }
-        if (host.matches("[0-9.]+")) {
-            return host; // IP adresa
-        }
-        List<String> parts = new ArrayList<>();
-        for (String part : host.split("\\.")) {
-            if (!part.isEmpty()) {
-                parts.add(part);
-            }
-        }
-        int n = parts.size();
-        if (n < 2) {
-            return null;
-        }
-        int keep = n >= 3 && parts.get(n - 1).length() == 2 && SECOND_LEVEL.contains(parts.get(n - 2)) ? 3 : 2;
-        StringBuilder sb = new StringBuilder();
-        for (int i = n - Math.min(keep, n); i < n; i++) {
-            if (sb.length() > 0) {
-                sb.append('.');
-            }
-            sb.append(parts.get(i));
-        }
-        return sb.toString();
     }
 }

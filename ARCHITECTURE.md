@@ -36,12 +36,12 @@ com.cuvar.app            Komponente iz AndroidManifest-a (aktivnosti, servisi)
 | Paket | Klase |
 |---|---|
 | `com.cuvar.app` | `MainActivity`, `RulesActivity`, `ScheduleActivity`, `FocusActivity`, `StatsActivity`, `SubActivity`, `GuardService` |
-| `data` | `Store` (ulaz: `Store.get(c)`, pravila aplikacija i sajtova, popuštanje od sutra) i njegovi delovi: `Clock` (pouzdano vreme), `Unlocks` (šifra, otključavanje, hitno), `Modes` (vremenski režimi), `DayLimits` (ukupni dnevni limit), `UsageLog` (izmereno vreme, otvaranja), `Sessions` (korišćenje u komadu), `Focus`, `GuardLog` (kad Čuvar nije radio) |
+| `data` | `Store` (ulaz: `Store.get(c)`, pravila aplikacija i sajtova, popuštanje od sutra) i njegovi delovi: `Clock` (pouzdano vreme), `Unlocks` (šifra, otključavanje, hitno), `Modes` (vremenski režimi), `DayLimits` (ukupni dnevni limit), `UsageLog` (izmereno vreme, otvaranja), `Sessions` (korišćenje u komadu), `Focus`, `GuardLog` (kad Čuvar nije radio), `AppLabels` (naziv aplikacije) |
 | `rules` | `BlockKind`, `CodeAttempts`, `DailyCode`, `DailySchedule`, `DayLimit`, `DomainRules`, `LimitWarnings`, `RuleMerge`, `SessionLimit`, `TrustedClock`, `UnlockCost`, `UnlockStreak`, `UnlockTimer`, `UsageCalendar`, `UsageTracker` |
 | `guard` | delovi servisa: `BlockScreen` (prikaz i sakrivanje blokade, „nazad“), `AppKinds` (vrsta aplikacije napred: bez pravila, kopija, WebAPK, izuzeta, podešavanja), `UsageAccounting` (upis vremena, upozorenja pred limit); ostalo: `BlockOverlayContent`, `Clones`, `ForegroundApp`, `GuardDiagnostics`, `GuardOverlayWindow`, `LoadMeter`, `MusicOwner`, `PauseOverlayContent`, `SystemScreens` |
 | `web` | `BrowserWindows` (prozori na ekranu, glavni prozor pregledača), `BrowserAddressState`, `BrowserMonitor`, `Hosts`, `Links`, `WebAddress` |
 | `unlock` | `Jokes`, `NumberGame`, `NumberGameView`, `PinPad`, `Quiz`, `QuizBank` |
-| `ui` | `Charts`, `CheckRow`, `SettingsSheets`, `Sheet`, `Ui` |
+| `ui` | `AppPicker`, `Charts`, `CheckRow`, `SettingsSheets`, `Sheet`, `Ui` |
 | `i18n` | `Lang`, `Translit` |
 
 ## Pravila

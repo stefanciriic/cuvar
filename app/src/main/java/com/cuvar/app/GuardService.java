@@ -1,5 +1,6 @@
 package com.cuvar.app;
 
+import com.cuvar.app.data.AppLabels;
 import com.cuvar.app.data.Store;
 import com.cuvar.app.web.BrowserWindows;
 import com.cuvar.app.guard.AppKinds;
@@ -13,7 +14,6 @@ import com.cuvar.app.guard.GuardOverlayWindow;
 import com.cuvar.app.guard.LoadMeter;
 import com.cuvar.app.guard.PauseOverlayContent;
 import com.cuvar.app.guard.SystemScreens;
-import com.cuvar.app.i18n.Translit;
 import com.cuvar.app.rules.BlockKind;
 import com.cuvar.app.rules.DailySchedule;
 import com.cuvar.app.rules.DayLimit;
@@ -30,7 +30,6 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.content.pm.PackageManager;
 import android.media.AudioManager;
 import android.os.Build;
 import android.os.Handler;
@@ -986,12 +985,7 @@ public class GuardService extends AccessibilityService {
     }
 
     public String appLabel(String pkg) {
-        try {
-            PackageManager pm = getPackageManager();
-            return Translit.keep(pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString());
-        } catch (Throwable t) {
-            return pkg;
-        }
+        return AppLabels.of(getPackageManager(), pkg);
     }
 
     // ---------- Ekran za blokadu ----------

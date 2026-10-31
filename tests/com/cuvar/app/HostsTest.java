@@ -16,14 +16,6 @@ public final class HostsTest {
         eq(Hosts.hostOf("ovo nije adresa"), null, "Tekst sa razmakom");
         eq(Hosts.hostOf(""), null, "Prazno");
         eq(Hosts.hostOf(null), null, "Ništa");
-
-        eq(Hosts.mainDomain("m.youtube.com"), "youtube.com", "Poddomen se sabira");
-        eq(Hosts.mainDomain("news.bbc.co.uk"), "bbc.co.uk", "Državni domen drugog nivoa");
-        eq(Hosts.mainDomain("nesto.org.rs"), "nesto.org.rs", "org.rs");
-        eq(Hosts.mainDomain("a.b.example.rs"), "example.rs", "Običan domen");
-        eq(Hosts.mainDomain("192.168.0.1"), "192.168.0.1", "IP adresa ostaje");
-        eq(Hosts.mainDomain("localhost"), null, "Bez tačke nije domen");
-        eq(Hosts.mainDomain("a b.com"), null, "Razmak nije domen");
         System.out.println("HostsTest: " + checks + " provera prošlo.");
     }
 

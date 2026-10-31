@@ -1,6 +1,5 @@
 package com.cuvar.app.data;
 
-import com.cuvar.app.i18n.Translit;
 import com.cuvar.app.rules.DailyCode;
 import com.cuvar.app.rules.DailySchedule;
 import com.cuvar.app.rules.DomainRules;
@@ -22,7 +21,6 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import org.json.JSONArray;
@@ -183,14 +181,6 @@ public final class Store {
 
     public synchronized List<String> appListNow() {
         return keysOf(enforcedApps());
-    }
-
-    public synchronized void setApp(String pkg, boolean lock, int limitMin) {
-        setApp(pkg, lock, limitMin, appOpens(pkg));
-    }
-
-    public synchronized void setApp(String pkg, boolean lock, int limitMin, int maxOpens) {
-        setApp(pkg, lock, limitMin, maxOpens, appSession(pkg));
     }
 
     public synchronized void setApp(String pkg, boolean lock, int limitMin, int maxOpens, int sessionMin) {
@@ -413,8 +403,7 @@ public final class Store {
     /** Ključ današnjeg dana ("yyyyMMdd") po pouzdanom vremenu, pa pomeranje sata ne vraća dnevne limite. */
     public synchronized String day() {
         Calendar c = clock.calendarNow();
-        return String.format(Locale.US, "%04d%02d%02d",
-                c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH));
+        return UsageCalendar.dayKey(c);
     }
 
     // ---------- Da li je stavka pod pravilom ----------
@@ -808,26 +797,22 @@ public final class Store {
         if (eProtect && !protectSelf()) out.add("Zaštita Čuvara od isključivanja se isključuje");
         for (String pkg : nightFree()) {
             if (eNightFree.contains(pkg)) continue;
-            String name = pkg;
-            try { name = Translit.keep(pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()); } catch (Exception ignored) { }
+            String name = AppLabels.of(pm, pkg);
             out.add(name + ": bez noćne blokade");
         }
         for (String pkg : codeFree()) {
             if (eCodeFree.contains(pkg)) continue;
-            String name = pkg;
-            try { name = Translit.keep(pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()); } catch (Exception ignored) { }
+            String name = AppLabels.of(pm, pkg);
             out.add(name + ": van režima bez dnevne šifre");
         }
         List<String> want = linkPairs();
         for (String p : eLinks) {
             if (want.contains(p)) continue;
-            String name = Links.pkgOf(p);
-            try { name = Translit.keep(pm.getApplicationLabel(pm.getApplicationInfo(name, 0)).toString()); } catch (Exception ignored) { }
+            String name = AppLabels.of(pm, Links.pkgOf(p));
             out.add(name + " i " + Links.domainOf(p) + " se razdvajaju");
         }
         for (String pkg : keysOf(eApps)) {
-            String name = pkg;
-            try { name = Translit.keep(pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()); } catch (Exception ignored) { }
+            String name = AppLabels.of(pm, pkg);
             boolean el = rawLock(pkg), dl = appLock(pkg);
             int ei = rawLimit(pkg), di = appLimit(pkg);
             if (el && !dl) out.add(name + ": bez zaključavanja");

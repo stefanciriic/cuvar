@@ -1,8 +1,9 @@
 package com.cuvar.app;
 
-import com.cuvar.app.i18n.Translit;
+import com.cuvar.app.data.AppLabels;
 import com.cuvar.app.rules.DailySchedule;
 import com.cuvar.app.ui.Charts;
+import com.cuvar.app.ui.AppPicker;
 import com.cuvar.app.ui.CheckRow;
 import com.cuvar.app.ui.Sheet;
 import com.cuvar.app.ui.Ui;
@@ -10,13 +11,8 @@ import com.cuvar.app.web.Hosts;
 
 import android.app.TimePickerDialog;
 import android.content.Intent;
-import android.content.pm.PackageManager;
-import android.content.pm.ResolveInfo;
-import android.graphics.drawable.Drawable;
 import android.os.Bundle;
-import android.text.Editable;
 import android.text.InputType;
-import android.text.TextWatcher;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -26,7 +22,6 @@ import android.widget.Toast;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -227,9 +222,7 @@ public class ScheduleActivity extends SubActivity {
         action("Dodaj / izaberi aplikacije", () -> chooseApps(rule));
         if (rule.apps.isEmpty()) empty("Još nema aplikacija u režimu.");
         for (String pkg : rule.apps) {
-            String label = pkg;
-            try { label = Translit.keep(getPackageManager().getApplicationLabel(getPackageManager().getApplicationInfo(pkg, 0)).toString()); }
-            catch (Exception ignored) { }
+            String label = AppLabels.of(getPackageManager(), pkg);
             action(label + " · ukloni", () -> {
                 if (!store.modes.setScheduleApp(id, pkg, false)) refused();
                 render();
@@ -342,49 +335,21 @@ public class ScheduleActivity extends SubActivity {
                 }).show();
     }
 
-    private static final class AppItem {
-        public String pkg;
-        public String label;
-        public Drawable icon;
-    }
-
     private void chooseApps(DailySchedule.Rule rule) {
         Toast.makeText(this, Ui.cyr("Učitavam aplikacije…"), Toast.LENGTH_SHORT).show();
-        new Thread(() -> {
-            List<AppItem> items = new ArrayList<>();
-            try {
-                PackageManager pm = getPackageManager();
-                Intent intent = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER);
-                Set<String> seen = new HashSet<>();
-                for (ResolveInfo info : pm.queryIntentActivities(intent, 0)) {
-                    if (info.activityInfo == null) continue;
-                    String pkg = info.activityInfo.packageName;
-                    if (pkg.equals(getPackageName()) || !seen.add(pkg)) continue;
-                    AppItem it = new AppItem();
-                    it.pkg = pkg;
-                    it.label = Translit.keep(info.loadLabel(pm).toString());
-                    try { it.icon = info.loadIcon(pm); } catch (Throwable ignored) { }
-                    items.add(it);
-                }
-                // Već izabrane na vrh, ostale po abecedi.
-                items.sort((a, b) -> {
-                    boolean sa = rule.apps.contains(a.pkg), sb = rule.apps.contains(b.pkg);
-                    if (sa != sb) return sa ? -1 : 1;
-                    return a.label.compareToIgnoreCase(b.label);
-                });
-            } catch (Exception ignored) { }
-            runOnUiThread(() -> {
-                if (isFinishing() || isDestroyed()) return;
-                if (items.isEmpty()) {
-                    Toast.makeText(this, Ui.cyr("Nije moguće učitati aplikacije"), Toast.LENGTH_LONG).show();
-                    return;
-                }
-                showAppPicker(rule, items);
-            });
-        }).start();
+        AppPicker.load(this, items -> {
+            if (items.isEmpty()) {
+                Toast.makeText(this, Ui.cyr("Nije moguće učitati aplikacije"), Toast.LENGTH_LONG).show();
+                return;
+            }
+            // Već izabrane na vrh, ostale po abecedi.
+            List<AppPicker.App> sorted = new ArrayList<>(items);
+            sorted.sort((a, b) -> Boolean.compare(!rule.apps.contains(a.pkg), !rule.apps.contains(b.pkg)));
+            showAppPicker(rule, sorted);
+        });
     }
 
-    private void showAppPicker(DailySchedule.Rule rule, List<AppItem> items) {
+    private void showAppPicker(DailySchedule.Rule rule, List<AppPicker.App> items) {
         Set<String> selected = new HashSet<>(rule.apps);
         LinearLayout box = Ui.column(this);
         TextView count = Ui.text(this, "", 14, Ui.ACCENT, true);
@@ -392,33 +357,16 @@ public class ScheduleActivity extends SubActivity {
                 ? "Ništa nije izabrano" : "Izabrano: " + selected.size());
         updateCount.run();
 
-        EditText search = Sheet.input(this, "Pretraži aplikacije", false);
-        search.setInputType(InputType.TYPE_CLASS_TEXT);
-        box.addView(search);
-        box.addView(count, Ui.fill(this, 10));
-
-        List<CheckRow> rows = new ArrayList<>();
-        for (AppItem it : items) {
-            CheckRow row = new CheckRow(this, it.icon, it.label, null);
-            row.setChecked(selected.contains(it.pkg));
+        List<CheckRow> rows = AppPicker.addList(this, box, items, count);
+        for (int i = 0; i < items.size(); i++) {
+            String pkg = items.get(i).pkg;
+            CheckRow row = rows.get(i);
+            row.setChecked(selected.contains(pkg));
             row.setListener(checked -> {
-                if (checked) selected.add(it.pkg); else selected.remove(it.pkg);
+                if (checked) selected.add(pkg); else selected.remove(pkg);
                 updateCount.run();
             });
-            rows.add(row);
-            box.addView(row, Ui.fill(this, 6));
         }
-        search.addTextChangedListener(new TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) { }
-            @Override public void onTextChanged(CharSequence s, int a, int b, int c) { }
-            @Override public void afterTextChanged(Editable s) {
-                String q = Translit.toLatin(s.toString().trim()).toLowerCase(Locale.ROOT);
-                for (int i = 0; i < rows.size(); i++) {
-                    boolean show = q.isEmpty() || items.get(i).label.toLowerCase(Locale.ROOT).contains(q);
-                    rows.get(i).setVisibility(show ? View.VISIBLE : View.GONE);
-                }
-            }
-        });
 
         new Sheet(this, "Aplikacije u režimu „" + rule.name + "“")
                 .message("Izabrane aplikacije biće blokirane " + rule.daysLabel() + " u periodu " + rule.label() + ".")
@@ -428,7 +376,7 @@ public class ScheduleActivity extends SubActivity {
                     boolean ok = true;
                     DailySchedule.Rule current = store.modes.schedule(id);
                     if (current != null) {
-                        for (AppItem it : items) {
+                        for (AppPicker.App it : items) {
                             boolean want = selected.contains(it.pkg);
                             if (want != current.apps.contains(it.pkg)) ok &= store.modes.setScheduleApp(id, it.pkg, want);
                         }

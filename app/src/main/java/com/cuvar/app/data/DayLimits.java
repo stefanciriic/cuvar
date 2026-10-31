@@ -1,14 +1,13 @@
 package com.cuvar.app.data;
 
-import com.cuvar.app.GuardService;
 import com.cuvar.app.guard.AppKinds;
 import com.cuvar.app.rules.DayLimit;
+import com.cuvar.app.rules.UsageCalendar;
 
 import android.content.Context;
 import android.content.SharedPreferences;
 
 import java.util.Calendar;
-import java.util.Locale;
 import java.util.Set;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -144,8 +143,7 @@ public final class DayLimits {
             if (dayLimit() <= 0) return;
             Calendar c = store.clock.calendarNow();
             c.add(Calendar.DAY_OF_MONTH, 1);
-            String tomorrow = String.format(Locale.US, "%04d%02d%02d",
-                    c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH));
+            String tomorrow = UsageCalendar.dayKey(c);
             store.sp.edit().putInt("dayLimitNext", 0).putString("dayLimitFrom", tomorrow).apply();
         }
     }

@@ -61,11 +61,6 @@ public final class LoadMeter {
         public double maxMs() {
             return maxNs / 1e6;
         }
-
-        /** Deo vremena (u procentima) koji su provere zauzele. */
-        public double busyPercent() {
-            return upMs <= 0 ? 0 : totalNs / 1e6 * 100.0 / upMs;
-        }
     }
 
     /** Deo vremena u procentima, npr. CPU vreme procesa prema vremenu otkako proces radi. */
