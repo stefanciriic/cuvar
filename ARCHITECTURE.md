@@ -41,7 +41,7 @@ com.cuvar.app            Komponente iz AndroidManifest-a (aktivnosti, servisi)
 | `guard` | delovi servisa: `BlockScreen` (prikaz i sakrivanje blokade, „nazad“), `AppKinds` (vrsta aplikacije napred: bez pravila, kopija, WebAPK, izuzeta, podešavanja), `UsageAccounting` (upis vremena, upozorenja pred limit), `GuardFacts` (pravila iz `Store`-a za `BlockRules`); ostalo: `BlockOverlayContent`, `Clones`, `ErrorLog` (dnevnik grešaka, čist i testiran), `ForegroundApp`, `GuardDiagnostics` (prijava greške u logcat i dnevnik na telefonu), `GuardOverlayWindow`, `LoadMeter`, `MusicOwner`, `PauseOverlayContent`, `SystemScreens` |
 | `web` | `BrowserWindows` (prozori na ekranu, glavni prozor pregledača), `BrowserAddressState`, `BrowserMonitor`, `Hosts`, `Links`, `WebAddress` |
 | `unlock` | `Jokes`, `NumberGame`, `NumberGameView`, `PinPad`, `Quiz`, `QuizBank` |
-| `ui` | `AppPicker`, `Charts`, `CheckRow`, `SettingsSheets`, `Sheet`, `Ui` |
+| `ui` | `AppPicker`, `Charts`, `CheckRow`, `Safe` (klik i posao koji ne smeju da obore proces), `SettingsSheets`, `Sheet`, `Ui` |
 | `i18n` | `Lang`, `Translit` |
 
 ## Pravila

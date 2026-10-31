@@ -7,6 +7,7 @@ import com.cuvar.app.rules.DailyCode;
 import com.cuvar.app.rules.DailySchedule;
 import com.cuvar.app.rules.DayLimit;
 import com.cuvar.app.rules.UnlockCost;
+import com.cuvar.app.ui.Safe;
 import com.cuvar.app.ui.Ui;
 import com.cuvar.app.unlock.Jokes;
 import com.cuvar.app.unlock.NumberGameView;
@@ -171,7 +172,7 @@ public final class BlockOverlayContent {
         close.setTextSize(17);
         close.setBackground(Ui.pressable(Ui.ACCENT, Ui.ACCENT_DOWN, Ui.dp(c, 14)));
         final int k = kind;
-        close.setOnClickListener(v -> host.screen.leaveBlock(key, k));
+        close.setOnClickListener(Safe.click("overlayClose", v -> host.screen.leaveBlock(key, k)));
         box.addView(close, Ui.fill(c, 20));
 
         if (cooling) {
@@ -186,7 +187,7 @@ public final class BlockOverlayContent {
                 TextView ask = overlayButton(c, "Hitno otključavanje (" + Unlocks.EMERGENCY_MS / 60000L + " min)");
                 ask.setTextColor(Ui.NIGHT_MUTED);
                 ask.setBackground(null);
-                ask.setOnClickListener(v -> showQuiz(urgent, () -> showEmergencyPad(urgent, key, code), null));
+                ask.setOnClickListener(Safe.click("overlayAsk", v -> showQuiz(urgent, () -> showEmergencyPad(urgent, key, code), null)));
                 urgent.addView(ask);
             }
         } else if (code && !GuardService.hard(kind) && !host.store.unlock.dailyCodeVisible()) {
@@ -212,7 +213,7 @@ public final class BlockOverlayContent {
                 TextView ask = overlayButton(c, "Ipak želim da otključam");
                 ask.setTextColor(Ui.NIGHT_MUTED);
                 ask.setBackground(null);
-                ask.setOnClickListener(v -> showAreYouSure(unlock, key, k, code));
+                ask.setOnClickListener(Safe.click("overlayAsk", v -> showAreYouSure(unlock, key, k, code)));
                 unlock.addView(ask);
             }
         }
@@ -222,7 +223,7 @@ public final class BlockOverlayContent {
         if (isSite || kind == GuardService.KIND_INAPP || kind == GuardService.KIND_ADDRESS
                 || kind == GuardService.KIND_UNSEEN_SITE) {
             TextView back = overlayButton(c, "Nazad");
-            back.setOnClickListener(v -> {
+            back.setOnClickListener(Safe.click("overlayBack", v -> {
                 if ((ItemKey.isSite(key) || k == GuardService.KIND_ADDRESS || k == GuardService.KIND_UNSEEN_SITE)
                         && host.screen.browserForCurrentBlock() != null) {
                     host.screen.leaveBlock(key, k);
@@ -231,7 +232,7 @@ public final class BlockOverlayContent {
                     host.h.removeCallbacks(host.recheckSoon);
                     host.h.postDelayed(host.recheckSoon, 600);
                 }
-            });
+            }));
             actions.addView(back, actionParams(c));
         }
         if (actions.getChildCount() > 0) box.addView(actions, Ui.fill(c, 12));
@@ -255,11 +256,11 @@ public final class BlockOverlayContent {
 
         TextView no = overlayButton(c, Jokes.pick(Jokes.NO));
         no.setBackground(Ui.pressable(Ui.ACCENT, Ui.ACCENT_DOWN, Ui.dp(c, 14)));
-        no.setOnClickListener(v -> host.screen.leaveBlock(key, kind));
+        no.setOnClickListener(Safe.click("overlayNo", v -> host.screen.leaveBlock(key, kind)));
         area.addView(no, Ui.fill(c, 16));
 
         TextView yes = overlayButton(c, Jokes.pick(Jokes.YES));
-        yes.setOnClickListener(v -> showQuiz(area, () -> showPinPad(area, key, code), null));
+        yes.setOnClickListener(Safe.click("overlayYes", v -> showQuiz(area, () -> showPinPad(area, key, code), null)));
         area.addView(yes, Ui.fill(c, 10));
     }
 
@@ -323,7 +324,7 @@ public final class BlockOverlayContent {
         } else {
             for (final String choice : q.choices) {
                 TextView b = overlayButton(c, choice);
-                b.setOnClickListener(v -> answer(area, onPass, q.isCorrect(choice)));
+                b.setOnClickListener(Safe.click("overlayAnswer", v -> answer(area, onPass, q.isCorrect(choice))));
                 area.addView(b, Ui.fill(c, 10));
             }
         }

@@ -1,5 +1,6 @@
 package com.cuvar.app.unlock;
 
+import com.cuvar.app.ui.Safe;
 import com.cuvar.app.ui.Ui;
 
 import android.app.Activity;
@@ -35,7 +36,7 @@ public final class NumberGameView {
         final LinearLayout area = Ui.column(a);
         box.addView(area, Ui.fill(a, 0));
         TextView close = button(a, "Zatvori");
-        close.setOnClickListener(v -> d.dismiss());
+        close.setOnClickListener(Safe.click("numbersClose", v -> d.dismiss()));
         box.addView(close, Ui.fill(a, 24));
         scroll.addView(box);
         d.setContentView(scroll);
@@ -52,10 +53,10 @@ public final class NumberGameView {
             n.setGravity(Gravity.CENTER);
             area.addView(n, Ui.fill(a, 8));
             TextView again = button(a, "Igraj ponovo");
-            again.setOnClickListener(v -> {
+            again.setOnClickListener(Safe.click("numbersAgain", v -> {
                 started[0] = SystemClock.elapsedRealtime();
                 show(a, h, area, won[0], null);
-            });
+            }));
             area.addView(again, Ui.fill(a, 16));
         };
         show(a, h, area, won[0], null);
@@ -103,7 +104,7 @@ public final class NumberGameView {
                 final TextView cell = Ui.text(c, String.valueOf(number), 18, 0xFFFFFFFF, true);
                 cell.setGravity(Gravity.CENTER);
                 cell.setBackground(Ui.pressable(Ui.NIGHT_KEY, Ui.NIGHT_KEY_DOWN, Ui.dp(c, 10)));
-                cell.setOnClickListener(v -> {
+                cell.setOnClickListener(Safe.click("numbersCell", v -> {
                     NumberGame.Tap t = game.tap(number, SystemClock.elapsedRealtime());
                     if (t == NumberGame.Tap.OK) {
                         cell.setBackground(null);
@@ -116,7 +117,7 @@ public final class NumberGameView {
                     } else if (t == NumberGame.Tap.LATE) {
                         show(c, h, area, onPass, "Vreme je isteklo. Kreni ispočetka.", side, timeMs);
                     }
-                });
+                }));
                 LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, Ui.dp(c, side > 5 ? 46 : 54), 1f);
                 lp.setMargins(gap, gap, gap, gap);
                 row.addView(cell, lp);
@@ -131,6 +132,10 @@ public final class NumberGameView {
         h.postDelayed(new Runnable() {
             @Override
             public void run() {
+                Safe.run("numbersTimer", this::tick);
+            }
+
+            private void tick() {
                 if (game.over() || grid.getParent() != area) return;
                 if (game.leftMs(SystemClock.elapsedRealtime()) == 0) {
                     // Zatvoren ekran blokade: samo stani.

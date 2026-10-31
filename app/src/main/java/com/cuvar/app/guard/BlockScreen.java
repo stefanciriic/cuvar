@@ -50,6 +50,27 @@ public final class BlockScreen {
      * sa te stranice (otvori početnu Google stranu). Sve ostalo: početni ekran telefona.
      */
     public void leaveBlock(String key, int kind) {
+        try {
+            leave(key, kind);
+        } catch (Throwable error) {
+            GuardDiagnostics.report("leaveBlock", error);
+            // Izlaz mora uvek da radi: početni ekran, pa nova provera (blokada se vraća ako i dalje važi).
+            try {
+                svc.performGlobalAction(GuardService.GLOBAL_ACTION_HOME);
+            } catch (Throwable ignored) {
+                // nema drugog izlaza; prozor se ipak skida ispod
+            }
+            try {
+                hideOverlay();
+            } catch (Throwable e2) {
+                GuardDiagnostics.report("leaveBlockHide", e2);
+            }
+            svc.h.removeCallbacks(svc.recheckSoon);
+            svc.h.postDelayed(svc.recheckSoon, 600);
+        }
+    }
+
+    private void leave(String key, int kind) {
         boolean sitePage = inBrowserPage(key, kind);
         String browser = sitePage ? browserForCurrentBlock() : null;
         if (sitePage) {

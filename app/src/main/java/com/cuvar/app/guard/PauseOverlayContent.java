@@ -3,6 +3,7 @@ package com.cuvar.app.guard;
 import com.cuvar.app.rules.ItemKey;
 import com.cuvar.app.GuardService;
 import com.cuvar.app.data.Store;
+import com.cuvar.app.ui.Safe;
 import com.cuvar.app.ui.Ui;
 
 import android.content.Context;
@@ -76,7 +77,7 @@ public final class PauseOverlayContent {
         TextView close = button("Zatvori");
         close.setTextSize(17);
         close.setBackground(Ui.pressable(Ui.ACCENT, Ui.ACCENT_DOWN, Ui.dp(context, 14)));
-        close.setOnClickListener(view -> actions.close());
+        close.setOnClickListener(Safe.click("pauseClose", view -> actions.close()));
         box.addView(close, Ui.fill(context, 24));
 
         final TextView go = button("");
@@ -86,6 +87,10 @@ public final class PauseOverlayContent {
         box.addView(go, Ui.fill(context, 16));
         Runnable countdown = new Runnable() {
             @Override public void run() {
+                Safe.run("pauseCountdown", this::tick);
+            }
+
+            private void tick() {
                 if (!actions.isVisible(scroll)) return;
                 long left = GuardService.PAUSE_SECONDS * 1000L - (SystemClock.elapsedRealtime() - shownAt);
                 if (left > 0) {
@@ -99,10 +104,10 @@ public final class PauseOverlayContent {
         };
         go.setText("Nastavi za " + GuardService.PAUSE_SECONDS + " s");
         handler.postDelayed(countdown, 250L);
-        go.setOnClickListener(view -> {
+        go.setOnClickListener(Safe.click("pauseGo", view -> {
             if (SystemClock.elapsedRealtime() - shownAt < GuardService.PAUSE_SECONDS * 1000L) return;
             actions.continueToApp();
-        });
+        }));
 
         scroll.addView(box, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT));

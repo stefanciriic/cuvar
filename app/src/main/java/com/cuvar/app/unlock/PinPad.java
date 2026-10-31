@@ -1,5 +1,6 @@
 package com.cuvar.app.unlock;
 
+import com.cuvar.app.ui.Safe;
 import com.cuvar.app.ui.Ui;
 
 import android.content.Context;
@@ -61,7 +62,7 @@ public final class PinPad extends LinearLayout {
                 if (BACK.equals(label)) b.setContentDescription("Obriši cifru");
                 else if (OK.equals(label)) b.setContentDescription("Potvrdi unos");
                 b.setBackground(Ui.pressable(key, keyDown, size / 2f));
-                b.setOnClickListener(v -> press(label));
+                b.setOnClickListener(Safe.click("pinKey", v -> press(label)));
                 LayoutParams lp = new LayoutParams(size, size);
                 lp.setMargins(gap, gap, gap, gap);
                 row.addView(b, lp);

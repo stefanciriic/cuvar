@@ -21,6 +21,7 @@ import com.cuvar.app.rules.BlockKind;
 import com.cuvar.app.rules.DailySchedule;
 import com.cuvar.app.rules.DayLimit;
 import com.cuvar.app.rules.UsageTracker;
+import com.cuvar.app.ui.Safe;
 import com.cuvar.app.ui.Ui;
 import com.cuvar.app.web.BrowserAddressState;
 import com.cuvar.app.web.BrowserMonitor;
@@ -544,11 +545,7 @@ public class GuardService extends AccessibilityService {
      * Neuhvaćena greška ruši ceo proces, a posle par padova Android gasi Pristupačnost.
      */
     private static void guarded(String where, Runnable work) {
-        try {
-            work.run();
-        } catch (Throwable error) {
-            GuardDiagnostics.report(where, error);
-        }
+        Safe.run(where, work);
     }
 
     public void safeCheck() {

@@ -62,35 +62,48 @@ public final class ForegroundApp {
 
     /** UsageStats IPC and event iteration can be slow on vendor builds; never run it on the service/UI thread. */
     public void refresh(Runnable onUpdated) {
-        if (usm == null || !queryPending.compareAndSet(false, true)) return;
-        worker.execute(() -> {
-            String old;
-            synchronized (this) { old = last; }
-            try {
-                long now = System.currentTimeMillis();
-                long from = lastQuery == 0 ? now - 10 * 60000L : Math.min(lastQuery - 2000L, now - 1000L);
-                UsageEvents events = usm.queryEvents(from, now);
-                UsageEvents.Event e = new UsageEvents.Event();
-                String found = old;
-                long foundAt = lastAt;
-                while (events != null && events.hasNextEvent()) {
-                    events.getNextEvent(e);
-                    if (e.getEventType() == UsageEvents.Event.MOVE_TO_FOREGROUND && e.getPackageName() != null) {
-                        found = e.getPackageName();
-                        foundAt = e.getTimeStamp();
-                    }
+        if (usm == null || worker.isShutdown() || !queryPending.compareAndSet(false, true)) return;
+        try {
+            worker.execute(() -> query(onUpdated));
+        } catch (RuntimeException rejected) {
+            // Nit je ugašena (servis se gasi): sledeći poziv ne sme da čeka zauvek.
+            queryPending.set(false);
+        }
+    }
+
+    private void query(Runnable onUpdated) {
+        String old;
+        synchronized (this) { old = last; }
+        try {
+            // Sat telefona je ovde potreban: UsageStats beleži događaje po njemu (ne odlučuje o pravilima).
+            long now = System.currentTimeMillis();
+            long from = lastQuery == 0 ? now - 10 * 60000L : Math.min(lastQuery - 2000L, now - 1000L);
+            UsageEvents events = usm.queryEvents(from, now);
+            UsageEvents.Event e = new UsageEvents.Event();
+            String found = old;
+            long foundAt = lastAt;
+            while (events != null && events.hasNextEvent()) {
+                events.getNextEvent(e);
+                if (e.getEventType() == UsageEvents.Event.MOVE_TO_FOREGROUND && e.getPackageName() != null) {
+                    found = e.getPackageName();
+                    foundAt = e.getTimeStamp();
                 }
-                synchronized (this) {
-                    last = found;
-                    lastAt = foundAt;
-                    lastQuery = now;
-                }
-            } catch (Throwable ignored) {
-                // Keep the last known foreground package; transient UsageStats failures must not stall enforcement.
-            } finally {
-                queryPending.set(false);
-                if (onUpdated != null && !worker.isShutdown()) onUpdated.run();
             }
-        });
+            synchronized (this) {
+                last = found;
+                lastAt = foundAt;
+                lastQuery = now;
+            }
+        } catch (Throwable error) {
+            // Ostaje poslednja poznata aplikacija; prolazna greška UsageStats-a ne sme da zaustavi pravila.
+            GuardDiagnostics.report("usageEvents", error);
+        } finally {
+            queryPending.set(false);
+            try {
+                if (onUpdated != null && !worker.isShutdown()) onUpdated.run();
+            } catch (Throwable error) {
+                GuardDiagnostics.report("usageEventsDone", error);
+            }
+        }
     }
 }

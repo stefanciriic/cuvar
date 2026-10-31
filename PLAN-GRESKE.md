@@ -107,7 +107,12 @@ vratio (nije "Crashed services"), brisanje radi. Nije probano na telefonu.
 - Prikaz u podešavanjima (postojeća dijagnostika ili novi red "Greške"), uz dugme za brisanje. Novi
   tekst ide u `en.tsv`.
 
-### Faza 3: prozor blokade i pitalice (R9, R10, R12)
+### Faza 3: prozor blokade i pitalice (R9, R10, R12) — urađeno 31.10.2026
+
+Urađeno: `ui/Safe` (klik, posao), svi klikovi i odbrojavanja u prozoru blokade, pauzi, PIN-u i igrici;
+`leaveBlock` ima rezervni izlaz na početni ekran; `ForegroundApp` prijavljuje grešku i ne zaglavi se posle gašenja.
+R10 i R12 su već bili rešeni (unos broja i `queryPending` u `finally`). Na emulatoru: namerna greška u
+"Zatvori" je ipak vratila na početni ekran; greška u igrici nije oborila aplikaciju. Nije probano na telefonu.
 
 - Zaštitni omotač za `OnClickListener` (na primer `Ui.safeClick`) i upotreba u overlay sadržajima,
   `PinPad` i `NumberGameView`.
