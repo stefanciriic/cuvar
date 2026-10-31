@@ -38,8 +38,8 @@ com.cuvar.app            Komponente iz AndroidManifest-a (aktivnosti, servisi)
 | `com.cuvar.app` | `MainActivity`, `RulesActivity`, `ScheduleActivity`, `FocusActivity`, `StatsActivity`, `SubActivity`, `GuardService`, `NotificationCounter` |
 | `data` | `Store` (ulaz: `Store.get(c)`, pravila aplikacija i sajtova, popuštanje od sutra) i njegovi delovi: `Clock` (pouzdano vreme), `Unlocks` (šifra, otključavanje, hitno), `Modes` (vremenski režimi), `DayLimits` (ukupni dnevni limit), `UsageLog` (izmereno vreme, otvaranja, notifikacije), `Sessions` (korišćenje u komadu), `Focus`, `GuardLog` (kad Čuvar nije radio) |
 | `rules` | `BlockKind`, `CodeAttempts`, `DailyCode`, `DailySchedule`, `DayLimit`, `DomainRules`, `LimitWarnings`, `NotifCounts`, `RuleMerge`, `SessionLimit`, `TrustedClock`, `UnlockCost`, `UnlockStreak`, `UnlockTimer`, `UsageCalendar`, `UsageTracker` |
-| `guard` | `BlockOverlayContent`, `Clones`, `ForegroundApp`, `GuardDiagnostics`, `GuardOverlayWindow`, `LoadMeter`, `MusicOwner`, `PauseOverlayContent`, `SystemScreens` |
-| `web` | `BrowserAddressState`, `BrowserMonitor`, `Hosts`, `Links`, `WebAddress` |
+| `guard` | delovi servisa: `BlockScreen` (prikaz i sakrivanje blokade, „nazad“), `AppKinds` (vrsta aplikacije napred: bez pravila, kopija, WebAPK, izuzeta, podešavanja), `UsageAccounting` (upis vremena, upozorenja pred limit); ostalo: `BlockOverlayContent`, `Clones`, `ForegroundApp`, `GuardDiagnostics`, `GuardOverlayWindow`, `LoadMeter`, `MusicOwner`, `PauseOverlayContent`, `SystemScreens` |
+| `web` | `BrowserWindows` (prozori na ekranu, glavni prozor pregledača), `BrowserAddressState`, `BrowserMonitor`, `Hosts`, `Links`, `WebAddress` |
 | `unlock` | `Jokes`, `NumberGame`, `NumberGameView`, `PinPad`, `Quiz`, `QuizBank` |
 | `ui` | `Charts`, `CheckRow`, `SettingsSheets`, `Sheet`, `Ui` |
 | `i18n` | `Lang`, `Translit` |
@@ -56,7 +56,7 @@ com.cuvar.app            Komponente iz AndroidManifest-a (aktivnosti, servisi)
 3. **Smer zavisnosti:** `com.cuvar.app` → `ui`/`guard`/`web`/`unlock` → `data` → `rules`.
    `i18n` koriste svi. Cilj je da `data` ne zna za ekrane ni za `GuardService`.
    Postojeći izuzeci koje treba ukloniti pri podeli `Store`-a: `Store` koristi
-   `Ui` za format datuma i brojanje ("3 aplikacije") i `GuardService.exemptApps`.
+   `Ui` za format datuma i brojanje ("3 aplikacije") i `AppKinds.exemptApps` (guard).
    Ne dodaji nove ovakve veze.
 4. **Vreme samo iz `Store.now()` / `Store.day()`**, nikad `System.currentTimeMillis()`
    u pravilima.
@@ -91,8 +91,18 @@ store.usageLog.usedToday(k); // izmereno vreme
 Pravila aplikacija i sajtova i mehanizam "popuštanje od sutra" (`enforce()`,
 `pendingChanges()`, `cancelPending()`) su u samom `Store`-u, jer dodiruju sve delove.
 
+## Kako je podeljen `GuardService`
+
+`GuardService` (~1.000 redova) ostaje u `com.cuvar.app` i drži životni ciklus servisa,
+događaje i glavnu proveru `check()`. Njegovi delovi su polja servisa:
+`svc.screen` (`BlockScreen`), `svc.kinds` (`AppKinds`), `svc.accounting`
+(`UsageAccounting`), `svc.windows` (`BrowserWindows`). Stanje koje delovi dele
+(`currentPkg`, `rawPkg`, `overlayRule`...) je zato `public` u servisu. Menja ga samo
+servis i njegovi delovi, nikad ekrani.
+
 ## Sledeći korak
 
-`GuardService.java` (~1.500 redova) je i dalje preveliki: odluka "koja blokada sada
-važi" treba da postane čista klasa u `rules` (sa testom), a servis samo da skuplja
-stanje i prikazuje rezultat.
+`check()` u `GuardService`-u ima ~350 redova. Odluka "koja blokada sada važi" treba
+da postane čista klasa u `rules` (sa testom), a `check()` samo da skuplja stanje i
+prikazuje rezultat. To menja ponašanje ako se pogreši, pa ide posebno i uz proveru
+na telefonu.

@@ -1,5 +1,7 @@
 package com.cuvar.app;
 
+import com.cuvar.app.guard.UsageAccounting;
+
 import com.cuvar.app.data.Store;
 import com.cuvar.app.data.Unlocks;
 import com.cuvar.app.guard.ForegroundApp;
@@ -487,7 +489,7 @@ public class MainActivity extends Activity {
         for (Map.Entry<String, Long> e : store.usageLog.todayMap().entrySet()) {
             String key = e.getKey();
             if (key.startsWith("site:") || key.startsWith("web:") || key.equals(home) || key.equals(me)
-                    || !GuardService.tracked(this, key)) {
+                    || !UsageAccounting.tracked(this, key)) {
                 continue;
             }
             String label = labelOf(pm, key);

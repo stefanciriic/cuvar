@@ -2,13 +2,14 @@ package com.cuvar.app.data;
 
 import com.cuvar.app.rules.DailySchedule;
 import com.cuvar.app.web.Links;
+
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Collections;
+import java.util.List;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Calendar;
-import java.util.List;
 
 /** Vremenski režimi: podešeni i oni koji sada važe. */
 public final class Modes {

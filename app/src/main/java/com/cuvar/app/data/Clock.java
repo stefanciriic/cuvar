@@ -1,12 +1,14 @@
 package com.cuvar.app.data;
 
 import com.cuvar.app.rules.TrustedClock;
+
 import android.os.SystemClock;
 import android.provider.Settings;
-import org.json.JSONException;
-import org.json.JSONObject;
+
 import java.util.Calendar;
 import java.util.TimeZone;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 /** Pouzdano vreme: meri se od paljenja telefona, pa pomeranje sata ne menja pravila. */
 public final class Clock {

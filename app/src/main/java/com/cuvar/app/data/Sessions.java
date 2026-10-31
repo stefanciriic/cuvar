@@ -1,10 +1,11 @@
 package com.cuvar.app.data;
 
 import com.cuvar.app.rules.SessionLimit;
-import org.json.JSONException;
-import org.json.JSONObject;
+
 import java.util.ArrayList;
 import java.util.List;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 /** Korišćenje u komadu i obavezna pauza posle njega. */
 public final class Sessions {

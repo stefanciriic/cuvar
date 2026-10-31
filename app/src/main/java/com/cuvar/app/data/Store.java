@@ -14,21 +14,20 @@ import android.content.SharedPreferences;
 import android.os.SystemClock;
 import android.provider.Settings;
 
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
-
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Calendar;
 import java.util.Arrays;
+import java.util.Calendar;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 /** Sva podešavanja i izmereno vreme. Čuva se samo na telefonu. */
 public final class Store {

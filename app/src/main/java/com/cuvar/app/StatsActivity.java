@@ -1,5 +1,7 @@
 package com.cuvar.app;
 
+import com.cuvar.app.guard.UsageAccounting;
+
 import com.cuvar.app.data.Store;
 import com.cuvar.app.data.UsageLog;
 import com.cuvar.app.i18n.Translit;
@@ -160,7 +162,7 @@ public class StatsActivity extends SubActivity {
                 if (key.startsWith("web:") || key.startsWith("site:")) {
                     continue; // vreme sajta je već deo vremena pregledača, ne broji se duplo u ukupno
                 }
-                if (skip.contains(key) || !GuardService.tracked(this, key)) {
+                if (skip.contains(key) || !UsageAccounting.tracked(this, key)) {
                     continue;
                 }
                 grandTotal += ms;
@@ -251,7 +253,7 @@ public class StatsActivity extends SubActivity {
         long t = 0;
         for (Map.Entry<String, Long> e : store.usageLog.dayMap(dayKey).entrySet()) {
             String k = e.getKey();
-            if (k.startsWith("web:") || k.startsWith("site:") || skip.contains(k) || !GuardService.tracked(this, k)) continue;
+            if (k.startsWith("web:") || k.startsWith("site:") || skip.contains(k) || !UsageAccounting.tracked(this, k)) continue;
             t += e.getValue();
         }
         return t;

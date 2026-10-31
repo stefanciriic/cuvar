@@ -4,16 +4,18 @@ import com.cuvar.app.rules.CodeAttempts;
 import com.cuvar.app.rules.DailyCode;
 import com.cuvar.app.rules.UnlockStreak;
 import com.cuvar.app.rules.UnlockTimer;
+
 import android.os.SystemClock;
-import org.json.JSONException;
-import org.json.JSONObject;
+
 import java.security.SecureRandom;
-import java.util.Collections;
 import java.util.Calendar;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 /** Dnevna šifra, otključavanje sa pauzom, hitno otključavanje i brojanje otključavanja. */
 public final class Unlocks {

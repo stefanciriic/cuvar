@@ -171,14 +171,14 @@ public final class BlockOverlayContent {
         close.setTextSize(17);
         close.setBackground(Ui.pressable(Ui.ACCENT, Ui.ACCENT_DOWN, Ui.dp(c, 14)));
         final int k = kind;
-        close.setOnClickListener(v -> host.leaveBlock(key, k));
+        close.setOnClickListener(v -> host.screen.leaveBlock(key, k));
         box.addView(close, Ui.fill(c, 20));
 
         if (cooling) {
             // Pauza posle otključavanja: nema dugmeta ni PIN-a, samo odbrojavanje.
-            host.cooldownLabel = Ui.text(c, GuardService.cooldownText(host.store.unlock.cooldownLeft(key)), 15, 0xFFFFFFFF, true);
-            host.cooldownLabel.setGravity(Gravity.CENTER);
-            box.addView(host.cooldownLabel, Ui.fill(c, 22));
+            host.screen.cooldownLabel = Ui.text(c, BlockScreen.cooldownText(host.store.unlock.cooldownLeft(key)), 15, 0xFFFFFFFF, true);
+            host.screen.cooldownLabel.setGravity(Gravity.CENTER);
+            box.addView(host.screen.cooldownLabel, Ui.fill(c, 22));
             if (host.store.unlock.emergencyAvailable() && host.store.unlock.dailyCodeVisible()) {
                 final LinearLayout urgent = Ui.column(c);
                 urgent.setGravity(Gravity.CENTER_HORIZONTAL);
@@ -224,10 +224,10 @@ public final class BlockOverlayContent {
             TextView back = overlayButton(c, "Nazad");
             back.setOnClickListener(v -> {
                 if ((key.startsWith("site:") || k == GuardService.KIND_ADDRESS || k == GuardService.KIND_UNSEEN_SITE)
-                        && host.browserForCurrentBlock() != null) {
-                    host.leaveBlock(key, k);
+                        && host.screen.browserForCurrentBlock() != null) {
+                    host.screen.leaveBlock(key, k);
                 } else {
-                    host.overlayGlobalBack();
+                    host.screen.overlayGlobalBack();
                     host.h.removeCallbacks(host.recheckSoon);
                     host.h.postDelayed(host.recheckSoon, 600);
                 }
@@ -255,7 +255,7 @@ public final class BlockOverlayContent {
 
         TextView no = overlayButton(c, Jokes.pick(Jokes.NO));
         no.setBackground(Ui.pressable(Ui.ACCENT, Ui.ACCENT_DOWN, Ui.dp(c, 14)));
-        no.setOnClickListener(v -> host.leaveBlock(key, kind));
+        no.setOnClickListener(v -> host.screen.leaveBlock(key, kind));
         area.addView(no, Ui.fill(c, 16));
 
         TextView yes = overlayButton(c, Jokes.pick(Jokes.YES));

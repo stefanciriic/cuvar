@@ -1,14 +1,17 @@
 package com.cuvar.app.data;
 
 import com.cuvar.app.GuardService;
+import com.cuvar.app.guard.AppKinds;
 import com.cuvar.app.rules.DayLimit;
+
 import android.content.Context;
 import android.content.SharedPreferences;
-import org.json.JSONException;
-import org.json.JSONObject;
+
 import java.util.Calendar;
 import java.util.Locale;
 import java.util.Set;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 /** Ukupni dnevni limit za ceo telefon. */
 public final class DayLimits {
@@ -42,7 +45,7 @@ public final class DayLimits {
         JSONObject d = store.usageLog.usage.optJSONObject(today);
         if (d != null && !d.has(GUARDED_KEY)) {
             Set<String> guarded = store.guardedApps();
-            guarded.removeAll(GuardService.exemptApps(c));
+            guarded.removeAll(AppKinds.exemptApps(c));
             try {
                 d.put(GUARDED_KEY, DayLimit.guardedEstimate(store.usageLog.dayMap(today), guarded, store.siteKeysNow()));
                 store.dirty = true;

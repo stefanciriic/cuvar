@@ -2,12 +2,13 @@ package com.cuvar.app.data;
 
 import com.cuvar.app.rules.DailySchedule;
 import com.cuvar.app.web.Hosts;
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
+
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 /** Ručni Fokus: šta je dozvoljeno i do kada. */
 public final class Focus {

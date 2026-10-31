@@ -1,15 +1,17 @@
 package com.cuvar.app.data;
 
 import com.cuvar.app.ui.Ui;
+
 import android.os.SystemClock;
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
+
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 /** Zapis o tome kada Čuvar nije radio (ugašen servis, restart telefona). */
 public final class GuardLog {

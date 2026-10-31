@@ -3,19 +3,21 @@ package com.cuvar.app.data;
 import com.cuvar.app.rules.NotifCounts;
 import com.cuvar.app.rules.UsageCalendar;
 import com.cuvar.app.ui.Ui;
+
 import android.content.SharedPreferences;
 import android.os.SystemClock;
-import org.json.JSONException;
-import org.json.JSONObject;
+
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Calendar;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 /** Izmereno vreme, broj otvaranja i notifikacija po danu. */
 public final class UsageLog {

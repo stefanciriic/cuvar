@@ -122,8 +122,8 @@ iz koda, bez XML rasporeda. Zašto baš ovako i gde ide nova klasa:
 | `NotificationCounter.java` | Broj primljenih notifikacija (samo paket, bez teksta) |
 | `data/` | `Store` (sva podešavanja, "popuštanje od sutra") i njegovi delovi: `Clock` (pouzdan sat), `Unlocks`, `Modes` (režimi), `DayLimits`, `UsageLog`, `Sessions`, `Focus`, `GuardLog` |
 | `rules/` | Čista pravila bez Android-a, sa testovima: `BlockKind` (vrste blokade), `UnlockTimer`, `UnlockCost`, `CodeAttempts`, `TrustedClock`, `SessionLimit`, `RuleMerge`, `LimitWarnings`, `DailySchedule` (režimi), `DailyCode` (dnevna šifra), `DayLimit`, `DomainRules`, `UsageTracker`, `UsageCalendar`, `UnlockStreak`, `NotifCounts` |
-| `guard/` | Delovi servisa: `BlockOverlayContent` (ekran blokade i otključavanje), `PauseOverlayContent` (pauza 6 s), `GuardOverlayWindow` (prozor preko svega, muzika), `ForegroundApp`, `SystemScreens`, `Clones`, `MusicOwner`, `LoadMeter`, `GuardDiagnostics` |
-| `web/` | Pregledači: `BrowserMonitor`, `BrowserAddressState`, `WebAddress` (pravi sajt), `Hosts`, `Links` (aplikacija ↔ sajt) |
+| `guard/` | Delovi servisa: `BlockScreen` (prikaz blokade), `AppKinds` (vrsta aplikacije napred), `UsageAccounting` (upis vremena), `BlockOverlayContent` (ekran blokade i otključavanje), `PauseOverlayContent` (pauza 6 s), `GuardOverlayWindow` (prozor preko svega, muzika), `ForegroundApp`, `SystemScreens`, `Clones`, `MusicOwner`, `LoadMeter`, `GuardDiagnostics` |
+| `web/` | Pregledači: `BrowserMonitor`, `BrowserWindows`, `BrowserAddressState`, `WebAddress` (pravi sajt), `Hosts`, `Links` (aplikacija ↔ sajt) |
 | `unlock/` | `Quiz`, `QuizBank`, `Jokes`, `NumberGame`, `NumberGameView`, `PinPad` |
 | `ui/` | `Ui`, `Sheet`, `CheckRow`, `Charts`, `SettingsSheets` (prozori podešavanja) |
 | `i18n/` | `Lang`, `Translit`, uz `app/src/main/assets/en.tsv` |

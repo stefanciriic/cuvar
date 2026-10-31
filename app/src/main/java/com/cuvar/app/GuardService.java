@@ -1,10 +1,12 @@
 package com.cuvar.app;
 
 import com.cuvar.app.data.Store;
-import com.cuvar.app.data.DayLimits;
-import com.cuvar.app.data.Sessions;
+import com.cuvar.app.web.BrowserWindows;
+import com.cuvar.app.guard.AppKinds;
+import com.cuvar.app.guard.UsageAccounting;
+import com.cuvar.app.guard.BlockScreen;
+
 import com.cuvar.app.guard.BlockOverlayContent;
-import com.cuvar.app.guard.Clones;
 import com.cuvar.app.guard.ForegroundApp;
 import com.cuvar.app.guard.GuardDiagnostics;
 import com.cuvar.app.guard.GuardOverlayWindow;
@@ -15,13 +17,10 @@ import com.cuvar.app.i18n.Translit;
 import com.cuvar.app.rules.BlockKind;
 import com.cuvar.app.rules.DailySchedule;
 import com.cuvar.app.rules.DayLimit;
-import com.cuvar.app.rules.LimitWarnings;
 import com.cuvar.app.rules.UsageTracker;
 import com.cuvar.app.ui.Ui;
 import com.cuvar.app.web.BrowserAddressState;
 import com.cuvar.app.web.BrowserMonitor;
-import com.cuvar.app.web.Hosts;
-import com.cuvar.app.web.WebAddress;
 
 import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.AccessibilityServiceInfo;
@@ -39,20 +38,13 @@ import android.os.Looper;
 import android.os.PowerManager;
 import android.os.SystemClock;
 import android.provider.Settings;
-import android.provider.Telephony;
-import android.telecom.TelecomManager;
-import android.view.KeyEvent;
 import android.view.View;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
-import android.view.accessibility.AccessibilityWindowInfo;
-import android.widget.FrameLayout;
-import android.widget.TextView;
 import android.widget.Toast;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -69,10 +61,7 @@ import com.cuvar.app.rules.BlockKind.Block;
 public class GuardService extends AccessibilityService {
 
     public static volatile boolean running;
-
     private static final long TICK_MS = 5000L;
-    private final LimitWarnings limitWarnings = new LimitWarnings();
-    private final Map<String, String> webApkHosts = new HashMap<>();
     /** Povratak u istu aplikaciju za manje od ovoga ne računa se kao novo otvaranje. */
     private static final long OPEN_GRACE_MS = 15000L;
 
@@ -96,54 +85,44 @@ public class GuardService extends AccessibilityService {
     public static final int KIND_BROWSER = BlockKind.BROWSER;
     public static final int KIND_UNSEEN_SITE = BlockKind.UNSEEN_SITE;
     /** Sistemski prozori koji se pojave preko aplikacije, a ne znače da je korisnik izašao iz nje. */
-    private static final Set<String> TRANSPARENT = new HashSet<>();
-    /** Navigacija: Čuvar je nikad ne prati, ne čita i ne blokira, osim ako sama ima pravilo. */
-    private static final Set<String> HANDS_OFF = new HashSet<>(java.util.Arrays.asList(
-            "com.google.android.apps.maps", "com.google.android.apps.mapslite", "com.waze"));
+    public static final Set<String> TRANSPARENT = new HashSet<>();
 
     static {
         TRANSPARENT.add("com.android.systemui");
         TRANSPARENT.add("android");
     }
 
+    public final BrowserWindows windows = new BrowserWindows(this);
+    public final AppKinds kinds = new AppKinds(this);
+    public final UsageAccounting accounting = new UsageAccounting(this);
+    public final BlockScreen screen = new BlockScreen(this);
     public final Handler h = new Handler(Looper.getMainLooper());
     public Store store;
-    private GuardOverlayWindow overlayWindow;
-    private PowerManager power;
-    private KeyguardManager keyguard;
+    public GuardOverlayWindow overlayWindow;
+    public PowerManager power;
+    public KeyguardManager keyguard;
     private boolean receiverOn;
-
-    private String currentPkg;    // aplikacija koja je trenutno na ekranu
+    public String currentPkg;    // aplikacija koja je trenutno na ekranu
     private String currentHost;   // host trenutno otvoren u pregledaču (za vremenske režime)
-    private DailySchedule.Rule overlayRule; // režim prikazan na ekranu za blokadu
-    private final UsageTracker usageTracker = new UsageTracker(3 * TICK_MS);
-    private final Set<String> visibleHosts = new HashSet<>();
+    public DailySchedule.Rule overlayRule; // režim prikazan na ekranu za blokadu
+    public final UsageTracker usageTracker = new UsageTracker(3 * TICK_MS);
+    public final Set<String> visibleHosts = new HashSet<>();
     private final Set<String> secondaryContentPackages = new HashSet<>();
-    private BrowserMonitor browserMonitor;
+    public BrowserMonitor browserMonitor;
     public PauseOverlayContent pauseOverlayContent;
-    private BlockOverlayContent blockOverlayContent;
+    public BlockOverlayContent blockOverlayContent;
     private BrowserAddressState currentAddress;
-    private boolean observationValid;
+    public boolean observationValid;
     private boolean checkPending;
     private boolean contentEvents = true; // da li stižu i događaji o promeni sadržaja (samo za pregledače)
     private long lastEventCheck;
-    private Set<String> launcherApps;
-    private long launcherAppsAt;
     private long ruledSeenAt;     // kad je poslednji put viđena aplikacija sa pravilom ili pregledač napred (System.currentTimeMillis)
-
-    private View overlay;
-    private String overlayKey;
-    private int overlayKind;
-    private boolean overlayCooling;   // prikazana je pauza posle otključavanja
-    private boolean overlayCode;      // otključava se dnevnom šifrom umesto PIN-om
-    public TextView cooldownLabel;  // odbrojavanje do sledećeg mogućeg otključavanja
-    private String leavingSiteKey;
-    private String leavingSiteBrowser;
-    private long leavingSiteUntil;
-    private Set<String> exempt;      // aplikacije koje ne troše ukupni limit i ne blokiraju se zbog njega, ni uz pravilo
+    public String leavingSiteKey;
+    public String leavingSiteBrowser;
+    public long leavingSiteUntil;
     private String pendingOpen;      // aplikacija upravo otvorena; broji se kad se zaista prikaže, bez blokade
     private String opensBlocked;     // aplikacija otvorena posle potrošenih otvaranja; blokirana dok se ne izađe
-    private final Map<String, String> activityOf = new LinkedHashMap<String, String>() {
+    public final Map<String, String> activityOf = new LinkedHashMap<String, String>() {
         @Override protected boolean removeEldestEntry(Map.Entry<String, String> entry) {
             return size() > 128;
         }
@@ -152,44 +131,29 @@ public class GuardService extends AccessibilityService {
     public static volatile long usageSetupUntil;
     /** Korisnik je iz Statistike otvorio „Pristup obaveštenjima“: taj ekran se ne zatvara dva minuta. */
     public static volatile long notifSetupUntil;
-    /** Aplikacije koje otvaraju linkove u svom pregledaču. */
-    private static final String[] IN_APP_APPS = {"com.instagram.android", "com.instagram.lite", "com.facebook.katana",
-            "com.facebook.lite", "com.facebook.orca", "com.facebook.mlite", "com.zhiliaoapp.musically", "com.ss.android.ugc.trill",
-            "com.twitter.android", "com.snapchat.android", "com.linkedin.android", "com.reddit.frontpage",
-            "com.google.android.googlequicksearchbox", "com.google.android.gm", "org.telegram.messenger", "com.pinterest"};
-    /** Sistemski ekrani koje zaštita od isključivanja mora da vidi. */
-    private static final String[] SETTINGS_APPS = {"com.android.settings", "com.google.android.packageinstaller",
-            "com.android.packageinstaller", "com.google.android.permissioncontroller", "com.android.permissioncontroller",
-            "com.android.vending", "com.miui.securitycenter", "com.samsung.android.lool", "com.samsung.accessibility",
-            "com.google.android.marvin.talkback", "com.huawei.systemmanager", "com.coloros.safecenter", "com.oplus.safecenter"};
     private ForegroundApp foreground;
     private AudioManager audio;
-    private boolean currentCall;     // napred je ekran poziva aplikacije kojoj pozivi uvek prolaze
-    private boolean usageOk;
+    public boolean currentCall;     // napred je ekran poziva aplikacije kojoj pozivi uvek prolaze
+    public boolean usageOk;
     private long usageCheckedAt;
     private Set<String> watched;     // paketi od kojih Pristupačnost šalje događaje 
     private boolean currentQuiet;    // napred je aplikacija bez ikakvog pravila (mape, kalkulator...)
     private boolean currentInApp;    // napred je pregledač unutar aplikacije
-    private String rawPkg;           // stvarni paket na ekranu (pre prepoznavanja kopije)
-    private Map<String, String> clones;
-    private long clonesAt;
+    public String rawPkg;           // stvarni paket na ekranu (pre prepoznavanja kopije)
     private String pausePkg;         // aplikacija upravo otvorena koja pre prikaza čeka pauzu
     private String lastLeftPkg;      // aplikacija iz koje se upravo izašlo
     private long lastLeftAt;
     private boolean leftBlocked, leftPending, leftPause;
-    private long exemptAt;
     private long protectToastAt;
-    private int overlayFailures;
-    private long overlayRetryAt;
 
     private final Runnable tick = new Runnable() {
         @Override
         public void run() {
             updateWatched();
-            if (overlay == null) overlayWindow.noteMusic(rawPkg);
+            if (screen.overlay == null) overlayWindow.noteMusic(rawPkg);
             // Dok je navigacija napred bez „Pristupa korišćenju“, njen prozor se ne čita ni povremeno;
             // prelazak u drugu aplikaciju javlja ta aplikacija.
-            if (usageOk || !(currentQuiet && overlay == null && handsOff(rawPkg))) safeCheck();
+            if (usageOk || !(currentQuiet && screen.overlay == null && kinds.handsOff(rawPkg))) safeCheck();
             try {
                 store.guardLog.guardBeat(false);
             } catch (Throwable error) {
@@ -240,7 +204,7 @@ public class GuardService extends AccessibilityService {
     };
 
     /** Keep the just-dismissed site block from flashing back while the browser navigates to the neutral page. */
-    private final Runnable finishSiteExit = new Runnable() {
+    public final Runnable finishSiteExit = new Runnable() {
         @Override
         public void run() {
             leavingSiteKey = null;
@@ -255,8 +219,8 @@ public class GuardService extends AccessibilityService {
         public void onReceive(Context context, Intent intent) {
             String a = intent == null ? null : intent.getAction();
             if (Intent.ACTION_SCREEN_OFF.equals(a)) {
-                accountUntilNow(Collections.emptySet());
-                hideOverlay();
+                accounting.accountUntilNow(Collections.emptySet());
+                screen.hideOverlay();
                 if (store != null) {
                     store.flush();
                     store.guardLog.guardBeat(true);
@@ -277,11 +241,11 @@ public class GuardService extends AccessibilityService {
         public void onReceive(Context context, Intent intent) {
             try {
                 if (browserMonitor != null) browserMonitor.resetApps();
-                launcherApps = null;
-                webApkHosts.clear();
-                clones = null;
+                kinds.launcherApps = null;
+                kinds.webApkHosts.clear();
+                kinds.clones = null;
                 android.net.Uri data = intent == null ? null : intent.getData();
-                if (data != null) forgetTracked(data.getSchemeSpecificPart());
+                if (data != null) accounting.forgetTracked(data.getSchemeSpecificPart());
                 if (store != null) updateWatched();
                 h.removeCallbacks(recheckSoon);
                 h.postDelayed(recheckSoon, 300);
@@ -321,7 +285,7 @@ public class GuardService extends AccessibilityService {
         browserMonitor = new BrowserMonitor(this);
         overlayWindow = new GuardOverlayWindow(this);
         pauseOverlayContent = new PauseOverlayContent(this, h, store, new PauseOverlayContent.Actions() {
-            @Override public boolean isVisible(View view) { return overlay == view; }
+            @Override public boolean isVisible(View view) { return screen.overlay == view; }
             @Override public String appLabel(String packageName) { return GuardService.this.appLabel(packageName); }
             @Override public void close() {
                 pausePkg = null;
@@ -415,19 +379,19 @@ public class GuardService extends AccessibilityService {
         Set<String> want = new HashSet<>();
         if (!usageOk || store.focus.focusActive()) {
             // Bez zapisa o korišćenju (ili tokom fokusa) prate se sve aplikacije sa ikonom i sistemski ekrani, ali ne i navigacija.
-            want.addAll(launcherApps());
+            want.addAll(kinds.launcherApps());
             want.add("android");
             want.add("com.android.systemui");
-            Collections.addAll(want, SETTINGS_APPS);
+            Collections.addAll(want, AppKinds.SETTINGS_APPS);
         }
         want.add(getPackageName());
-        want.addAll(exempt()); // početni ekran (i nedavne aplikacije u njemu), telefon, poruke
+        want.addAll(kinds.exempt()); // početni ekran (i nedavne aplikacije u njemu), telefon, poruke
         want.addAll(BrowserMonitor.BROWSER_PACKAGES);
         want.addAll(browserMonitor.webApps());
         want.addAll(store.guardedApps());
-        if (store.hasSiteRules() || store.focus.focusHasSites()) Collections.addAll(want, IN_APP_APPS);
-        if (store.protectNow()) Collections.addAll(want, SETTINGS_APPS);
-        for (String p : HANDS_OFF) if (handsOff(p)) want.remove(p);
+        if (store.hasSiteRules() || store.focus.focusHasSites()) Collections.addAll(want, AppKinds.IN_APP_APPS);
+        if (store.protectNow()) Collections.addAll(want, AppKinds.SETTINGS_APPS);
+        for (String p : AppKinds.HANDS_OFF) if (kinds.handsOff(p)) want.remove(p);
         if (want.equals(watched)) return;
         try {
             AccessibilityServiceInfo info = getServiceInfo();
@@ -449,7 +413,7 @@ public class GuardService extends AccessibilityService {
         int type = event.getEventType();
         if (type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             CharSequence p = event.getPackageName(), cls = event.getClassName();
-            if (p != null && store != null && !quiet(p.toString())) ruledSeenAt = System.currentTimeMillis();
+            if (p != null && store != null && !kinds.quiet(p.toString())) ruledSeenAt = System.currentTimeMillis();
             if (p != null && cls != null) {
                 String c = cls.toString();
                 // Pamti se samo ekran aplikacije, ne sistemski dijalozi i delovi ekrana.
@@ -457,11 +421,11 @@ public class GuardService extends AccessibilityService {
             }
         }
         if ((type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED || type == AccessibilityEvent.TYPE_WINDOWS_CHANGED)
-                && currentQuiet && overlay == null) {
+                && currentQuiet && screen.overlay == null) {
             // Napred je aplikacija bez pravila. Mape i slične aplikacije šalju ovakve događaje u nizu (pomeranje mape,
             // donji paneli), pa se ništa ne čita dok događaj dolazi iz iste aplikacije; promena aplikacije se proveri odmah.
             CharSequence p = event.getPackageName();
-            if (handsOff(rawPkg) && (p == null || p.toString().equals(rawPkg))) return; // navigacija napred: ništa se ne proverava
+            if (kinds.handsOff(rawPkg) && (p == null || p.toString().equals(rawPkg))) return; // navigacija napred: ništa se ne proverava
             if (p == null || p.toString().equals(rawPkg)) {
                 h.removeCallbacks(recheckLater);
                 h.postDelayed(recheckLater, 1200);
@@ -518,8 +482,8 @@ public class GuardService extends AccessibilityService {
             foreground.close();
             foreground = null;
         }
-        accountUntilNow(Collections.emptySet());
-        hideOverlay();
+        accounting.accountUntilNow(Collections.emptySet());
+        screen.hideOverlay();
         if (receiverOn) {
             try {
                 unregisterReceiver(screenReceiver);
@@ -541,9 +505,9 @@ public class GuardService extends AccessibilityService {
 
     public void safeCheck() {
         // Settle the OLD app/site before check() changes the observed context or shows a block.
-        accountUntilNow(null);
+        accounting.accountUntilNow(null);
         // Muzika se beleži pre nego što se promeni aplikacija napred, da se zna iz koje je krenula.
-        if (overlay == null && overlayWindow != null) overlayWindow.noteMusic(rawPkg);
+        if (screen.overlay == null && overlayWindow != null) overlayWindow.noteMusic(rawPkg);
         long started = System.nanoTime();
         try {
             check();
@@ -553,59 +517,11 @@ public class GuardService extends AccessibilityService {
         } finally {
             LoadMeter.GUARD.check(System.nanoTime() - started);
             try {
-                accountUntilNow(usageKeys());
+                accounting.accountUntilNow(accounting.usageKeys());
             } catch (Throwable error) {
-                accountUntilNow(Collections.emptySet());
+                accounting.accountUntilNow(Collections.emptySet());
                 GuardDiagnostics.report("usageContext", error);
             }
-        }
-    }
-
-    private Set<String> usageKeys() {
-        Set<String> keys = new HashSet<>();
-        if (!observationValid || store == null || power == null || keyguard == null || !power.isInteractive()
-                || keyguard.isKeyguardLocked() || overlay != null || currentPkg == null) return keys;
-        if (currentCall) return keys; // poziv ne troši limit aplikacije ni ukupni dnevni limit
-        if (tracked(this, currentPkg)) keys.add(currentPkg);
-        for (String host : visibleHosts) {
-            // Meri se samo vreme sajtova sa pravilom (za limit); istorija ostalih sajtova se ne čuva.
-            for (String domain : store.matchingSitesNow(host)) keys.add("site:" + domain);
-        }
-        if (countsForDayLimit()) keys.add(DayLimits.GUARDED_KEY);
-        return keys;
-    }
-
-    /**
-     * Ukupni dnevni limit troši samo ono što on i zaključa: aplikacija sa pravilom ili sajt sa pravilom.
-     * Mape, pozivi i sve ostalo bez pravila ga ne troše.
-     */
-    private boolean countsForDayLimit() {
-        if (exempt().contains(currentPkg)) return false;
-        if (guarded(currentPkg)) return true;
-        for (String host : visibleHosts) if (store.siteGuarded(host) != null) return true;
-        return false;
-    }
-
-    private void accountUntilNow(Set<String> nextKeys) {
-        if (store == null) return;
-        try {
-            long elapsed = SystemClock.elapsedRealtime();
-            long epoch = store.now();
-            UsageTracker.Interval interval = nextKeys == null ? usageTracker.checkpoint(elapsed, epoch)
-                    : usageTracker.transition(elapsed, epoch, nextKeys);
-            if (interval == null) return;
-            long dt = interval.toMs - interval.fromMs;
-            for (String key : interval.keys) {
-                store.usageLog.addUsageBetween(key, interval.fromMs, interval.toMs);
-                if (key.startsWith("site:") || key.startsWith("web:") || key.equals(DayLimits.GUARDED_KEY)) continue;
-                long left = store.sessions.addSession(key, dt);
-                if (left > 0 && left <= 60000L && left + dt > 60000L) {
-                    Toast.makeText(this, Ui.cyr("Čuvar: još minut u komadu, pa pauza od "
-                            + Sessions.SESSION_BREAK_MS / 60000L + " min."), Toast.LENGTH_LONG).show();
-                }
-            }
-        } catch (Throwable error) {
-            GuardDiagnostics.report("usage", error);
         }
     }
 
@@ -631,11 +547,11 @@ public class GuardService extends AccessibilityService {
             return;
         }
         if (!power.isInteractive()) {
-            hideOverlay();
+            screen.hideOverlay();
             return;
         }
         if (keyguard.isKeyguardLocked()) {
-            hideOverlay();
+            screen.hideOverlay();
             return;
         }
 
@@ -644,11 +560,11 @@ public class GuardService extends AccessibilityService {
         // pravilom, pregledač, podešavanja pod zaštitom ili kad se ne zna šta je napred.
         AccessibilityNodeInfo root = null;
         String pkg = null;
-        if (usageOk && foreground != null && overlay == null) {
+        if (usageOk && foreground != null && screen.overlay == null) {
             String fg = foreground.current();
             // Android ponekad kasni sa zapisom: ako je posle njega javila aplikacija sa pravilom, čita se prozor.
-            if (fg != null && !TRANSPARENT.contains(fg) && quiet(fg)
-                    && (handsOff(fg) || (foreground.since() > ruledSeenAt && appWindowCount() < 2))) {
+            if (fg != null && !TRANSPARENT.contains(fg) && kinds.quiet(fg)
+                    && (kinds.handsOff(fg) || (foreground.since() > ruledSeenAt && windows.appWindowCount() < 2))) {
                 pkg = fg;
             }
         }
@@ -656,12 +572,12 @@ public class GuardService extends AccessibilityService {
             // Prvo se uzme samo vrh ekrana, bez ostatka sadržaja: za aplikacije bez pravila to je sve što treba.
             root = Build.VERSION.SDK_INT >= 33 ? getRootInActiveWindow(0) : getRootInActiveWindow();
             pkg = root == null || root.getPackageName() == null ? null : root.getPackageName().toString();
-            if (pkg != null && !pkg.equals(getPackageName())) ruledSeenAt = quiet(pkg) ? 0L : System.currentTimeMillis();
+            if (pkg != null && !pkg.equals(getPackageName())) ruledSeenAt = kinds.quiet(pkg) ? 0L : System.currentTimeMillis();
         }
-        if (pkg == null && usageOk && foreground != null && overlay == null) {
+        if (pkg == null && usageOk && foreground != null && screen.overlay == null) {
             // Prozor se ne može pročitati: koju je aplikaciju Android poslednju pokrenuo.
             String fg = foreground.current();
-            if (fg != null && quiet(fg)) pkg = fg;
+            if (fg != null && kinds.quiet(fg)) pkg = fg;
         }
         if (pkg == null) {
             return;
@@ -669,11 +585,11 @@ public class GuardService extends AccessibilityService {
         if (TRANSPARENT.contains(pkg)) {
             return;
         }
-        boolean quiet = overlay == null && quiet(pkg) && (handsOff(pkg) || appWindowCount() < 2);
+        boolean quiet = screen.overlay == null && kinds.quiet(pkg) && (kinds.handsOff(pkg) || windows.appWindowCount() < 2);
         if (!quiet && root == null) return;
         // Ceo vrh ekrana (sa delom sadržaja) treba samo za pregledač unutar aplikacije, gde se adresa traži po ekranu.
         // U pregledačima se adresa čita direktno po polju za adresu, bez čitanja stranice.
-        if (!quiet && Build.VERSION.SDK_INT >= 33 && inAppBrowser(pkg)) {
+        if (!quiet && Build.VERSION.SDK_INT >= 33 && kinds.inAppBrowser(pkg)) {
             AccessibilityNodeInfo full = getRootInActiveWindow();
             if (full != null && full.getPackageName() != null && pkg.equals(full.getPackageName().toString())) root = full;
         }
@@ -682,12 +598,12 @@ public class GuardService extends AccessibilityService {
         visibleHosts.clear();
         secondaryContentPackages.clear();
         String raw = pkg;
-        if (overlay != null && pkg.equals(getPackageName())) {
+        if (screen.overlay != null && pkg.equals(getPackageName())) {
             if (currentPkg == null) return;
             pkg = currentPkg; // ponovo proveri pravila i dok je naš ekran preko aplikacije
             raw = rawPkg != null ? rawPkg : currentPkg;
         } else {
-            pkg = cloneOf(pkg); // kopija aplikacije (npr. Instagram 2) potpada pod pravila originala
+            pkg = kinds.cloneOf(pkg); // kopija aplikacije (npr. Instagram 2) potpada pod pravila originala
         }
         rawPkg = raw;
 
@@ -721,7 +637,7 @@ public class GuardService extends AccessibilityService {
                 int max = store.appOpensNow(pkg);
                 opensBlocked = max > 0 && store.usageLog.opensToday("app:" + pkg) >= max ? pkg : null;
                 pendingOpen = opensBlocked == null && max > 0 ? pkg : null;
-                pausePkg = store.appGuarded(pkg) && !exempt().contains(pkg) ? pkg : null;
+                pausePkg = store.appGuarded(pkg) && !kinds.exempt().contains(pkg) ? pkg : null;
             }
         }
 
@@ -732,13 +648,13 @@ public class GuardService extends AccessibilityService {
             currentHost = null;
             currentAddress = null;
             setContentEvents(false);
-            hideOverlay();
+            screen.hideOverlay();
             return;
         }
 
-        if (store.protectNow() && guardsSelf(root, pkg)) {
+        if (store.protectNow() && kinds.guardsSelf(root, pkg)) {
             // Ekran na kome bi Čuvar mogao da se isključi, zaustavi ili obriše: zatvori ga.
-            hideOverlay();
+            screen.hideOverlay();
             performGlobalAction(GLOBAL_ACTION_BACK);
             performGlobalAction(GLOBAL_ACTION_HOME);
             long nowEl = SystemClock.elapsedRealtime();
@@ -759,13 +675,13 @@ public class GuardService extends AccessibilityService {
             currentAddress = null;
             pendingOpen = null;
             setContentEvents(false);
-            hideOverlay();
+            screen.hideOverlay();
             return;
         }
 
         String urlBarId = BrowserMonitor.addressViewId(pkg);
-        boolean inApp = urlBarId == null && inAppBrowser(raw);
-        String apkHost = urlBarId == null && !inApp ? webApkHost(raw) : null;
+        boolean inApp = urlBarId == null && kinds.inAppBrowser(raw);
+        String apkHost = urlBarId == null && !inApp ? kinds.webApkHost(raw) : null;
         if (inApp != currentInApp) {
             currentInApp = inApp;
             currentHost = null;
@@ -775,7 +691,7 @@ public class GuardService extends AccessibilityService {
         AccessibilityNodeInfo addressRoot = null;
         if (urlBarId != null && !root.getPackageName().toString().equals(getPackageName())) {
             // Oblačić, meni ili savet preko stranice je poseban prozor bez adresne trake: adresa se čita iz glavnog prozora.
-            addressRoot = browserAddressRoot(root, raw, urlBarId);
+            addressRoot = windows.browserAddressRoot(root, raw, urlBarId);
             currentAddress = browserMonitor.readAddress(addressRoot, urlBarId, activityOf.get(raw));
             currentHost = currentAddress.host();
         } else if (inApp && !root.getPackageName().toString().equals(getPackageName())) {
@@ -802,24 +718,24 @@ public class GuardService extends AccessibilityService {
                         Toast.LENGTH_LONG).show();
             }
             if (DayLimit.reached(dayLimit, used)) store.dayLimits.markDayLimitHit();
-            if (DayLimit.reached(dayLimit, used) && !exempt().contains(pkg)) {
+            if (DayLimit.reached(dayLimit, used) && !kinds.exempt().contains(pkg)) {
                 String site = web ? store.siteGuarded(currentHost) : null;
-                if (guarded(pkg)) {
+                if (kinds.guarded(pkg)) {
                     blocks.add(new Block(appKey, KIND_DAY, null, false));
                 } else if (site != null) {
                     blocks.add(new Block("site:" + site, KIND_DAY, null, false));
                 }
             }
         }
-        if (store.nightActive() && !exempt().contains(pkg)) {
+        if (store.nightActive() && !kinds.exempt().contains(pkg)) {
             String site = web ? store.siteGuarded(currentHost) : null;
-            if (guarded(pkg)) {
+            if (kinds.guarded(pkg)) {
                 if (store.nightBlocksApp(pkg)) blocks.add(new Block(appKey, KIND_NIGHT, null, false));
             } else if (site != null) {
                 blocks.add(new Block("site:" + site, KIND_NIGHT, null, false));
             }
         }
-        if (store.focus.focusActive() && !exempt().contains(pkg)
+        if (store.focus.focusActive() && !kinds.exempt().contains(pkg)
                 && !store.focus.focusAllowsApp(pkg)
                 && !(web && store.focus.focusAllowsSite(currentHost))) {
             blocks.add(new Block(appKey, KIND_FOCUS, null, false));
@@ -843,7 +759,7 @@ public class GuardService extends AccessibilityService {
             boolean lock = store.appLockNow(pkg);
             int limit = store.appLimitNow(pkg);
             boolean timeUp = limit > 0 && store.usedShared(pkg) >= limit * 60000L;
-            if (limit > 0 && !timeUp) warnLimit(appKey, appLabel(pkg), limit, store.usedShared(pkg));
+            if (limit > 0 && !timeUp) accounting.warnLimit(appKey, appLabel(pkg), limit, store.usedShared(pkg));
             // Van perioda režim sa dnevnom šifrom drži svoje aplikacije zaključane, a umesto PIN-a traži šifru.
             DailySchedule.Rule codeRule = store.modes.codeRuleForApp(pkg);
             if (lock || timeUp || codeRule != null) {
@@ -851,10 +767,10 @@ public class GuardService extends AccessibilityService {
                 blocks.add(new Block(appKey, k, null, true));
             }
         }
-        if (unknownBrowser(pkg)) {
+        if (kinds.unknownBrowser(pkg)) {
             blocks.add(new Block(appKey, unseen(KIND_BROWSER), null, true));
         }
-        if (cloner(pkg)) {
+        if (kinds.cloner(pkg)) {
             blocks.add(new Block(appKey, KIND_CLONER, null, true));
         }
         if (web && siteRule == null) {
@@ -878,18 +794,18 @@ public class GuardService extends AccessibilityService {
             } else if (siteLimit > 0 && store.usedShared("site:" + domain) >= siteLimit * 60000L) {
                 blocks.add(new Block("site:" + domain, KIND_SITE_TIME, null, true));
             } else if (siteLimit > 0) {
-                warnLimit("site:" + domain, domain, siteLimit, store.usedShared("site:" + domain));
+                accounting.warnLimit("site:" + domain, domain, siteLimit, store.usedShared("site:" + domain));
             }
         }
 
         // Inspect every visible window even while another rule wins, so all visible sites are timed.
         List<Block> secondary = new ArrayList<>();
-        for (AppWindow other : otherAppWindows()) {
-            if (isSameBrowserWindow(other, raw, urlBarId, addressRoot)) continue;
+        for (BrowserWindows.AppWindow other : windows.otherAppWindows()) {
+            if (BrowserWindows.isSameBrowserWindow(other, raw, urlBarId, addressRoot)) continue;
             Block b = appOnlyBlock(other.pkg);
             if (b != null) secondary.add(b);
             String id = BrowserMonitor.addressViewId(other.pkg);
-            boolean embedded = id == null && inAppBrowser(other.rawPkg);
+            boolean embedded = id == null && kinds.inAppBrowser(other.rawPkg);
             if (id != null || embedded) secondaryContentPackages.add(other.rawPkg);
             String host = null;
             if (id != null) {
@@ -906,12 +822,12 @@ public class GuardService extends AccessibilityService {
             }
             if (host != null) {
                 visibleHosts.add(host);
-                if (store.focus.focusActive() && !exempt().contains(other.pkg)
+                if (store.focus.focusActive() && !kinds.exempt().contains(other.pkg)
                         && !store.focus.focusAllowsApp(other.pkg) && !store.focus.focusAllowsSite(host)) {
                     secondary.add(new Block("app:" + other.pkg, KIND_FOCUS, null, false));
                 }
                 addSecondarySiteBlocks(secondary, other.pkg, host);
-            } else if (store.focus.focusActive() && !exempt().contains(other.pkg)
+            } else if (store.focus.focusActive() && !kinds.exempt().contains(other.pkg)
                     && !store.focus.focusAllowsApp(other.pkg)) {
                 secondary.add(new Block("app:" + other.pkg, KIND_FOCUS, null, false));
             }
@@ -951,7 +867,7 @@ public class GuardService extends AccessibilityService {
         }
         long coolLeft = show == null || hard(show.kind) || show.kind == KIND_PAUSE ? 0 : store.unlock.cooldownLeft(show.key);
 
-        if (show != null && show.kind != KIND_PAUSE && (overlay == null || !show.key.equals(overlayKey) || overlayKind == KIND_PAUSE)) {
+        if (show != null && show.kind != KIND_PAUSE && (screen.overlay == null || !show.key.equals(screen.overlayKey) || screen.overlayKind == KIND_PAUSE)) {
             store.usageLog.countOpen("try:" + show.key); // novi pokušaj da se otvori nešto blokirano
         }
         if (show == null && pkg.equals(pendingOpen)) {
@@ -960,14 +876,14 @@ public class GuardService extends AccessibilityService {
         }
 
         if (show != null) {
-            showOverlay(show.key, show.kind, show.rule, coolLeft > 0, show.code);
-            if (cooldownLabel != null && coolLeft > 0) {
-                cooldownLabel.setText(cooldownText(coolLeft));
+            screen.showOverlay(show.key, show.kind, show.rule, coolLeft > 0, show.code);
+            if (screen.cooldownLabel != null && coolLeft > 0) {
+                screen.cooldownLabel.setText(BlockScreen.cooldownText(coolLeft));
             }
         } else {
-            hideOverlay();
-            overlayFailures = 0;
-            overlayRetryAt = 0L;
+            screen.hideOverlay();
+            screen.overlayFailures = 0;
+            screen.overlayRetryAt = 0L;
         }
     }
 
@@ -992,86 +908,9 @@ public class GuardService extends AccessibilityService {
         }
     }
 
-    private static final class AppWindow {
-        public final String pkg;
-        public final String rawPkg;
-        public final AccessibilityNodeInfo root;
-
-        public AppWindow(String pkg, String rawPkg, AccessibilityNodeInfo root) {
-            this.pkg = pkg;
-            this.rawPkg = rawPkg;
-            this.root = root;
-        }
-    }
-
-    /**
-     * Prozor pregledača u kome je adresna traka. Kad je napred oblačić, meni ili savet pregledača (poseban mali
-     * prozor bez trake), traži se glavni prozor istog pregledača na ekranu. Ako ga nema, ostaje prednji prozor.
-     */
-    private AccessibilityNodeInfo browserAddressRoot(AccessibilityNodeInfo root, String raw, String urlBarId) {
-        if (hasNode(root, urlBarId)) return root;
-        try {
-            for (AccessibilityWindowInfo w : getWindows()) {
-                if (w == null || w.getType() != AccessibilityWindowInfo.TYPE_APPLICATION) continue;
-                if (w.getId() == root.getWindowId()) continue;
-                AccessibilityNodeInfo r = w.getRoot();
-                if (r == null || r.getPackageName() == null || !raw.equals(r.getPackageName().toString())) continue;
-                if (hasNode(r, urlBarId)) return r;
-            }
-        } catch (Throwable error) {
-            GuardDiagnostics.report("addressWindow", error);
-        }
-        return root;
-    }
-
-    private static boolean hasNode(AccessibilityNodeInfo root, String id) {
-        if (root == null) return false;
-        try {
-            List<AccessibilityNodeInfo> nodes = root.findAccessibilityNodeInfosByViewId(id);
-            return nodes != null && !nodes.isEmpty();
-        } catch (Throwable ignored) {
-            return false;
-        }
-    }
-
-    /**
-     * Drugi prozor istog pregledača koji je već proveren (glavni prozor pročitan umesto oblačića)
-     * ili je samo njegov oblačić/meni bez adresne trake. Pravi drugi prozor pregledača (podeljen ekran) ima traku.
-     */
-    private static boolean isSameBrowserWindow(AppWindow other, String raw, String urlBarId,
-                                               AccessibilityNodeInfo addressRoot) {
-        if (urlBarId == null || !other.rawPkg.equals(raw)) return false;
-        if (addressRoot != null && other.root.getWindowId() == addressRoot.getWindowId()) return true;
-        return !hasNode(other.root, urlBarId);
-    }
-
-    /** Other visible application windows; retain their roots to enforce website rules too. */
-    private List<AppWindow> otherAppWindows() {
-        List<AppWindow> out = new ArrayList<>();
-        try {
-            List<AccessibilityWindowInfo> apps = new ArrayList<>();
-            for (AccessibilityWindowInfo w : getWindows()) {
-                if (w != null && w.getType() == AccessibilityWindowInfo.TYPE_APPLICATION) apps.add(w);
-            }
-            // Samo jedna aplikacija na ekranu (uobičajeno): ne pita se aplikacija za sadržaj bez potrebe.
-            if (apps.size() < 2) return out;
-            for (AccessibilityWindowInfo w : apps) {
-                if (w.isActive() || w.isFocused()) continue;
-                AccessibilityNodeInfo r = w.getRoot();
-                if (r == null || r.getPackageName() == null) continue;
-                String p = r.getPackageName().toString();
-                if (p.equals(getPackageName()) || TRANSPARENT.contains(p)) continue;
-                out.add(new AppWindow(cloneOf(p), p, r));
-            }
-        } catch (Throwable error) {
-            GuardDiagnostics.report("otherWindows", error);
-        }
-        return out;
-    }
-
     private void addSecondarySiteBlocks(List<Block> blocks, String pkg, String host) {
         String guardedSite = store.siteGuarded(host);
-        if (guardedSite != null && !exempt().contains(pkg)) {
+        if (guardedSite != null && !kinds.exempt().contains(pkg)) {
             if (DayLimit.reached(store.dayLimits.dayLimit(), store.dayLimits.guardedToday())) {
                 blocks.add(new Block("site:" + guardedSite, KIND_DAY, null, false));
             }
@@ -1097,13 +936,13 @@ public class GuardService extends AccessibilityService {
 
     /** Blokada aplikacije koja je na ekranu, ali nije u fokusu (bez sajtova i broja otvaranja), ili null. */
     private Block appOnlyBlock(String p) {
-        if (exempt().contains(p)) return null;
+        if (kinds.exempt().contains(p)) return null;
         String k = "app:" + p;
         Block b = null;
         int dayLimit = store.dayLimits.dayLimit();
-        if (guarded(p) && DayLimit.reached(dayLimit, store.dayLimits.guardedToday())) {
+        if (kinds.guarded(p) && DayLimit.reached(dayLimit, store.dayLimits.guardedToday())) {
             b = new Block(k, KIND_DAY, null, false);
-        } else if (guarded(p) && store.nightBlocksApp(p)) {
+        } else if (kinds.guarded(p) && store.nightBlocksApp(p)) {
             b = new Block(k, KIND_NIGHT, null, false);
         } else if (store.sessions.sessionBreakLeft(p) > 0) {
             b = new Block(k, KIND_BREAK, null, false);
@@ -1117,9 +956,9 @@ public class GuardService extends AccessibilityService {
                 DailySchedule.Rule codeRule = store.modes.codeRuleForApp(p);
                 if (store.appLockNow(p) || timeUp || codeRule != null) {
                     b = new Block(k, timeUp ? KIND_TIME : codeRule != null ? KIND_CODE : KIND_LOCK, null, true);
-                } else if (unknownBrowser(p)) {
+                } else if (kinds.unknownBrowser(p)) {
                     b = new Block(k, unseen(KIND_BROWSER), null, true);
-                } else if (cloner(p)) {
+                } else if (kinds.cloner(p)) {
                     b = new Block(k, KIND_CLONER, null, true);
                 }
             }
@@ -1137,252 +976,14 @@ public class GuardService extends AccessibilityService {
         return BlockKind.hard(kind);
     }
 
-    /** Aplikacija sa pravilom, ili pregledač koji Čuvar ne prati dok postoje pravila za sajtove. */
-    private boolean guarded(String p) {
-        return store.appGuarded(p) || unknownBrowser(p) || cloner(p);
-    }
-
-    /**
-     * Sajt „instaliran kao aplikacija“ iz pregledača (WebAPK, npr. YouTube na početnom ekranu iz Chrome-a):
-     * host njegove početne adrese, "" kad se adresa ne zna, null kad nije takva aplikacija.
-     */
-    private String webApkHost(String p) {
-        if (p == null || p.equals(getPackageName()) || BrowserMonitor.isBrowser(p)) return null;
-        if (webApkHosts.containsKey(p)) return webApkHosts.get(p);
-        String host = null;
-        try {
-            android.os.Bundle meta = getPackageManager()
-                    .getApplicationInfo(p, PackageManager.GET_META_DATA).metaData;
-            if (meta != null) {
-                Object url = meta.get("org.chromium.webapk.shell_apk.startUrl");
-                if (url == null) url = meta.get("org.chromium.webapk.shell_apk.scope");
-                if (url != null) {
-                    host = Hosts.hostOf(WebAddress.real(url.toString()));
-                    if (host == null) host = "";
-                }
-            }
-        } catch (Throwable ignored) {
-        }
-        if (host == null && (p.startsWith("org.chromium.webapk.") || p.contains(".webapk."))) host = "";
-        webApkHosts.put(p, host);
-        return host;
-    }
-
-    /** Aplikacija za kloniranje drugih aplikacija; zaključana dok postoje pravila za aplikacije. */
-    private boolean cloner(String p) {
-        return Clones.isCloner(p) && !store.guardedApps().isEmpty();
-    }
-
-    /**
-     * Kopija aplikacije sa drugim imenom paketa (npr. com.instagram.android2 ili „Instagram 2“ iz App Cloner-a)
-     * vodi se kao original, da se pravila ne zaobiđu kloniranjem. Vraća paket originala ili isti paket.
-     */
-    private String cloneOf(String p) {
-        long now = SystemClock.elapsedRealtime();
-        if (clones == null || now - clonesAt > 60000L) {
-            clones = new HashMap<>();
-            clonesAt = now;
-        }
-        String known = clones.get(p);
-        if (known != null) return known;
-        String out = p;
-        Set<String> guarded = store.guardedApps();
-        if (!guarded.contains(p) && !exempt().contains(p) && !BrowserMonitor.isBrowser(p)) {
-            String label = appLabel(p);
-            for (String g : guarded) {
-                if (Clones.isPackageCopy(p, g) || Clones.isLabelCopy(label, g, appLabel(g))) {
-                    out = g;
-                    break;
-                }
-            }
-        }
-        clones.put(p, out);
-        return out;
-    }
-
-    /** Da li je napred pregledač unutar aplikacije (link otvoren iz Instagrama, Facebooka, Messengera...). */
-    private boolean inAppBrowser(String p) {
-        if (BrowserMonitor.isBrowser(p) || p.equals(getPackageName())) return false;
-        String a = activityOf.get(p);
-        return BrowserMonitor.isInAppBrowserActivity(a);
-    }
-
-    /**
-     * Pregledač u kome Čuvar ne može da pročita adresu (npr. Opera, DuckDuckGo). Dok postoje pravila za sajtove,
-     * on je zaključan kao aplikacija, inače bi se blokirani sajtovi samo otvorili u njemu.
-     */
-    private boolean unknownBrowser(String p) {
-        return browserMonitor.isUnknownBrowser(p, store.hasSiteRules());
-    }
-
-    /** Promene sadržaja trebaju za adresu u pregledaču i, dok je zaštita uključena, za ekrane podešavanja. */
-    /**
-     * Aplikacija na koju se ne odnosi nijedno pravilo ni provera: nije pregledač, nema pravilo, nije kopija ni
-     * aplikacija za kloniranje, nije ekran podešavanja pod zaštitom i ne traje fokus.
-     */
-    private boolean quiet(String raw) {
-        if (handsOff(raw)) return true;
-        if (raw.equals(getPackageName()) || BrowserMonitor.isBrowser(raw) || store.focus.focusActive()) return false;
-        if (settingsLike(raw) && store.protectNow()) return false;
-        if (inAppBrowser(raw)) return false;
-        if (webApkHost(raw) != null && store.hasSiteRules()) return false;
-        String p = cloneOf(raw);
-        return p.equals(raw) && !guarded(p);
-    }
-
-    private boolean handsOff(String p) {
-        return p != null && HANDS_OFF.contains(p) && (store == null || !store.appGuarded(p));
-    }
-
-    /** Sve aplikacije sa ikonom, za praćenje bez „Pristupa korišćenju“; osvežava se na 5 minuta. */
-    private Set<String> launcherApps() {
-        long now = SystemClock.elapsedRealtime();
-        if (launcherApps == null || now - launcherAppsAt > 5 * 60000L) {
-            Set<String> out = new HashSet<>();
-            try {
-                Intent i = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER);
-                for (android.content.pm.ResolveInfo r : getPackageManager().queryIntentActivities(i, PackageManager.MATCH_ALL)) {
-                    if (r.activityInfo != null) out.add(r.activityInfo.packageName);
-                }
-            } catch (Throwable ignored) {
-            }
-            launcherApps = out;
-            launcherAppsAt = now;
-        }
-        return launcherApps;
-    }
-
-    /** Broj prozora aplikacija na ekranu (podeljen ekran, plutajući prozor); ne čita sadržaj aplikacija. */
-    private int appWindowCount() {
-        int n = 0;
-        try {
-            for (AccessibilityWindowInfo w : getWindows()) {
-                if (w != null && w.getType() == AccessibilityWindowInfo.TYPE_APPLICATION) n++;
-            }
-        } catch (Throwable ignored) {
-        }
-        return n;
-    }
-
     private boolean wantsContent(String p) {
         return (BrowserMonitor.isBrowser(p) && (store == null || store.hasSiteRules() || store.focus.focusHasSites()))
-                || (settingsLike(p) && store != null && store.protectNow());
-    }
-
-    private static boolean settingsLike(String p) {
-        return SystemScreens.settingsLike(p);
-    }
-
-    /** Da li sistemski ekran prikazuje Čuvara (podaci o aplikaciji, Pristupačnost, brisanje). */
-    private boolean guardsSelf(AccessibilityNodeInfo root, String p) {
-        if (p.equals(getPackageName()) || exempt().contains(p)) return false;
-        if (!settingsLike(p)) return false;
-        // Korisnik je iz Čuvara otvorio „Pristup korišćenju“ da ga uključi: taj ekran se ne zatvara dva minuta.
-        if (SystemClock.elapsedRealtime() < usageSetupUntil && !usageOk) return false;
-        if (SystemClock.elapsedRealtime() < notifSetupUntil && !NotificationCounter.granted(this)) return false;
-        boolean installer = SystemScreens.installer(p);
-        try {
-            String label = getString(R.string.app_name);
-            if (!mentions(root, label) && !mentions(root, "Чувар")) return false;
-            if (!installer) return true;
-            for (String w : SystemScreens.UNINSTALL) {
-                List<AccessibilityNodeInfo> n = root.findAccessibilityNodeInfosByText(w);
-                if (n != null && !n.isEmpty()) return true;
-            }
-        } catch (Throwable ignored) {
-        }
-        return false;
-    }
-
-    /** Da li se na ekranu pominje naziv (ali ne „čuvar ekrana“, koji je podešavanje ekrana). */
-    private static boolean mentions(AccessibilityNodeInfo root, String name) {
-        List<AccessibilityNodeInfo> nodes = root.findAccessibilityNodeInfosByText(name);
-        if (nodes == null) return false;
-        for (AccessibilityNodeInfo n : nodes) {
-            CharSequence t = n == null ? null : n.getText();
-            if (t == null) t = n == null ? null : n.getContentDescription();
-            if (t == null) continue;
-            if (SystemScreens.namesGuard(t.toString())) return true;
-        }
-        return false;
-    }
-
-    private static final Map<String, Boolean> TRACKED = new HashMap<>();
-
-    /**
-     * Meri se samo vreme aplikacija koje imaju ikonicu u meniju. Sistemski prozori bez ikonice
-     * (biometrija, dozvole, instalacija) ne ulaze u statistiku ni u limite.
-     */
-    private static synchronized void forgetTracked(String pkg) {
-        if (pkg != null) TRACKED.remove(pkg);
-    }
-
-    public static synchronized boolean tracked(Context c, String pkg) {
-        Boolean t = TRACKED.get(pkg);
-        if (t == null) {
-            try {
-                t = c.getPackageManager().getLaunchIntentForPackage(pkg) != null;
-            } catch (Throwable e) {
-                t = true;
-            }
-            TRACKED.put(pkg, t);
-        }
-        return t;
-    }
-
-    /** Početni ekran, Čuvar, pozivi i poruke: ne troše ukupni limit i nikad se zbog njega ne blokiraju, ni uz pravilo. */
-    private Set<String> exempt() {
-        long now = SystemClock.elapsedRealtime();
-        if (exempt == null || now - exemptAt > 60000L) {
-            exempt = exemptApps(this);
-            exemptAt = now;
-        }
-        return exempt;
-    }
-
-    public static Set<String> exemptApps(Context c) {
-        Set<String> out = new HashSet<>();
-        out.add(c.getPackageName());
-        try {
-            Intent i = new Intent(Intent.ACTION_MAIN);
-            i.addCategory(Intent.CATEGORY_HOME);
-            android.content.pm.ResolveInfo r = c.getPackageManager().resolveActivity(i, PackageManager.MATCH_DEFAULT_ONLY);
-            if (r != null && r.activityInfo != null) out.add(r.activityInfo.packageName);
-        } catch (Throwable ignored) {
-        }
-        try {
-            TelecomManager tm = (TelecomManager) c.getSystemService(Context.TELECOM_SERVICE);
-            if (tm != null && tm.getDefaultDialerPackage() != null) out.add(tm.getDefaultDialerPackage());
-        } catch (Throwable ignored) {
-        }
-        try {
-            String sms = Telephony.Sms.getDefaultSmsPackage(c);
-            if (sms != null) out.add(sms);
-        } catch (Throwable ignored) {
-        }
-        return out;
+                || (AppKinds.settingsLike(p) && store != null && store.protectNow());
     }
 
     /** Stavka je upravo otključana šifrom ili hitnim otključavanjem. */
     private boolean unlockedNow(String key) {
         return store.unlock.unlockLeft(key) > 0 || store.unlock.emergencyLeft(key) > 0;
-    }
-
-    public static String cooldownText(long left) {
-        long min = (left + 59999L) / 60000L;
-        return "Otključavanje je iskorišćeno. Sledeće je moguće za " + min + " min.";
-    }
-
-    /**
-     * Upozorenje 5 i 1 min pre isteka limita aplikacije ili sajta, jednom po pragu u danu,
-     * da se stigne završiti bez naglog prekida.
-     */
-    private void warnLimit(String key, String name, int limitMin, long used) {
-        long left = limitMin * 60000L - used;
-        if (left <= 0 || left > LimitWarnings.FIRST_MS) return;
-        if (!limitWarnings.shouldWarn(key, store.day(), left)) return;
-        Toast.makeText(this, Ui.cyr("Čuvar: limit ističe za " + Ui.fmt(left + 59999L) + " – " + name),
-                Toast.LENGTH_LONG).show();
     }
 
     public String appLabel(String pkg) {
@@ -1395,168 +996,5 @@ public class GuardService extends AccessibilityService {
     }
 
     // ---------- Ekran za blokadu ----------
-
-    /** Blokada se odnosi na stranicu u pregledaču koji je na ekranu (sajt ili nepotvrđena adresa). */
-    private boolean inBrowserPage(String key, int kind) {
-        return (key.startsWith("site:") || kind == KIND_ADDRESS || kind == KIND_UNSEEN_SITE) && browserForCurrentBlock() != null;
-    }
-
-    public String browserForCurrentBlock() {
-        if (currentPkg != null && BrowserMonitor.isBrowser(currentPkg)) return currentPkg;
-        return rawPkg != null && BrowserMonitor.isBrowser(rawPkg) ? rawPkg : null;
-    }
-
-    /**
-     * Izlaz sa ekrana za blokadu. Blokiran sajt u pregledaču: ostani u pregledaču, samo skloni karticu
-     * sa te stranice (otvori početnu Google stranu). Sve ostalo: početni ekran telefona.
-     */
-    public void leaveBlock(String key, int kind) {
-        boolean sitePage = inBrowserPage(key, kind);
-        String browser = sitePage ? browserForCurrentBlock() : null;
-        if (sitePage) {
-            leavingSiteKey = key;
-            leavingSiteBrowser = browser;
-            leavingSiteUntil = SystemClock.elapsedRealtime() + 2500L;
-            h.removeCallbacks(finishSiteExit);
-            h.postDelayed(finishSiteExit, 2500L);
-        }
-        // Remove the accessibility window before starting browser navigation so Back feels immediate and
-        // the browser can receive focus while we set its neutral URL.
-        hideOverlay();
-        if (sitePage) {
-            openStartPage(browser);
-        } else {
-            performGlobalAction(GLOBAL_ACTION_HOME);
-        }
-        h.removeCallbacks(recheckSoon);
-        h.postDelayed(recheckSoon, 600);
-    }
-
-    private static final String START_PAGE = "https://www.google.com";
-
-    /** Otvara neutralnu stranicu direktnim browser intent-om; ne menja fokus dok je accessibility overlay aktivan. */
-    private void openStartPage(String browser) {
-        startPageIntent(browser);
-        h.removeCallbacks(recheckSoon);
-        h.postDelayed(recheckSoon, 600);
-    }
-
-    private void startPageIntent(String browser) {
-        try {
-            Intent i = new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(START_PAGE))
-                    .setPackage(browser)
-                    .putExtra("com.android.browser.application_id", getPackageName())
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(i);
-        } catch (Throwable t) {
-            performGlobalAction(GLOBAL_ACTION_HOME);
-        }
-    }
-
-    /** Omotač koji sistemsko „nazad“ (taster ili pokret) pretvara u izlaz na početnu stranu pregledača. */
-    private View backCatcher(View inner, final String key, final int kind) {
-        FrameLayout wrap = new FrameLayout(this) {
-            @Override
-            public boolean dispatchKeyEvent(KeyEvent e) {
-                if (e.getKeyCode() == KeyEvent.KEYCODE_BACK) {
-                    if (e.getAction() == KeyEvent.ACTION_UP && !e.isCanceled()) leaveBlock(key, kind);
-                    return true;
-                }
-                return super.dispatchKeyEvent(e);
-            }
-        };
-        wrap.setFocusable(true);
-        wrap.setFocusableInTouchMode(true);
-        wrap.addView(inner, new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
-        if (Build.VERSION.SDK_INT >= 33) {
-            // Android 16 šalje „nazad“ kao povratni poziv, ne kao taster.
-            wrap.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
-                private android.window.OnBackInvokedDispatcher dispatcher;
-                private android.window.OnBackInvokedCallback callback;
-
-                @Override
-                public void onViewAttachedToWindow(View v) {
-                    v.requestFocus();
-                    dispatcher = v.findOnBackInvokedDispatcher();
-                    if (dispatcher != null) {
-                        callback = () -> leaveBlock(key, kind);
-                        dispatcher.registerOnBackInvokedCallback(
-                                android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, callback);
-                    }
-                }
-
-                @Override
-                public void onViewDetachedFromWindow(View v) {
-                    if (dispatcher != null && callback != null) {
-                        dispatcher.unregisterOnBackInvokedCallback(callback);
-                        dispatcher = null;
-                        callback = null;
-                    }
-                }
-            });
-        }
-        return wrap;
-    }
-
-    private void showOverlay(String key, int kind, DailySchedule.Rule rule, boolean cooling, boolean code) {
-        if (overlay != null && key.equals(overlayKey) && kind == overlayKind && sameRule(rule, overlayRule)
-                && cooling == overlayCooling && code == overlayCode) {
-            return;
-        }
-        if (overlay == null && overlayRetryAt > SystemClock.elapsedRealtime()) return;
-        hideOverlay();
-        try {
-            View v = blockOverlayContent.build(key, kind, rule, cooling, code);
-            // Kod sajta u pregledaču naš ekran hvata i sistemsko „nazad“: inače bi ga dobio pregledač,
-            // zatvorio karticu bez istorije i izašao iz aplikacije umesto da te vrati na početnu stranu.
-            boolean catchBack = inBrowserPage(key, kind);
-            if (catchBack) v = backCatcher(v, key, kind);
-            overlayWindow.show(v, catchBack, rawPkg);
-            overlay = v;
-            overlayKey = key;
-            overlayKind = kind;
-            overlayRule = rule;
-            overlayCooling = cooling;
-            overlayCode = code;
-            overlayFailures = 0;
-            overlayRetryAt = 0L;
-        } catch (Throwable t) {
-            GuardDiagnostics.report("showOverlay", t);
-            overlay = null;
-            overlayKey = null;
-            cooldownLabel = null;
-            overlayFailures = Math.min(5, overlayFailures + 1);
-            long delay = Math.min(30000L, 1000L << Math.min(overlayFailures - 1, 4));
-            overlayRetryAt = SystemClock.elapsedRealtime() + delay;
-            h.removeCallbacks(recheckSoon);
-            h.postDelayed(recheckSoon, delay);
-        }
-    }
-
-    private void hideOverlay() {
-        if (overlay != null) {
-            overlayWindow.hide(overlay);
-            overlay = null;
-            overlayKey = null;
-            overlayKind = 0;
-            overlayRule = null;
-            overlayCooling = false;
-            overlayCode = false;
-        }
-        cooldownLabel = null;
-    }
-
-    /** Isti režim sa istim nazivom i periodom; inače ekran za blokadu treba osvežiti. */
-    private static boolean sameRule(DailySchedule.Rule a, DailySchedule.Rule b) {
-        if (a == null || b == null) return a == b;
-        return a.id.equals(b.id) && a.name.equals(b.name) && a.start == b.start && a.end == b.end
-                && a.days == b.days && a.code == b.code;
-    }
-
-    public void overlayGlobalBack() {
-        performGlobalAction(GLOBAL_ACTION_BACK);
-    }
-
 
 }
