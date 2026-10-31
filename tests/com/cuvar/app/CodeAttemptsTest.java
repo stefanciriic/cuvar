@@ -1,5 +1,7 @@
 package com.cuvar.app;
 
+import com.cuvar.app.rules.CodeAttempts;
+
 /** Pokušaji dnevne šifre: 5 grešaka donosi 30 s čekanja, i posle restarta. */
 public final class CodeAttemptsTest {
     private static int checks;

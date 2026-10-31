@@ -1,5 +1,7 @@
 package com.cuvar.app;
 
+import com.cuvar.app.rules.UnlockTimer;
+
 /** Otključavanje šifrom: 5 minuta korišćenja, pa sat vremena bez novog otključavanja. */
 public final class UnlockTimerTest {
     private static int checks;

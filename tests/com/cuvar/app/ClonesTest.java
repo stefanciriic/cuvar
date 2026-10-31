@@ -1,5 +1,7 @@
 package com.cuvar.app;
 
+import com.cuvar.app.guard.Clones;
+
 /** Kopije aplikacija potpadaju pod pravila originala. */
 public final class ClonesTest {
     private static int checks;

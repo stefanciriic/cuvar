@@ -1,5 +1,7 @@
 package com.cuvar.app;
 
+import com.cuvar.app.guard.MusicOwner;
+
 /** Ekran blokade ne zaustavlja muziku koja je krenula iz druge aplikacije (Spotify u pozadini). */
 public final class MusicOwnerTest {
     private static int checks;

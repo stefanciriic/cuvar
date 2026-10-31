@@ -1,5 +1,7 @@
 package com.cuvar.app;
 
+import com.cuvar.app.rules.NotifCounts;
+
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;

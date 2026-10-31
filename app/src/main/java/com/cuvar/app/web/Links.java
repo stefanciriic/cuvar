@@ -1,0 +1,79 @@
+package com.cuvar.app.web;
+
+import com.cuvar.app.rules.DailySchedule;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * Aplikacija i njen sajt kao jedna stavka (npr. LinkedIn = aplikacija i linkedin.com):
+ * pravila jedne važe i za drugu, a vreme se broji zajedno.
+ */
+public final class Links {
+    private Links() { }
+
+    /** Poznati parovi; povezuju se sami, a mogu se razdvojiti ili promeniti. */
+    public static final Map<String, String> KNOWN = new HashMap<>();
+
+    static {
+        KNOWN.put("com.google.android.youtube", "youtube.com");
+        KNOWN.put("com.instagram.android", "instagram.com");
+        KNOWN.put("com.facebook.katana", "facebook.com");
+        KNOWN.put("com.facebook.lite", "facebook.com");
+        KNOWN.put("com.reddit.frontpage", "reddit.com");
+        KNOWN.put("com.linkedin.android", "linkedin.com");
+        KNOWN.put("com.zhiliaoapp.musically", "tiktok.com");
+        KNOWN.put("com.ss.android.ugc.trill", "tiktok.com");
+        KNOWN.put("com.twitter.android", "x.com");
+        KNOWN.put("com.pinterest", "pinterest.com");
+        KNOWN.put("tv.twitch.android.app", "twitch.tv");
+        KNOWN.put("com.netflix.mediaclient", "netflix.com");
+    }
+
+    public static String pair(String pkg, String domain) {
+        return pkg + "|" + domain;
+    }
+
+    public static String pkgOf(String pair) {
+        return pair.substring(0, pair.indexOf('|'));
+    }
+
+    public static String domainOf(String pair) {
+        return pair.substring(pair.indexOf('|') + 1);
+    }
+
+    public static List<String> domainsOf(Collection<String> pairs, String pkg) {
+        List<String> out = new ArrayList<>();
+        for (String p : pairs) if (pkgOf(p).equals(pkg)) out.add(domainOf(p));
+        return out;
+    }
+
+    /** Aplikacije čiji povezan sajt pokriva domen (i poddomen, npr. m.youtube.com). */
+    public static List<String> appsOf(Collection<String> pairs, String domain) {
+        List<String> out = new ArrayList<>();
+        for (String p : pairs) if (covers(domainOf(p), domain) && !out.contains(pkgOf(p))) out.add(pkgOf(p));
+        return out;
+    }
+
+    public static boolean covers(String base, String domain) {
+        return domain.equals(base) || domain.endsWith("." + base);
+    }
+
+    /** Režimi u kojima je uz aplikaciju i njen sajt, i obrnuto. */
+    public static List<DailySchedule.Rule> expand(List<DailySchedule.Rule> rules, Collection<String> pairs) {
+        List<DailySchedule.Rule> out = new ArrayList<>();
+        for (DailySchedule.Rule r : rules) {
+            DailySchedule.Rule c = DailySchedule.copy(r, r.id);
+            for (String p : pairs) {
+                String pkg = pkgOf(p), dom = domainOf(p);
+                if (r.apps.contains(pkg)) c.sites.add(dom);
+                for (String site : r.sites) if (covers(dom, site)) c.apps.add(pkg);
+            }
+            out.add(c);
+        }
+        return out;
+    }
+}

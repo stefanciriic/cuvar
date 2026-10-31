@@ -1,5 +1,8 @@
 package com.cuvar.app;
 
+import com.cuvar.app.data.Store;
+import com.cuvar.app.rules.NotifCounts;
+
 import android.app.Notification;
 import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
@@ -16,7 +19,7 @@ public class NotificationCounter extends NotificationListenerService {
     private final Set<String> seen = new HashSet<>();
 
     /** Da li je korisnik uključio „Pristup obaveštenjima“ za Čuvara. */
-    static boolean granted(android.content.Context c) {
+    public static boolean granted(android.content.Context c) {
         try {
             String list = android.provider.Settings.Secure.getString(c.getContentResolver(), "enabled_notification_listeners");
             return list != null && list.contains(new android.content.ComponentName(c, NotificationCounter.class).flattenToString());

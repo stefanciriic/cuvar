@@ -1,5 +1,9 @@
 package com.cuvar.app;
 
+import com.cuvar.app.data.Store;
+import com.cuvar.app.ui.Sheet;
+import com.cuvar.app.ui.Ui;
+
 import android.app.Activity;
 import android.os.Bundle;
 import android.view.Gravity;
@@ -7,7 +11,7 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 /** Zajednička osnova za ekrane sa listama. */
-abstract class SubActivity extends Activity {
+public abstract class SubActivity extends Activity {
 
     protected Store store;
     private boolean dark;

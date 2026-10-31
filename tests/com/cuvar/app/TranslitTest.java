@@ -1,5 +1,7 @@
 package com.cuvar.app;
 
+import com.cuvar.app.i18n.Translit;
+
 /** Latinica u ćirilicu: srpske reči se menjaju, nazivi aplikacija i adrese ostaju. */
 public final class TranslitTest {
     private static int checks;

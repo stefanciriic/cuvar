@@ -1,5 +1,13 @@
 package com.cuvar.app;
 
+import com.cuvar.app.data.Store;
+import com.cuvar.app.i18n.Translit;
+import com.cuvar.app.rules.DailySchedule;
+import com.cuvar.app.rules.NotifCounts;
+import com.cuvar.app.rules.UnlockStreak;
+import com.cuvar.app.ui.Charts;
+import com.cuvar.app.ui.Ui;
+
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
@@ -27,12 +35,12 @@ import java.util.function.Function;
 public class StatsActivity extends SubActivity {
 
     private static final class Row {
-        String label;
-        long ms;
+        public String label;
+        public long ms;
     }
 
     /** Otvoren kao kartica donje trake glavnog ekrana (bez strelice nazad). */
-    static final String AS_TAB = "asTab";
+    public static final String AS_TAB = "asTab";
 
     private int days = 7;
     private LinearLayout body;

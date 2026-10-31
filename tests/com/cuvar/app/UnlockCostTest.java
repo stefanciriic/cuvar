@@ -1,5 +1,8 @@
 package com.cuvar.app;
 
+import com.cuvar.app.rules.UnlockCost;
+import com.cuvar.app.unlock.NumberGame;
+
 /** Cena otključavanja po broju otključavanja u danu. */
 public final class UnlockCostTest {
     private static int checks;

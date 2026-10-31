@@ -68,7 +68,7 @@ Automatske provere perioda pokreću se i u APK workflow-u. Provere na telefonu z
 Automatska provera banke pitanja (svaki red ispravno zapisan, bez duplikata, tačan odgovor ponuđen) i 20.000 nasumičnih pitanja (računica tačna, rimski brojevi, bez ponavljanja među poslednjih 40):
 
 ```powershell
-javac -encoding UTF-8 -d .review/quiz app/src/main/java/com/cuvar/app/Quiz.java app/src/main/java/com/cuvar/app/QuizBank.java tests/com/cuvar/app/QuizTest.java
+javac -encoding UTF-8 -d .review/quiz app/src/main/java/com/cuvar/app/unlock/Quiz.java app/src/main/java/com/cuvar/app/unlock/QuizBank.java tests/com/cuvar/app/QuizTest.java
 java -cp .review/quiz com.cuvar.app.QuizTest
 ```
 
@@ -102,7 +102,7 @@ Limit troši samo vreme u aplikacijama i na sajtovima koji imaju pravilo; mape, 
 Automatska provera pravila (strožiji limit odmah, blaži ili isključen tek od sutra, potrošen limit, upozorenje 15 min ranije, vreme pod pravilima bez aplikacija bez pravila):
 
 ```powershell
-javac -encoding UTF-8 -d .review/daylimit app/src/main/java/com/cuvar/app/DayLimit.java tests/com/cuvar/app/DayLimitTest.java
+javac -encoding UTF-8 -d .review/daylimit app/src/main/java/com/cuvar/app/rules/DayLimit.java tests/com/cuvar/app/DayLimitTest.java
 java -cp .review/daylimit com.cuvar.app.DayLimitTest
 ```
 

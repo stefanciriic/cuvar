@@ -1,11 +1,14 @@
 package com.cuvar.app;
 
+import com.cuvar.app.unlock.Quiz;
+import com.cuvar.app.unlock.QuizBank;
+
 import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
 
-/** Pokretanje: javac -encoding UTF-8 -d .review/quiz app/src/main/java/com/cuvar/app/Quiz.java app/src/main/java/com/cuvar/app/QuizBank.java tests/com/cuvar/app/QuizTest.java
+/** Pokretanje: javac -encoding UTF-8 -d .review/quiz app/src/main/java/com/cuvar/app/unlock/Quiz.java app/src/main/java/com/cuvar/app/unlock/QuizBank.java tests/com/cuvar/app/QuizTest.java
  *  java -cp .review/quiz com.cuvar.app.QuizTest */
 public final class QuizTest {
     private static int checks;

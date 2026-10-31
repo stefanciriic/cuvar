@@ -1,11 +1,14 @@
 package com.cuvar.app;
 
+import com.cuvar.app.rules.DailyCode;
+import com.cuvar.app.rules.DailySchedule;
+
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.List;
 import java.util.TimeZone;
 
-/** Pokretanje: javac -d .review/schedule app/src/main/java/com/cuvar/app/DailySchedule.java app/src/main/java/com/cuvar/app/DailyCode.java tests/com/cuvar/app/DailyScheduleTest.java
+/** Pokretanje: javac -d .review/schedule app/src/main/java/com/cuvar/app/rules/DailySchedule.java app/src/main/java/com/cuvar/app/rules/DailyCode.java tests/com/cuvar/app/DailyScheduleTest.java
  *  java -cp .review/schedule com.cuvar.app.DailyScheduleTest */
 public final class DailyScheduleTest {
     private static int checks;

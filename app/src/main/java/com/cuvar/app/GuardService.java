@@ -1,5 +1,26 @@
 package com.cuvar.app;
 
+import com.cuvar.app.data.Store;
+import com.cuvar.app.guard.BlockOverlayContent;
+import com.cuvar.app.guard.Clones;
+import com.cuvar.app.guard.ForegroundApp;
+import com.cuvar.app.guard.GuardDiagnostics;
+import com.cuvar.app.guard.GuardOverlayWindow;
+import com.cuvar.app.guard.LoadMeter;
+import com.cuvar.app.guard.PauseOverlayContent;
+import com.cuvar.app.guard.SystemScreens;
+import com.cuvar.app.i18n.Translit;
+import com.cuvar.app.rules.BlockKind;
+import com.cuvar.app.rules.DailySchedule;
+import com.cuvar.app.rules.DayLimit;
+import com.cuvar.app.rules.LimitWarnings;
+import com.cuvar.app.rules.UsageTracker;
+import com.cuvar.app.ui.Ui;
+import com.cuvar.app.web.BrowserAddressState;
+import com.cuvar.app.web.BrowserMonitor;
+import com.cuvar.app.web.Hosts;
+import com.cuvar.app.web.WebAddress;
+
 import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.AccessibilityServiceInfo;
 import android.app.KeyguardManager;
@@ -37,7 +58,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-import com.cuvar.app.BlockKind.Block;
+import com.cuvar.app.rules.BlockKind.Block;
 
 /**
  * Srce aplikacije. Prati koja je aplikacija na ekranu i koji je sajt otvoren u pregledaču,
@@ -45,7 +66,7 @@ import com.cuvar.app.BlockKind.Block;
  */
 public class GuardService extends AccessibilityService {
 
-    static volatile boolean running;
+    public static volatile boolean running;
 
     private static final long TICK_MS = 5000L;
     private final LimitWarnings limitWarnings = new LimitWarnings();
@@ -54,24 +75,24 @@ public class GuardService extends AccessibilityService {
     private static final long OPEN_GRACE_MS = 15000L;
 
     // Vrste blokade: opis je u BlockKind.
-    static final int KIND_LOCK = BlockKind.LOCK;
-    static final int KIND_TIME = BlockKind.TIME;
-    static final int KIND_SITE = BlockKind.SITE;
-    static final int KIND_SITE_TIME = BlockKind.SITE_TIME;
-    static final int KIND_SCHEDULE = BlockKind.SCHEDULE;
-    static final int KIND_CODE = BlockKind.CODE;
-    static final int KIND_NIGHT = BlockKind.NIGHT;
-    static final int KIND_DAY = BlockKind.DAY;
-    static final int KIND_OPENS = BlockKind.OPENS;
-    static final int KIND_PAUSE = BlockKind.PAUSE;
-    static final int PAUSE_SECONDS = 6;
-    static final int KIND_BREAK = BlockKind.BREAK;
-    static final int KIND_CLONER = BlockKind.CLONER;
-    static final int KIND_INAPP = BlockKind.INAPP;
-    static final int KIND_ADDRESS = BlockKind.ADDRESS;
-    static final int KIND_FOCUS = BlockKind.FOCUS;
-    static final int KIND_BROWSER = BlockKind.BROWSER;
-    static final int KIND_UNSEEN_SITE = BlockKind.UNSEEN_SITE;
+    public static final int KIND_LOCK = BlockKind.LOCK;
+    public static final int KIND_TIME = BlockKind.TIME;
+    public static final int KIND_SITE = BlockKind.SITE;
+    public static final int KIND_SITE_TIME = BlockKind.SITE_TIME;
+    public static final int KIND_SCHEDULE = BlockKind.SCHEDULE;
+    public static final int KIND_CODE = BlockKind.CODE;
+    public static final int KIND_NIGHT = BlockKind.NIGHT;
+    public static final int KIND_DAY = BlockKind.DAY;
+    public static final int KIND_OPENS = BlockKind.OPENS;
+    public static final int KIND_PAUSE = BlockKind.PAUSE;
+    public static final int PAUSE_SECONDS = 6;
+    public static final int KIND_BREAK = BlockKind.BREAK;
+    public static final int KIND_CLONER = BlockKind.CLONER;
+    public static final int KIND_INAPP = BlockKind.INAPP;
+    public static final int KIND_ADDRESS = BlockKind.ADDRESS;
+    public static final int KIND_FOCUS = BlockKind.FOCUS;
+    public static final int KIND_BROWSER = BlockKind.BROWSER;
+    public static final int KIND_UNSEEN_SITE = BlockKind.UNSEEN_SITE;
     /** Sistemski prozori koji se pojave preko aplikacije, a ne znače da je korisnik izašao iz nje. */
     private static final Set<String> TRANSPARENT = new HashSet<>();
     /** Navigacija: Čuvar je nikad ne prati, ne čita i ne blokira, osim ako sama ima pravilo. */
@@ -83,8 +104,8 @@ public class GuardService extends AccessibilityService {
         TRANSPARENT.add("android");
     }
 
-    final Handler h = new Handler(Looper.getMainLooper());
-    Store store;
+    public final Handler h = new Handler(Looper.getMainLooper());
+    public Store store;
     private GuardOverlayWindow overlayWindow;
     private PowerManager power;
     private KeyguardManager keyguard;
@@ -97,7 +118,7 @@ public class GuardService extends AccessibilityService {
     private final Set<String> visibleHosts = new HashSet<>();
     private final Set<String> secondaryContentPackages = new HashSet<>();
     private BrowserMonitor browserMonitor;
-    PauseOverlayContent pauseOverlayContent;
+    public PauseOverlayContent pauseOverlayContent;
     private BlockOverlayContent blockOverlayContent;
     private BrowserAddressState currentAddress;
     private boolean observationValid;
@@ -113,7 +134,7 @@ public class GuardService extends AccessibilityService {
     private int overlayKind;
     private boolean overlayCooling;   // prikazana je pauza posle otključavanja
     private boolean overlayCode;      // otključava se dnevnom šifrom umesto PIN-om
-    TextView cooldownLabel;  // odbrojavanje do sledećeg mogućeg otključavanja
+    public TextView cooldownLabel;  // odbrojavanje do sledećeg mogućeg otključavanja
     private String leavingSiteKey;
     private String leavingSiteBrowser;
     private long leavingSiteUntil;
@@ -126,9 +147,9 @@ public class GuardService extends AccessibilityService {
         }
     }; // paket -> poslednji prikazan ekran (aktivnost)
     /** Do kada sme da se otvori ekran „Pristup korišćenju“ iako je zaštita uključena (korisnik je tapnuo dugme u Čuvaru). */
-    static volatile long usageSetupUntil;
+    public static volatile long usageSetupUntil;
     /** Korisnik je iz Statistike otvorio „Pristup obaveštenjima“: taj ekran se ne zatvara dva minuta. */
-    static volatile long notifSetupUntil;
+    public static volatile long notifSetupUntil;
     /** Aplikacije koje otvaraju linkove u svom pregledaču. */
     private static final String[] IN_APP_APPS = {"com.instagram.android", "com.instagram.lite", "com.facebook.katana",
             "com.facebook.lite", "com.facebook.orca", "com.facebook.mlite", "com.zhiliaoapp.musically", "com.ss.android.ugc.trill",
@@ -202,7 +223,7 @@ public class GuardService extends AccessibilityService {
         }
     };
 
-    final Runnable recheckSoon = new Runnable() {
+    public final Runnable recheckSoon = new Runnable() {
         @Override
         public void run() {
             safeCheck();
@@ -270,7 +291,7 @@ public class GuardService extends AccessibilityService {
     private boolean packageReceiverOn;
 
     /** Da li je korisnik uključio Čuvara u Pristupačnosti. */
-    static boolean isEnabled(Context c) {
+    public static boolean isEnabled(Context c) {
         if (running) {
             return true;
         }
@@ -516,7 +537,7 @@ public class GuardService extends AccessibilityService {
         }
     }
 
-    void safeCheck() {
+    public void safeCheck() {
         // Settle the OLD app/site before check() changes the observed context or shows a block.
         accountUntilNow(null);
         // Muzika se beleži pre nego što se promeni aplikacija napred, da se zna iz koje je krenula.
@@ -970,11 +991,11 @@ public class GuardService extends AccessibilityService {
     }
 
     private static final class AppWindow {
-        final String pkg;
-        final String rawPkg;
-        final AccessibilityNodeInfo root;
+        public final String pkg;
+        public final String rawPkg;
+        public final AccessibilityNodeInfo root;
 
-        AppWindow(String pkg, String rawPkg, AccessibilityNodeInfo root) {
+        public AppWindow(String pkg, String rawPkg, AccessibilityNodeInfo root) {
             this.pkg = pkg;
             this.rawPkg = rawPkg;
             this.root = root;
@@ -1110,7 +1131,7 @@ public class GuardService extends AccessibilityService {
         return BlockKind.unseenSite(softKind, store.hardSiteBlockNow());
     }
 
-    static boolean hard(int kind) {
+    public static boolean hard(int kind) {
         return BlockKind.hard(kind);
     }
 
@@ -1294,7 +1315,7 @@ public class GuardService extends AccessibilityService {
         if (pkg != null) TRACKED.remove(pkg);
     }
 
-    static synchronized boolean tracked(Context c, String pkg) {
+    public static synchronized boolean tracked(Context c, String pkg) {
         Boolean t = TRACKED.get(pkg);
         if (t == null) {
             try {
@@ -1317,7 +1338,7 @@ public class GuardService extends AccessibilityService {
         return exempt;
     }
 
-    static Set<String> exemptApps(Context c) {
+    public static Set<String> exemptApps(Context c) {
         Set<String> out = new HashSet<>();
         out.add(c.getPackageName());
         try {
@@ -1345,7 +1366,7 @@ public class GuardService extends AccessibilityService {
         return store.unlockLeft(key) > 0 || store.emergencyLeft(key) > 0;
     }
 
-    static String cooldownText(long left) {
+    public static String cooldownText(long left) {
         long min = (left + 59999L) / 60000L;
         return "Otključavanje je iskorišćeno. Sledeće je moguće za " + min + " min.";
     }
@@ -1362,7 +1383,7 @@ public class GuardService extends AccessibilityService {
                 Toast.LENGTH_LONG).show();
     }
 
-    String appLabel(String pkg) {
+    public String appLabel(String pkg) {
         try {
             PackageManager pm = getPackageManager();
             return Translit.keep(pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString());
@@ -1378,7 +1399,7 @@ public class GuardService extends AccessibilityService {
         return (key.startsWith("site:") || kind == KIND_ADDRESS || kind == KIND_UNSEEN_SITE) && browserForCurrentBlock() != null;
     }
 
-    String browserForCurrentBlock() {
+    public String browserForCurrentBlock() {
         if (currentPkg != null && BrowserMonitor.isBrowser(currentPkg)) return currentPkg;
         return rawPkg != null && BrowserMonitor.isBrowser(rawPkg) ? rawPkg : null;
     }
@@ -1387,7 +1408,7 @@ public class GuardService extends AccessibilityService {
      * Izlaz sa ekrana za blokadu. Blokiran sajt u pregledaču: ostani u pregledaču, samo skloni karticu
      * sa te stranice (otvori početnu Google stranu). Sve ostalo: početni ekran telefona.
      */
-    void leaveBlock(String key, int kind) {
+    public void leaveBlock(String key, int kind) {
         boolean sitePage = inBrowserPage(key, kind);
         String browser = sitePage ? browserForCurrentBlock() : null;
         if (sitePage) {
@@ -1531,7 +1552,7 @@ public class GuardService extends AccessibilityService {
                 && a.days == b.days && a.code == b.code;
     }
 
-    void overlayGlobalBack() {
+    public void overlayGlobalBack() {
         performGlobalAction(GLOBAL_ACTION_BACK);
     }
 

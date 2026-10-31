@@ -1,11 +1,13 @@
 package com.cuvar.app;
 
+import com.cuvar.app.rules.DayLimit;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-/** Pokretanje: javac -d .review/daylimit app/src/main/java/com/cuvar/app/DayLimit.java tests/com/cuvar/app/DayLimitTest.java
+/** Pokretanje: javac -d .review/daylimit app/src/main/java/com/cuvar/app/rules/DayLimit.java tests/com/cuvar/app/DayLimitTest.java
  *  java -cp .review/daylimit com.cuvar.app.DayLimitTest */
 public final class DayLimitTest {
     private static int checks;

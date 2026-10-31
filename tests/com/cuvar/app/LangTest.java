@@ -1,5 +1,7 @@
 package com.cuvar.app;
 
+import com.cuvar.app.i18n.Lang;
+
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -29,7 +31,7 @@ public final class LangTest {
         // Tekst u kodu bez prevoda: samo upozorenje, da build ne stane.
         Pattern lit = Pattern.compile("\"((?:[^\"\\\\\\n]|\\\\.)*)\"");
         int missing = 0;
-        for (java.nio.file.Path p : (Iterable<java.nio.file.Path>) Files.list(Paths.get("app/src/main/java/com/cuvar/app"))::iterator) {
+        for (java.nio.file.Path p : (Iterable<java.nio.file.Path>) Files.walk(Paths.get("app/src/main/java/com/cuvar/app")).filter(f -> f.toString().endsWith(".java"))::iterator) {
             String name = p.getFileName().toString();
             if (name.equals("QuizBank.java") || name.equals("Translit.java") || name.equals("Lang.java")) continue;
             for (String line : Files.readAllLines(p, StandardCharsets.UTF_8)) {

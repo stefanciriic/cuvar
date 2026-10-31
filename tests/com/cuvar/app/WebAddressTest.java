@@ -1,5 +1,7 @@
 package com.cuvar.app;
 
+import com.cuvar.app.web.WebAddress;
+
 /** Zaobilazne adrese vode na pravi sajt. */
 public final class WebAddressTest {
     private static int checks;

@@ -1,5 +1,7 @@
 package com.cuvar.app;
 
+import com.cuvar.app.guard.SystemScreens;
+
 /** Ekrani poziva i podešavanja, i pominjanje Čuvara na ekranu. */
 public final class SystemScreensTest {
     private static int checks;

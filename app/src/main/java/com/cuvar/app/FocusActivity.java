@@ -1,5 +1,11 @@
 package com.cuvar.app;
 
+import com.cuvar.app.i18n.Translit;
+import com.cuvar.app.ui.CheckRow;
+import com.cuvar.app.ui.Sheet;
+import com.cuvar.app.ui.Ui;
+import com.cuvar.app.web.Hosts;
+
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
@@ -25,9 +31,9 @@ import java.util.Set;
 public class FocusActivity extends SubActivity {
 
     private static final class Item {
-        String pkg;
-        String label;
-        Drawable icon;
+        public String pkg;
+        public String label;
+        public Drawable icon;
     }
 
     private final List<Item> apps = new ArrayList<>();

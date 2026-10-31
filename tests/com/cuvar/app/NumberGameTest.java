@@ -1,5 +1,7 @@
 package com.cuvar.app;
 
+import com.cuvar.app.unlock.NumberGame;
+
 import java.util.Arrays;
 import java.util.Random;
 

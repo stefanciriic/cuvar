@@ -1,5 +1,13 @@
 package com.cuvar.app;
 
+import com.cuvar.app.i18n.Translit;
+import com.cuvar.app.rules.DailySchedule;
+import com.cuvar.app.ui.Charts;
+import com.cuvar.app.ui.CheckRow;
+import com.cuvar.app.ui.Sheet;
+import com.cuvar.app.ui.Ui;
+import com.cuvar.app.web.Hosts;
+
 import android.app.TimePickerDialog;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -335,9 +343,9 @@ public class ScheduleActivity extends SubActivity {
     }
 
     private static final class AppItem {
-        String pkg;
-        String label;
-        Drawable icon;
+        public String pkg;
+        public String label;
+        public Drawable icon;
     }
 
     private void chooseApps(DailySchedule.Rule rule) {

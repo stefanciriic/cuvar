@@ -1,5 +1,7 @@
 package com.cuvar.app;
 
+import com.cuvar.app.rules.UsageCalendar;
+
 import java.util.Calendar;
 import java.util.Map;
 import java.util.TimeZone;

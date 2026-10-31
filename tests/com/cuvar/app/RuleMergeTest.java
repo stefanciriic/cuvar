@@ -1,5 +1,7 @@
 package com.cuvar.app;
 
+import com.cuvar.app.rules.RuleMerge;
+
 /** Spajanje današnjeg i novog pravila: uvek ostaje strožije. */
 public final class RuleMergeTest {
     private static int checks;

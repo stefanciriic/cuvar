@@ -1,5 +1,14 @@
 package com.cuvar.app;
 
+import com.cuvar.app.data.Store;
+import com.cuvar.app.i18n.Translit;
+import com.cuvar.app.rules.DailySchedule;
+import com.cuvar.app.ui.CheckRow;
+import com.cuvar.app.ui.Sheet;
+import com.cuvar.app.ui.Ui;
+import com.cuvar.app.web.Hosts;
+import com.cuvar.app.web.Links;
+
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
@@ -208,10 +217,10 @@ public class RulesActivity extends SubActivity {
 
     /** Jedan red opisa: tekst i da li je naglašen (blokada) ili prigušen. */
     private static final class Line {
-        final String text;
-        final boolean strong;
+        public final String text;
+        public final boolean strong;
 
-        Line(String text, boolean strong) {
+        public Line(String text, boolean strong) {
             this.text = text;
             this.strong = strong;
         }

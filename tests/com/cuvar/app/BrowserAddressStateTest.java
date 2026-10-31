@@ -1,5 +1,7 @@
 package com.cuvar.app;
 
+import com.cuvar.app.web.BrowserAddressState;
+
 public final class BrowserAddressStateTest {
     private static int checks;
 

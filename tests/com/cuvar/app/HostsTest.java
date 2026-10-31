@@ -1,5 +1,7 @@
 package com.cuvar.app;
 
+import com.cuvar.app.web.Hosts;
+
 /** Čist domen iz adrese i glavni domen hosta. */
 public final class HostsTest {
     private static int checks;

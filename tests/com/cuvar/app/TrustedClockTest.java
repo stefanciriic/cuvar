@@ -1,5 +1,7 @@
 package com.cuvar.app;
 
+import com.cuvar.app.rules.TrustedClock;
+
 /** Pouzdan sat: pomeranje sata telefona ne menja vreme režima i šifre. */
 public final class TrustedClockTest {
     private static int checks;

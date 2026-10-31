@@ -1,5 +1,7 @@
 package com.cuvar.app;
 
+import com.cuvar.app.rules.UnlockStreak;
+
 import java.util.HashMap;
 import java.util.Map;
 

@@ -1,5 +1,7 @@
 package com.cuvar.app;
 
+import com.cuvar.app.rules.SessionLimit;
+
 /** Najduže u komadu: posle limita pauza od 15 min; kratak izlazak ne prekida komad. */
 public final class SessionLimitTest {
     private static int checks;

@@ -1,5 +1,7 @@
 package com.cuvar.app;
 
+import com.cuvar.app.guard.LoadMeter;
+
 /** Merenje opterećenja: broj provera, prosek, najduža i deo vremena. */
 public final class LoadMeterTest {
     private static int checks;

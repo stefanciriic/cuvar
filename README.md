@@ -108,50 +108,25 @@ paljenja (ne može se pomeriti), a ručno pomeranje sata se pamti i oduzima.
 ## Struktura koda
 
 Ceo kod je obična Java, bez dodatnih biblioteka, u
-`app/src/main/java/com/cuvar/app/`. Ekrani se prave iz koda, bez XML rasporeda.
+`app/src/main/java/com/cuvar/app/`, podeljen u pakete po ulozi. Ekrani se prave
+iz koda, bez XML rasporeda. Zašto baš ovako i gde ide nova klasa:
+[ARCHITECTURE.md](ARCHITECTURE.md).
 
-| Fajl | Šta radi |
+| Paket / fajl | Šta radi |
 |------|----------|
 | `GuardService.java` | Servis za Pristupačnost: šta je napred, merenje, odluka o blokadi, zaštita od isključivanja |
-| `Store.java` | Sva podešavanja, izmereno vreme, otključavanja, pouzdan sat, "popuštanje od sutra" |
 | `MainActivity.java` | Početni ekran sa karticama Danas / Pravila / Statistika |
-| `SettingsSheets.java` | Prozori podešavanja (tema, jezik, privatnost) i pravila za ceo telefon (dnevni limit, noć, zaštita) |
 | `RulesActivity.java` | "Aplikacije i sajtovi": lista pravila i prozor za izmenu jedne stavke |
-| `ScheduleActivity.java` | Vremenski režimi |
-| `FocusActivity.java` | Ručni fokus |
-| `StatsActivity.java`, `Charts.java` | Statistika i grafikoni |
-| `BlockOverlayContent.java` | Ekran za blokadu i tok otključavanja (pitalica, šifra, hitno) |
-| `PauseOverlayContent.java` | Pauza od 6 sekundi pre otvaranja |
-| `GuardOverlayWindow.java` | Prozor preko svega i pauziranje muzike dok je blokada prikazana |
-| `BrowserMonitor.java`, `BrowserAddressState.java`, `WebAddress.java` | Čitanje adrese u pregledačima, prepoznavanje pravog sajta |
-| `ForegroundApp.java` | Koja je aplikacija napred, iz Androidovih zapisa o korišćenju |
-| `UsageTracker.java`, `UsageCalendar.java` | Merenje vremena i podela po danima |
-| `DailySchedule.java` | Vremenski režimi (periodi, dani, pooštravanje) |
-| `DailyCode.java` | Dnevna šifra (HMAC iz tajnog ključa i dana) |
-| `DayLimit.java` | Ukupni dnevni limit |
-| `DomainRules.java`, `Links.java` | Domeni i poddomeni, veza aplikacija ↔ sajt |
-| `Quiz.java`, `QuizBank.java`, `Jokes.java` | Pitalice i šaljive poruke |
-| `UnlockStreak.java` | Niz dana bez otključavanja |
-| `NotifCounts.java`, `NotificationCounter.java` | Broj primljenih notifikacija po danu i aplikaciji (samo paket, bez teksta) za Statistiku |
-| `Lang.java`, `Translit.java`, `app/src/main/assets/en.tsv` | Engleski prevod i ćirilica |
-| `Ui.java`, `Sheet.java`, `CheckRow.java`, `PinPad.java`, `SubActivity.java` | Zajednički delovi interfejsa |
-| `GuardDiagnostics.java` | Lokalni zapis grešaka (bez adresa i sadržaja) |
-
-Delovi logike su izdvojeni u male klase bez Android-a, da bi mogli da se testiraju
-na računaru:
-
-| Fajl | Šta radi |
-|------|----------|
-| `BlockKind.java` | Vrste blokade, koje se ne otključavaju, koja se prikazuje |
-| `UnlockTimer.java` | 5 minuta posle otključavanja, pa sat vremena pauze |
-| `CodeAttempts.java` | Pogrešne šifre i čekanje od 30 s |
-| `TrustedClock.java` | Pravila pouzdanog sata (pomeranje sata, restart) |
-| `SessionLimit.java` | Najduže u komadu i pauza od 15 minuta |
-| `RuleMerge.java` | Spajanje današnjeg i novog pravila (strožije ostaje) |
-| `LimitWarnings.java` | Upozorenja 5 i 1 minut pre limita |
-| `SystemScreens.java` | Ekrani poziva i podešavanja, pominjanje Čuvara |
-| `Clones.java` | Kopije aplikacija i aplikacije za kloniranje |
-| `Hosts.java` | Domen iz adrese i glavni domen |
+| `ScheduleActivity.java`, `FocusActivity.java` | Vremenski režimi, ručni fokus |
+| `StatsActivity.java` | Statistika |
+| `NotificationCounter.java` | Broj primljenih notifikacija (samo paket, bez teksta) |
+| `data/Store.java` | Sva podešavanja, izmereno vreme, otključavanja, pouzdan sat, "popuštanje od sutra" |
+| `rules/` | Čista pravila bez Android-a, sa testovima: `BlockKind` (vrste blokade), `UnlockTimer`, `UnlockCost`, `CodeAttempts`, `TrustedClock`, `SessionLimit`, `RuleMerge`, `LimitWarnings`, `DailySchedule` (režimi), `DailyCode` (dnevna šifra), `DayLimit`, `DomainRules`, `UsageTracker`, `UsageCalendar`, `UnlockStreak`, `NotifCounts` |
+| `guard/` | Delovi servisa: `BlockOverlayContent` (ekran blokade i otključavanje), `PauseOverlayContent` (pauza 6 s), `GuardOverlayWindow` (prozor preko svega, muzika), `ForegroundApp`, `SystemScreens`, `Clones`, `MusicOwner`, `LoadMeter`, `GuardDiagnostics` |
+| `web/` | Pregledači: `BrowserMonitor`, `BrowserAddressState`, `WebAddress` (pravi sajt), `Hosts`, `Links` (aplikacija ↔ sajt) |
+| `unlock/` | `Quiz`, `QuizBank`, `Jokes`, `NumberGame`, `NumberGameView`, `PinPad` |
+| `ui/` | `Ui`, `Sheet`, `CheckRow`, `Charts`, `SettingsSheets` (prozori podešavanja) |
+| `i18n/` | `Lang`, `Translit`, uz `app/src/main/assets/en.tsv` |
 
 ## Prevod
 

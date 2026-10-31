@@ -1,5 +1,7 @@
 package com.cuvar.app;
 
+import com.cuvar.app.rules.LimitWarnings;
+
 /** Upozorenje 5 i 1 minut pre isteka limita, jednom po pragu u danu. */
 public final class LimitWarningsTest {
     private static int checks;

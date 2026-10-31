@@ -1,5 +1,7 @@
 package com.cuvar.app;
 
+import com.cuvar.app.rules.UsageTracker;
+
 import java.util.Arrays;
 import java.util.Collections;
 

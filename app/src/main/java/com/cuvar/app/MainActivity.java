@@ -1,5 +1,17 @@
 package com.cuvar.app;
 
+import com.cuvar.app.data.Store;
+import com.cuvar.app.guard.ForegroundApp;
+import com.cuvar.app.i18n.Lang;
+import com.cuvar.app.i18n.Translit;
+import com.cuvar.app.rules.DailyCode;
+import com.cuvar.app.rules.DailySchedule;
+import com.cuvar.app.rules.DayLimit;
+import com.cuvar.app.ui.Charts;
+import com.cuvar.app.ui.SettingsSheets;
+import com.cuvar.app.ui.Sheet;
+import com.cuvar.app.ui.Ui;
+
 import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -29,8 +41,8 @@ import java.util.Map;
 public class MainActivity extends Activity {
 
     private static final class Row {
-        String label;
-        long ms;
+        public String label;
+        public long ms;
     }
 
     private Store store;
@@ -81,7 +93,7 @@ public class MainActivity extends Activity {
     // ---------- Ekrani ----------
 
     /** Izabrana kartica donje trake: 0 = Danas, 1 = Pravila (Statistika je poseban ekran). */
-    static int tab;
+    public static int tab;
 
     private void setScreen(LinearLayout content) {
         ScrollView scroll = new ScrollView(this);
@@ -434,7 +446,7 @@ public class MainActivity extends Activity {
     }
 
     /** Popuštanja pravila koja čekaju sutra, sa dugmetom da se od njih odustane; null ako ih nema. */
-    static View pendingCard(android.app.Activity a, Store store, Runnable refresh) {
+    public static View pendingCard(android.app.Activity a, Store store, Runnable refresh) {
         List<String> items = store.pendingChanges(a.getPackageManager());
         if (items.isEmpty()) return null;
         LinearLayout card = Ui.card(a);

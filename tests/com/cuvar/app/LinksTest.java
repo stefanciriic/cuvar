@@ -1,5 +1,8 @@
 package com.cuvar.app;
 
+import com.cuvar.app.rules.DailySchedule;
+import com.cuvar.app.web.Links;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
