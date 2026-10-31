@@ -178,6 +178,16 @@ public final class Ui {
         return Translit.cyrillic ? Translit.toCyrillic(s) : s;
     }
 
+    /** Poruka na dnu ekrana (duža), na izabranom jeziku. */
+    public static void toast(Context c, String text) {
+        android.widget.Toast.makeText(c, cyr(text), android.widget.Toast.LENGTH_LONG).show();
+    }
+
+    /** Kratka poruka na dnu ekrana, na izabranom jeziku. */
+    public static void toastShort(Context c, String text) {
+        android.widget.Toast.makeText(c, cyr(text), android.widget.Toast.LENGTH_SHORT).show();
+    }
+
     public static final String LANG_LATIN = "sr";
     public static final String LANG_CYRILLIC = "sr-Cyrl";
     public static final String LANG_ENGLISH = "en";

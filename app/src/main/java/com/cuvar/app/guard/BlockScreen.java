@@ -1,5 +1,6 @@
 package com.cuvar.app.guard;
 
+import com.cuvar.app.rules.ItemKey;
 import com.cuvar.app.GuardService;
 import com.cuvar.app.rules.DailySchedule;
 import com.cuvar.app.web.BrowserMonitor;
@@ -36,7 +37,7 @@ public final class BlockScreen {
 
     /** Blokada se odnosi na stranicu u pregledaču koji je na ekranu (sajt ili nepotvrđena adresa). */
     private boolean inBrowserPage(String key, int kind) {
-        return (key.startsWith("site:") || kind == GuardService.KIND_ADDRESS || kind == GuardService.KIND_UNSEEN_SITE) && browserForCurrentBlock() != null;
+        return (ItemKey.isSite(key) || kind == GuardService.KIND_ADDRESS || kind == GuardService.KIND_UNSEEN_SITE) && browserForCurrentBlock() != null;
     }
 
     public String browserForCurrentBlock() {

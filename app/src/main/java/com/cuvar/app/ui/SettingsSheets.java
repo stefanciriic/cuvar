@@ -14,7 +14,6 @@ import android.app.Activity;
 import android.view.Gravity;
 import android.widget.LinearLayout;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import java.util.Locale;
 
@@ -191,8 +190,8 @@ public final class SettingsSheets {
                         + ". Ovo je jedino povećanje danas i ne može se ponoviti do sutra.",
                         "Povećaj", () -> {
                             int added = store.dayLimits.raiseDayLimit();
-                            Toast.makeText(a, Ui.cyr(added > 0 ? "Limit je sada " + DayLimit.label(store.dayLimits.dayLimit())
-                                    : "Povećanje je danas već iskorišćeno."), Toast.LENGTH_LONG).show();
+                            Ui.toast(a, added > 0 ? "Limit je sada " + DayLimit.label(store.dayLimits.dayLimit())
+                                    : "Povećanje je danas već iskorišćeno.");
                         });
             });
             box.addView(up, Ui.fill(a, 14));
@@ -213,7 +212,7 @@ public final class SettingsSheets {
                 sheet.dismiss();
                 Runnable apply = () -> {
                     if (store.dayLimits.lowerDayLimit(min)) {
-                        Toast.makeText(a, Ui.cyr("Limit je sada " + DayLimit.label(min)), Toast.LENGTH_LONG).show();
+                        Ui.toast(a, "Limit je sada " + DayLimit.label(min));
                     }
                 };
                 if (limit <= 0) {
@@ -239,11 +238,11 @@ public final class SettingsSheets {
                 sheet.dismiss();
                 if (offTomorrow) {
                     store.dayLimits.keepDayLimit();
-                    Toast.makeText(a, Ui.cyr("Limit ostaje uključen."), Toast.LENGTH_LONG).show();
+                    Ui.toast(a, "Limit ostaje uključen.");
                 } else {
                     store.dayLimits.turnOffDayLimitTomorrow();
-                    Toast.makeText(a, Ui.cyr("Isključuje se od sutra. Danas ostaje "
-                            + DayLimit.label(limit).toLowerCase(Locale.ROOT) + "."), Toast.LENGTH_LONG).show();
+                    Ui.toast(a, "Isključuje se od sutra. Danas ostaje "
+                            + DayLimit.label(limit).toLowerCase(Locale.ROOT) + ".");
                 }
                 refresh.run();
             });

@@ -1,5 +1,6 @@
 package com.cuvar.app.data;
 
+import com.cuvar.app.rules.ItemKey;
 import com.cuvar.app.rules.DailySchedule;
 import com.cuvar.app.web.Links;
 
@@ -34,7 +35,7 @@ public final class Modes {
             if (o == null || !o.has("scheduled")) continue;
             if (o.optBoolean("scheduled", false)) first.apps.add(pkg);
             o.remove("scheduled");
-            if (!o.optBoolean("lock", false) && o.optInt("limit", 0) <= 0) store.apps.remove(pkg);
+            if (!Store.appRule(o).any()) store.apps.remove(pkg);
         }
         first.sites.addAll(store.sp.getStringSet("scheduledSites", Collections.emptySet()));
         boolean hadOld = store.sp.contains("scheduleEnabled") || !first.apps.isEmpty() || !first.sites.isEmpty();
@@ -323,7 +324,7 @@ public final class Modes {
             for (DailySchedule.Rule r : store.enforced()) if (!r.sites.isEmpty() && r.active(m, d)) return true;
             for (String dom : store.siteKeysNow()) {
                 int limit = store.siteLimitNow(dom);
-                if (limit > 0 && store.usedShared("site:" + dom) >= limit * 60000L) return true;
+                if (limit > 0 && store.usedShared(ItemKey.site(dom)) >= limit * 60000L) return true;
             }
             return false;
         }

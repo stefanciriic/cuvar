@@ -1,5 +1,6 @@
 package com.cuvar.app.guard;
 
+import com.cuvar.app.rules.ItemKey;
 import com.cuvar.app.GuardService;
 import com.cuvar.app.data.DayLimits;
 import com.cuvar.app.data.Sessions;
@@ -9,7 +10,6 @@ import com.cuvar.app.ui.Ui;
 
 import android.content.Context;
 import android.os.SystemClock;
-import android.widget.Toast;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -34,7 +34,7 @@ public final class UsageAccounting {
         if (tracked(svc, svc.currentPkg)) keys.add(svc.currentPkg);
         for (String host : svc.visibleHosts) {
             // Meri se samo vreme sajtova sa pravilom (za limit); istorija ostalih sajtova se ne čuva.
-            for (String domain : svc.store.matchingSitesNow(host)) keys.add("site:" + domain);
+            for (String domain : svc.store.matchingSitesNow(host)) keys.add(ItemKey.site(domain));
         }
         if (countsForDayLimit()) keys.add(DayLimits.GUARDED_KEY);
         return keys;
@@ -62,11 +62,11 @@ public final class UsageAccounting {
             long dt = interval.toMs - interval.fromMs;
             for (String key : interval.keys) {
                 svc.store.usageLog.addUsageBetween(key, interval.fromMs, interval.toMs);
-                if (key.startsWith("site:") || key.startsWith("web:") || key.equals(DayLimits.GUARDED_KEY)) continue;
+                if (ItemKey.isSite(key) || key.startsWith("web:") || key.equals(DayLimits.GUARDED_KEY)) continue;
                 long left = svc.store.sessions.addSession(key, dt);
                 if (left > 0 && left <= 60000L && left + dt > 60000L) {
-                    Toast.makeText(svc, Ui.cyr("Čuvar: još minut u komadu, pa pauza od "
-                            + Sessions.SESSION_BREAK_MS / 60000L + " min."), Toast.LENGTH_LONG).show();
+                    Ui.toast(svc, "Čuvar: još minut u komadu, pa pauza od "
+                            + Sessions.SESSION_BREAK_MS / 60000L + " min.");
                 }
             }
         } catch (Throwable error) {
@@ -105,7 +105,6 @@ public final class UsageAccounting {
         long left = limitMin * 60000L - used;
         if (left <= 0 || left > LimitWarnings.FIRST_MS) return;
         if (!limitWarnings.shouldWarn(key, svc.store.day(), left)) return;
-        Toast.makeText(svc, Ui.cyr("Čuvar: limit ističe za " + Ui.fmt(left + 59999L) + " – " + name),
-                Toast.LENGTH_LONG).show();
+        Ui.toast(svc, "Čuvar: limit ističe za " + Ui.fmt(left + 59999L) + " – " + name);
     }
 }

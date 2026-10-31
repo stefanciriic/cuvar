@@ -1,5 +1,7 @@
 package com.cuvar.app.data;
 
+import com.cuvar.app.rules.AppRule;
+import com.cuvar.app.rules.ItemKey;
 import com.cuvar.app.rules.DailyCode;
 import com.cuvar.app.rules.DailySchedule;
 import com.cuvar.app.rules.DomainRules;
@@ -127,26 +129,42 @@ public final class Store {
 
     // ---------- Aplikacije ----------
 
+    /** Pravilo aplikacije iz sačuvanog JSON-a (null = bez pravila). */
+    static AppRule appRule(JSONObject o) {
+        if (o == null) return AppRule.NONE;
+        return new AppRule(o.optBoolean("lock", false), o.optInt("limit", 0), o.optInt("opens", 0), o.optInt("session", 0));
+    }
+
+    static JSONObject toJson(AppRule r) throws JSONException {
+        return new JSONObject().put("lock", r.lock).put("limit", r.limit).put("opens", r.opens).put("session", r.session);
+    }
+
+    /** Podešeno pravilo aplikacije. */
+    public synchronized AppRule appRule(String pkg) {
+        return appRule(apps.optJSONObject(pkg));
+    }
+
+    /** Pravilo aplikacije koje sada važi (bez povezanog sajta). */
+    synchronized AppRule appRuleNow(String pkg) {
+        return appRule(enforcedApps().optJSONObject(pkg));
+    }
+
     public synchronized boolean appLock(String pkg) {
-        JSONObject o = apps.optJSONObject(pkg);
-        return o != null && o.optBoolean("lock", false);
+        return appRule(pkg).lock;
     }
 
     public synchronized int appLimit(String pkg) {
-        JSONObject o = apps.optJSONObject(pkg);
-        return o == null ? 0 : o.optInt("limit", 0);
+        return appRule(pkg).limit;
     }
 
     /** Koliko puta dnevno sme da se otvori aplikacija (0 = bez ograničenja). */
     public synchronized int appOpens(String pkg) {
-        JSONObject o = apps.optJSONObject(pkg);
-        return o == null ? 0 : o.optInt("opens", 0);
+        return appRule(pkg).opens;
     }
 
     /** Najduže korišćenje u komadu, u minutima (0 = bez ograničenja). */
     public synchronized int appSession(String pkg) {
-        JSONObject o = apps.optJSONObject(pkg);
-        return o == null ? 0 : o.optInt("session", 0);
+        return appRule(pkg).session;
     }
 
     /** Aplikacije kojima je danas potrošen dnevni limit. */
@@ -155,7 +173,7 @@ public final class Store {
         for (String pkg : appKeysNow()) {
             int limit = appLimitNow(pkg);
             int max = appOpensNow(pkg);
-            if ((limit > 0 && usedShared(pkg) >= limit * 60000L) || (max > 0 && usageLog.opensToday("app:" + pkg) >= max)) out.add(pkg);
+            if ((limit > 0 && usedShared(pkg) >= limit * 60000L) || (max > 0 && usageLog.opensToday(ItemKey.app(pkg)) >= max)) out.add(pkg);
         }
         return out;
     }
@@ -165,7 +183,7 @@ public final class Store {
         List<String> out = new ArrayList<>();
         for (String d : siteKeysNow()) {
             int limit = siteLimitNow(d);
-            if (limit > 0 && usedShared("site:" + d) >= limit * 60000L) out.add(d);
+            if (limit > 0 && usedShared(ItemKey.site(d)) >= limit * 60000L) out.add(d);
         }
         return out;
     }
@@ -184,16 +202,12 @@ public final class Store {
     }
 
     public synchronized void setApp(String pkg, boolean lock, int limitMin, int maxOpens, int sessionMin) {
-        if (!lock && limitMin <= 0 && maxOpens <= 0 && sessionMin <= 0) {
+        AppRule r = new AppRule(lock, limitMin, maxOpens, sessionMin);
+        if (!r.any()) {
             apps.remove(pkg);
         } else {
             try {
-                JSONObject o = new JSONObject();
-                o.put("lock", lock);
-                o.put("limit", Math.max(0, limitMin));
-                o.put("opens", Math.max(0, maxOpens));
-                o.put("session", Math.max(0, sessionMin));
-                apps.put(pkg, o);
+                apps.put(pkg, toJson(r));
             } catch (JSONException ignored) {
             }
         }
@@ -518,15 +532,12 @@ public final class Store {
         Set<String> keys = new HashSet<>(keysOf(eApps));
         keys.addAll(keysOf(apps));
         for (String pkg : keys) {
-            JSONObject e = eApps.optJSONObject(pkg), d = apps.optJSONObject(pkg);
+            JSONObject d = apps.optJSONObject(pkg);
             if (REMOVE_NOW && d == null) continue;
-            boolean lock = (e != null && e.optBoolean("lock", false)) || (d != null && d.optBoolean("lock", false));
-            int limit = RuleMerge.stricterLimit(e == null ? 0 : e.optInt("limit", 0), d == null ? 0 : d.optInt("limit", 0));
-            int max = RuleMerge.stricterLimit(e == null ? 0 : e.optInt("opens", 0), d == null ? 0 : d.optInt("opens", 0));
-            int ses = RuleMerge.stricterLimit(e == null ? 0 : e.optInt("session", 0), d == null ? 0 : d.optInt("session", 0));
-            if (!RuleMerge.anyAppRule(lock, limit, max, ses)) continue;
+            AppRule r = AppRule.stricter(appRule(eApps.optJSONObject(pkg)), appRule(d));
+            if (!r.any()) continue;
             try {
-                na.put(pkg, new JSONObject().put("lock", lock).put("limit", limit).put("opens", max).put("session", ses));
+                na.put(pkg, toJson(r));
             } catch (JSONException ignored) {
             }
         }
@@ -584,16 +595,6 @@ public final class Store {
         return eSites == null ? sites : eSites;
     }
 
-    boolean rawLock(String pkg) {
-        JSONObject o = enforcedApps().optJSONObject(pkg);
-        return o != null && o.optBoolean("lock", false);
-    }
-
-    int rawLimit(String pkg) {
-        JSONObject o = enforcedApps().optJSONObject(pkg);
-        return o == null ? 0 : o.optInt("limit", 0);
-    }
-
     int rawSite(String domain) {
         JSONObject o = enforcedSites().optJSONObject(domain);
         return o == null ? -1 : o.optInt("limit", 0);
@@ -636,15 +637,13 @@ public final class Store {
     }
 
     boolean groupLock(String pkg, boolean now) {
-        JSONObject o = appsOf(now).optJSONObject(pkg);
-        if (o != null && o.optBoolean("lock", false)) return true;
+        if (appRule(appsOf(now).optJSONObject(pkg)).lock) return true;
         for (String k : coveredSites(pkg, now)) if (sitesOf(now).optJSONObject(k).optInt("limit", 0) == 0) return true;
         return false;
     }
 
     int groupLimit(String pkg, boolean now) {
-        JSONObject o = appsOf(now).optJSONObject(pkg);
-        int limit = o == null ? 0 : o.optInt("limit", 0);
+        int limit = appRule(appsOf(now).optJSONObject(pkg)).limit;
         for (String k : coveredSites(pkg, now)) limit = RuleMerge.stricterLimit(limit, sitesOf(now).optJSONObject(k).optInt("limit", 0));
         return limit;
     }
@@ -662,13 +661,11 @@ public final class Store {
     }
 
     public synchronized int appOpensNow(String pkg) {
-        JSONObject o = enforcedApps().optJSONObject(pkg);
-        return o == null ? 0 : o.optInt("opens", 0);
+        return appRuleNow(pkg).opens;
     }
 
     public synchronized int appSessionNow(String pkg) {
-        JSONObject o = enforcedApps().optJSONObject(pkg);
-        return o == null ? 0 : o.optInt("session", 0);
+        return appRuleNow(pkg).session;
     }
 
     /** Sajt nasleđuje zaključavanje (kao stalnu blokadu sa šifrom) i limit povezane aplikacije. */
@@ -711,16 +708,16 @@ public final class Store {
     public synchronized long usedShared(String key) {
         Set<String> pairs = linksNow();
         String pkg = key;
-        if (key.startsWith("site:")) {
-            List<String> owners = Links.appsOf(pairs, key.substring(5));
+        if (ItemKey.isSite(key)) {
+            List<String> owners = Links.appsOf(pairs, ItemKey.name(key));
             if (owners.isEmpty()) return usageLog.usedToday(key);
             pkg = owners.get(0);
         }
         List<String> bases = Links.domainsOf(pairs, pkg);
         if (bases.isEmpty()) return usageLog.usedToday(pkg);
         long site = 0;
-        for (String d : bases) site = Math.max(site, usageLog.usedToday("site:" + d));
-        for (String d : coveredSites(pkg, true)) site = Math.max(site, usageLog.usedToday("site:" + d));
+        for (String d : bases) site = Math.max(site, usageLog.usedToday(ItemKey.site(d)));
+        for (String d : coveredSites(pkg, true)) site = Math.max(site, usageLog.usedToday(ItemKey.site(d)));
         return usageLog.usedToday(pkg) + site;
     }
 
@@ -813,14 +810,7 @@ public final class Store {
         }
         for (String pkg : keysOf(eApps)) {
             String name = AppLabels.of(pm, pkg);
-            boolean el = rawLock(pkg), dl = appLock(pkg);
-            int ei = rawLimit(pkg), di = appLimit(pkg);
-            if (el && !dl) out.add(name + ": bez zaključavanja");
-            if (ei != di) out.add(name + ": " + (di <= 0 ? "bez dnevnog limita" : "limit " + di + " min umesto " + ei));
-            int eo = appOpensNow(pkg), dop = appOpens(pkg);
-            if (eo != dop) out.add(name + ": " + (dop <= 0 ? "bez ograničenja otvaranja" : "najviše " + dop + " otvaranja umesto " + eo));
-            int es = appSessionNow(pkg), ds = appSession(pkg);
-            if (es != ds) out.add(name + ": " + (ds <= 0 ? "bez ograničenja u komadu" : "najviše " + ds + " min u komadu umesto " + es));
+            for (String change : AppRule.relaxations(appRuleNow(pkg), appRule(pkg))) out.add(name + ": " + change);
         }
         for (String dom : keysOf(eSites)) {
             int ei = rawSite(dom), di = siteLimit(dom);

@@ -18,7 +18,6 @@ import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
-import android.widget.Toast;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -251,7 +250,7 @@ public class ScheduleActivity extends SubActivity {
 
     /** Izmena bi oslabila aktivan režim: ekran se vraća na sačuvano stanje. */
     private void refused() {
-        Toast.makeText(this, Ui.cyr("Režim je sada aktivan i to ne može da se promeni do kraja perioda"), Toast.LENGTH_LONG).show();
+        Ui.toast(this, "Režim je sada aktivan i to ne može da se promeni do kraja perioda");
         render();
     }
 
@@ -270,7 +269,7 @@ public class ScheduleActivity extends SubActivity {
                 .secondary("Otkaži", null)
                 .primary("Sačuvaj", () -> {
                     if (days[0] == 0) {
-                        Toast.makeText(this, Ui.cyr("Izaberi bar jedan dan"), Toast.LENGTH_LONG).show();
+                        Ui.toast(this, "Izaberi bar jedan dan");
                         return false;
                     }
                     if (!store.modes.setScheduleDays(id, days[0])) refused(); else render();
@@ -325,7 +324,7 @@ public class ScheduleActivity extends SubActivity {
                 .secondary("Otkaži", null)
                 .primary("Sačuvaj", () -> {
                     if (values[0] == values[1]) {
-                        Toast.makeText(this, Ui.cyr("Početak i kraj moraju biti različiti"), Toast.LENGTH_LONG).show();
+                        Ui.toast(this, "Početak i kraj moraju biti različiti");
                         return false;
                     }
                     DailySchedule.Rule now = store.modes.schedule(id);
@@ -336,10 +335,10 @@ public class ScheduleActivity extends SubActivity {
     }
 
     private void chooseApps(DailySchedule.Rule rule) {
-        Toast.makeText(this, Ui.cyr("Učitavam aplikacije…"), Toast.LENGTH_SHORT).show();
+        Ui.toastShort(this, "Učitavam aplikacije…");
         AppPicker.load(this, items -> {
             if (items.isEmpty()) {
-                Toast.makeText(this, Ui.cyr("Nije moguće učitati aplikacije"), Toast.LENGTH_LONG).show();
+                Ui.toast(this, "Nije moguće učitati aplikacije");
                 return;
             }
             // Već izabrane na vrh, ostale po abecedi.

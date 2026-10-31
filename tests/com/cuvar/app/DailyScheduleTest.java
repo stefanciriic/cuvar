@@ -27,7 +27,31 @@ public final class DailyScheduleTest {
         weekDays();
         tightening();
         dailyCode();
+        labelsAndDomains();
         System.out.println("Prošlo: " + checks + " provera.");
+    }
+
+    /** Oznake dana, najduži domen i isključen režim. */
+    private static void labelsAndDomains() {
+        DailySchedule.Rule r = new DailySchedule.Rule("x", "X", true, 60, 120);
+        r.days = DailySchedule.WEEKEND;
+        check("vikendom".equals(r.daysLabel()), "Oznaka vikenda", 0);
+        r.days = 0;
+        check("nijednog dana".equals(r.daysLabel()), "Bez dana", 0);
+        check(!r.active(90, 0), "Bez dana nikad ne važi", 90);
+        r.days = 1 | (1 << 2) | (1 << 6);
+        check("pon, sre, ned".equals(r.daysLabel()), "Više dana", 0);
+        check(r.hasDay(6) && !r.hasDay(1), "Nedelja da, utorak ne", 0);
+        check("m.youtube.com".equals(DailySchedule.matchDomain("www.m.youtube.com", Arrays.asList("youtube.com", "m.youtube.com"))),
+                "Najduži domen pobeđuje", 0);
+        check(DailySchedule.matchDomain("youtube.com", Arrays.asList("m.youtube.com")) == null, "Poddomen ne pokriva glavni domen", 0);
+        r.days = DailySchedule.ALL_DAYS;
+        r.enabled = false;
+        r.apps.add("com.game");
+        check(DailySchedule.blockingApp(Arrays.asList(r), "com.game", 90, 0) == null, "Isključen režim ne blokira", 90);
+        r.enabled = true;
+        check(DailySchedule.blockingApp(Arrays.asList(r), "com.game", 90, 0) == r, "Uključen režim blokira", 90);
+        check(DailySchedule.blockingApp(Arrays.asList(r), "com.game", 120, 0) == null, "Kraj perioda nije u periodu", 120);
     }
 
     /** Više režima: svaki sa svojim periodom (i preko ponoći) i svojim aplikacijama i sajtovima. */

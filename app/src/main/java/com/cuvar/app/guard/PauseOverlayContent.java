@@ -1,5 +1,6 @@
 package com.cuvar.app.guard;
 
+import com.cuvar.app.rules.ItemKey;
 import com.cuvar.app.GuardService;
 import com.cuvar.app.data.Store;
 import com.cuvar.app.ui.Ui;
@@ -36,7 +37,7 @@ public final class PauseOverlayContent {
     }
 
     public View build(final String key) {
-        String pkg = key.substring(4);
+        String pkg = ItemKey.name(key);
         String name = actions.appLabel(pkg);
         final long shownAt = SystemClock.elapsedRealtime();
 

@@ -618,6 +618,7 @@ Zaštita Čuvara od isključivanja se isključuje	Čuvar's protection from turni
  i 	 and 
  se razdvajaju	 are separated
 : bez zaključavanja	: no lock
+bez zaključavanja	no lock
 bez dnevnog limita	no daily limit
 limit 	limit 
  min umesto 	 min instead of 

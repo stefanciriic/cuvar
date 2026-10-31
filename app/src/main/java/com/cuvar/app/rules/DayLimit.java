@@ -69,7 +69,7 @@ public final class DayLimit {
         for (String site : sites) {
             boolean nested = false;
             for (String parent : sites) nested |= site.endsWith("." + parent);
-            if (!nested) total += day.getOrDefault("site:" + site, 0L);
+            if (!nested) total += day.getOrDefault(ItemKey.site(site), 0L);
         }
         return total;
     }

@@ -1,5 +1,6 @@
 package com.cuvar.app;
 
+import com.cuvar.app.rules.ItemKey;
 import com.cuvar.app.data.AppLabels;
 import com.cuvar.app.data.Store;
 import com.cuvar.app.web.BrowserWindows;
@@ -40,7 +41,6 @@ import android.provider.Settings;
 import android.view.View;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
-import android.widget.Toast;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -633,7 +633,7 @@ public class GuardService extends AccessibilityService {
                 pausePkg = returnPause ? pkg : null;
             } else {
                 int max = store.appOpensNow(pkg);
-                opensBlocked = max > 0 && store.usageLog.opensToday("app:" + pkg) >= max ? pkg : null;
+                opensBlocked = max > 0 && store.usageLog.opensToday(ItemKey.app(pkg)) >= max ? pkg : null;
                 pendingOpen = opensBlocked == null && max > 0 ? pkg : null;
                 pausePkg = store.appGuarded(pkg) && !kinds.exempt().contains(pkg) ? pkg : null;
             }
@@ -658,8 +658,7 @@ public class GuardService extends AccessibilityService {
             long nowEl = SystemClock.elapsedRealtime();
             if (nowEl - protectToastAt > 5000L) {
                 protectToastAt = nowEl;
-                Toast.makeText(this, Ui.cyr("Čuvar je zaštićen od isključivanja. Zaštita se gasi u Čuvaru i važi tek od sledećeg jutra."),
-                        Toast.LENGTH_LONG).show();
+                Ui.toast(this, "Čuvar je zaštićen od isključivanja. Zaštita se gasi u Čuvaru i važi tek od sledećeg jutra.");
             }
             return;
         }
@@ -705,15 +704,14 @@ public class GuardService extends AccessibilityService {
         // noć, ručni fokus, vremenski režim, pa aplikacija i sajt.
         // Otključavanje jedne stavke ne otvara ostale (otključan pregledač ne otvara blokiran sajt).
         List<Block> blocks = new ArrayList<>();
-        String appKey = "app:" + pkg;
+        String appKey = ItemKey.app(pkg);
         boolean web = browsing && currentHost != null;
         int dayLimit = store.dayLimits.dayLimit();
         if (dayLimit > 0) {
             long used = store.dayLimits.guardedToday();
             if (DayLimit.warn(dayLimit, used) && store.dayLimits.firstDayLimitWarning()) {
                 long left = dayLimit * 60000L - used;
-                Toast.makeText(this, Ui.cyr("Čuvar: do dnevnog limita ostalo je " + Ui.fmt(left) + "."),
-                        Toast.LENGTH_LONG).show();
+                Ui.toast(this, "Čuvar: do dnevnog limita ostalo je " + Ui.fmt(left) + ".");
             }
             if (DayLimit.reached(dayLimit, used)) store.dayLimits.markDayLimitHit();
             if (DayLimit.reached(dayLimit, used) && !kinds.exempt().contains(pkg)) {
@@ -721,7 +719,7 @@ public class GuardService extends AccessibilityService {
                 if (kinds.guarded(pkg)) {
                     blocks.add(new Block(appKey, KIND_DAY, null, false));
                 } else if (site != null) {
-                    blocks.add(new Block("site:" + site, KIND_DAY, null, false));
+                    blocks.add(new Block(ItemKey.site(site), KIND_DAY, null, false));
                 }
             }
         }
@@ -730,7 +728,7 @@ public class GuardService extends AccessibilityService {
             if (kinds.guarded(pkg)) {
                 if (store.nightBlocksApp(pkg)) blocks.add(new Block(appKey, KIND_NIGHT, null, false));
             } else if (site != null) {
-                blocks.add(new Block("site:" + site, KIND_NIGHT, null, false));
+                blocks.add(new Block(ItemKey.site(site), KIND_NIGHT, null, false));
             }
         }
         if (store.focus.focusActive() && !kinds.exempt().contains(pkg)
@@ -750,7 +748,7 @@ public class GuardService extends AccessibilityService {
         }
         DailySchedule.Rule siteRule = web ? store.modes.scheduleBlockingSite(currentHost) : null;
         if (siteRule != null) {
-            blocks.add(new Block("site:" + DailySchedule.matchDomain(currentHost, siteRule.sites),
+            blocks.add(new Block(ItemKey.site(DailySchedule.matchDomain(currentHost, siteRule.sites)),
                     KIND_SCHEDULE, siteRule, false));
         }
         if (rule == null) {
@@ -774,7 +772,7 @@ public class GuardService extends AccessibilityService {
         if (web && siteRule == null) {
             DailySchedule.Rule codeRule = store.modes.codeRuleForSite(currentHost);
             if (codeRule != null) {
-                blocks.add(new Block("site:" + DailySchedule.matchDomain(currentHost, codeRule.sites),
+                blocks.add(new Block(ItemKey.site(DailySchedule.matchDomain(currentHost, codeRule.sites)),
                         KIND_CODE, null, true));
             }
         }
@@ -788,11 +786,11 @@ public class GuardService extends AccessibilityService {
         if (browsing) for (String domain : store.matchingSitesNow(currentHost)) {
             int siteLimit = store.siteLimitNow(domain);
             if (siteLimit == 0) {
-                blocks.add(new Block("site:" + domain, KIND_SITE, null, true));
-            } else if (siteLimit > 0 && store.usedShared("site:" + domain) >= siteLimit * 60000L) {
-                blocks.add(new Block("site:" + domain, KIND_SITE_TIME, null, true));
+                blocks.add(new Block(ItemKey.site(domain), KIND_SITE, null, true));
+            } else if (siteLimit > 0 && store.usedShared(ItemKey.site(domain)) >= siteLimit * 60000L) {
+                blocks.add(new Block(ItemKey.site(domain), KIND_SITE_TIME, null, true));
             } else if (siteLimit > 0) {
-                accounting.warnLimit("site:" + domain, domain, siteLimit, store.usedShared("site:" + domain));
+                accounting.warnLimit(ItemKey.site(domain), domain, siteLimit, store.usedShared(ItemKey.site(domain)));
             }
         }
 
@@ -810,24 +808,24 @@ public class GuardService extends AccessibilityService {
                 BrowserAddressState address = browserMonitor.readAddress(other.root, id, activityOf.get(other.rawPkg));
                 host = address.host();
                 if (address.unresolved(SystemClock.elapsedRealtime()) && store.hasSiteRules()) {
-                    secondary.add(new Block("app:" + other.pkg, unseen(KIND_ADDRESS), null, true));
+                    secondary.add(new Block(ItemKey.app(other.pkg), unseen(KIND_ADDRESS), null, true));
                 }
             } else if (embedded) {
                 host = browserMonitor.inAppHost(other.root);
                 if (host == null && store.hasSiteRules()) {
-                    secondary.add(new Block("app:" + other.pkg, unseen(KIND_INAPP), null, true));
+                    secondary.add(new Block(ItemKey.app(other.pkg), unseen(KIND_INAPP), null, true));
                 }
             }
             if (host != null) {
                 visibleHosts.add(host);
                 if (store.focus.focusActive() && !kinds.exempt().contains(other.pkg)
                         && !store.focus.focusAllowsApp(other.pkg) && !store.focus.focusAllowsSite(host)) {
-                    secondary.add(new Block("app:" + other.pkg, KIND_FOCUS, null, false));
+                    secondary.add(new Block(ItemKey.app(other.pkg), KIND_FOCUS, null, false));
                 }
                 addSecondarySiteBlocks(secondary, other.pkg, host);
             } else if (store.focus.focusActive() && !kinds.exempt().contains(other.pkg)
                     && !store.focus.focusAllowsApp(other.pkg)) {
-                secondary.add(new Block("app:" + other.pkg, KIND_FOCUS, null, false));
+                secondary.add(new Block(ItemKey.app(other.pkg), KIND_FOCUS, null, false));
             }
         }
         blocks.addAll(secondary);
@@ -849,7 +847,7 @@ public class GuardService extends AccessibilityService {
                 blocks.removeIf(b -> exitingKey.equals(b.key)
                         // U adresnoj traci se kratko pojavi i „nepoznata adresa”; ne prikazuj drugi overlay
                         // dok isti browser otvara neutralnu stranicu.
-                        || ((b.kind == KIND_ADDRESS || b.kind == KIND_UNSEEN_SITE) && ("app:" + exitingBrowser).equals(b.key)));
+                        || ((b.kind == KIND_ADDRESS || b.kind == KIND_UNSEEN_SITE) && (ItemKey.app(exitingBrowser)).equals(b.key)));
             }
         }
 
@@ -869,7 +867,7 @@ public class GuardService extends AccessibilityService {
             store.usageLog.countOpen("try:" + show.key); // novi pokušaj da se otvori nešto blokirano
         }
         if (show == null && pkg.equals(pendingOpen)) {
-            store.usageLog.countOpen("app:" + pkg); // otvaranje se broji tek kad se aplikacija zaista vidi
+            store.usageLog.countOpen(ItemKey.app(pkg)); // otvaranje se broji tek kad se aplikacija zaista vidi
             pendingOpen = null;
         }
 
@@ -910,24 +908,24 @@ public class GuardService extends AccessibilityService {
         String guardedSite = store.siteGuarded(host);
         if (guardedSite != null && !kinds.exempt().contains(pkg)) {
             if (DayLimit.reached(store.dayLimits.dayLimit(), store.dayLimits.guardedToday())) {
-                blocks.add(new Block("site:" + guardedSite, KIND_DAY, null, false));
+                blocks.add(new Block(ItemKey.site(guardedSite), KIND_DAY, null, false));
             }
-            if (store.nightActive()) blocks.add(new Block("site:" + guardedSite, KIND_NIGHT, null, false));
+            if (store.nightActive()) blocks.add(new Block(ItemKey.site(guardedSite), KIND_NIGHT, null, false));
         }
         DailySchedule.Rule rule = store.modes.scheduleBlockingSite(host);
         if (rule != null) {
-            blocks.add(new Block("site:" + DailySchedule.matchDomain(host, rule.sites), KIND_SCHEDULE, rule, false));
+            blocks.add(new Block(ItemKey.site(DailySchedule.matchDomain(host, rule.sites)), KIND_SCHEDULE, rule, false));
         } else {
             DailySchedule.Rule codeRule = store.modes.codeRuleForSite(host);
             if (codeRule != null) {
-                blocks.add(new Block("site:" + DailySchedule.matchDomain(host, codeRule.sites), KIND_CODE, null, true));
+                blocks.add(new Block(ItemKey.site(DailySchedule.matchDomain(host, codeRule.sites)), KIND_CODE, null, true));
             }
         }
         for (String domain : store.matchingSitesNow(host)) {
             int limit = store.siteLimitNow(domain);
-            if (limit == 0) blocks.add(new Block("site:" + domain, KIND_SITE, null, true));
-            else if (limit > 0 && store.usedShared("site:" + domain) >= limit * 60000L) {
-                blocks.add(new Block("site:" + domain, KIND_SITE_TIME, null, true));
+            if (limit == 0) blocks.add(new Block(ItemKey.site(domain), KIND_SITE, null, true));
+            else if (limit > 0 && store.usedShared(ItemKey.site(domain)) >= limit * 60000L) {
+                blocks.add(new Block(ItemKey.site(domain), KIND_SITE_TIME, null, true));
             }
         }
     }
@@ -935,7 +933,7 @@ public class GuardService extends AccessibilityService {
     /** Blokada aplikacije koja je na ekranu, ali nije u fokusu (bez sajtova i broja otvaranja), ili null. */
     private Block appOnlyBlock(String p) {
         if (kinds.exempt().contains(p)) return null;
-        String k = "app:" + p;
+        String k = ItemKey.app(p);
         Block b = null;
         int dayLimit = store.dayLimits.dayLimit();
         if (kinds.guarded(p) && DayLimit.reached(dayLimit, store.dayLimits.guardedToday())) {

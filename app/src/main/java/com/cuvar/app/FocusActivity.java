@@ -11,7 +11,6 @@ import android.text.InputType;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -151,7 +150,7 @@ public class FocusActivity extends SubActivity {
 
     private void showAppPicker() {
         if (apps.isEmpty()) {
-            Toast.makeText(this, Ui.cyr("Aplikacije se još učitavaju."), Toast.LENGTH_SHORT).show();
+            Ui.toastShort(this, "Aplikacije se još učitavaju.");
             return;
         }
         LinearLayout box = Ui.column(this);
@@ -195,7 +194,7 @@ public class FocusActivity extends SubActivity {
             return;
         }
         store.focus.startFocus(durationMin * 60000L, selectedApps, sites);
-        Toast.makeText(this, Ui.cyr("Fokus je pokrenut na " + durationMin + " min."), Toast.LENGTH_LONG).show();
+        Ui.toast(this, "Fokus je pokrenut na " + durationMin + " min.");
         finish();
     }
 }

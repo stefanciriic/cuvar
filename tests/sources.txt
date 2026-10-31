@@ -20,7 +20,9 @@ app/src/main/java/com/cuvar/app/rules/CodeAttempts.java
 app/src/main/java/com/cuvar/app/rules/TrustedClock.java
 app/src/main/java/com/cuvar/app/rules/SessionLimit.java
 app/src/main/java/com/cuvar/app/rules/RuleMerge.java
+app/src/main/java/com/cuvar/app/rules/AppRule.java
 app/src/main/java/com/cuvar/app/rules/BlockKind.java
+app/src/main/java/com/cuvar/app/rules/ItemKey.java
 app/src/main/java/com/cuvar/app/rules/LimitWarnings.java
 app/src/main/java/com/cuvar/app/guard/SystemScreens.java
 app/src/main/java/com/cuvar/app/guard/Clones.java

@@ -1,5 +1,6 @@
 package com.cuvar.app.data;
 
+import com.cuvar.app.rules.ItemKey;
 import com.cuvar.app.rules.UsageCalendar;
 import com.cuvar.app.ui.Ui;
 
@@ -48,7 +49,7 @@ public final class UsageLog {
             JSONObject d = usage.optJSONObject(dk);
             if (d == null) continue;
             for (String k : Store.keysOf(d)) {
-                if (k.startsWith("web:") || (k.startsWith("site:") && !dk.equals(today))) {
+                if (k.startsWith("web:") || (ItemKey.isSite(k) && !dk.equals(today))) {
                     d.remove(k);
                     changed = true;
                 }

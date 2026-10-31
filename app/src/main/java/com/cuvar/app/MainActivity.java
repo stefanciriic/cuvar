@@ -1,5 +1,6 @@
 package com.cuvar.app;
 
+import com.cuvar.app.rules.ItemKey;
 import com.cuvar.app.data.AppLabels;
 import com.cuvar.app.guard.UsageAccounting;
 
@@ -30,7 +31,6 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -488,7 +488,7 @@ public class MainActivity extends Activity {
         long total = 0;
         for (Map.Entry<String, Long> e : store.usageLog.todayMap().entrySet()) {
             String key = e.getKey();
-            if (key.startsWith("site:") || key.startsWith("web:") || key.equals(home) || key.equals(me)
+            if (ItemKey.isSite(key) || key.startsWith("web:") || key.equals(home) || key.equals(me)
                     || !UsageAccounting.tracked(this, key)) {
                 continue;
             }
@@ -611,7 +611,7 @@ public class MainActivity extends Activity {
         try {
             startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
         } catch (Throwable t) {
-            Toast.makeText(this, Ui.cyr("Otvori Podešavanja → Pristupačnost ručno"), Toast.LENGTH_LONG).show();
+            Ui.toast(this, "Otvori Podešavanja → Pristupačnost ručno");
         }
     }
 

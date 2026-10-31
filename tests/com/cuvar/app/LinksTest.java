@@ -31,6 +31,21 @@ public final class LinksTest {
         mobile.sites.add("m.youtube.com");
         if (!Links.expand(Arrays.asList(mobile), yt).get(0).apps.contains("com.google.android.youtube"))
             throw new AssertionError("režim poddomena ne pokriva aplikaciju");
-        System.out.println("LinksTest: prošlo 8 provera.");
+        String p = Links.pair("com.reddit.frontpage", "reddit.com");
+        if (!"com.reddit.frontpage".equals(Links.pkgOf(p))) throw new AssertionError("paket iz para");
+        if (!"reddit.com".equals(Links.domainOf(p))) throw new AssertionError("domen iz para");
+        if (!Links.covers("reddit.com", "old.reddit.com")) throw new AssertionError("poddomen je pokriven");
+        if (Links.covers("reddit.com", "notreddit.com")) throw new AssertionError("sličan domen nije pokriven");
+        if (Links.covers("old.reddit.com", "reddit.com")) throw new AssertionError("glavni domen nije pokriven poddomenom");
+        List<String> fb = Arrays.asList(Links.pair("com.facebook.katana", "facebook.com"), Links.pair("com.facebook.lite", "facebook.com"));
+        if (!Links.appsOf(fb, "facebook.com").equals(Arrays.asList("com.facebook.katana", "com.facebook.lite")))
+            throw new AssertionError("dve aplikacije istog sajta");
+        if (!Links.domainsOf(fb, "com.other").isEmpty()) throw new AssertionError("aplikacija bez para");
+        for (java.util.Map.Entry<String, String> e : Links.KNOWN.entrySet()) {
+            String k = Links.pair(e.getKey(), e.getValue());
+            if (!e.getKey().equals(Links.pkgOf(k)) || !e.getValue().equals(Links.domainOf(k))) throw new AssertionError("poznat par " + e.getKey());
+            if (!e.getValue().contains(".") || e.getValue().contains("|")) throw new AssertionError("poznat domen " + e.getValue());
+        }
+        System.out.println("LinksTest: prošlo 16 provera.");
     }
 }

@@ -1,7 +1,7 @@
 package com.cuvar.app.guard;
 
+import com.cuvar.app.rules.ItemKey;
 import com.cuvar.app.GuardService;
-import com.cuvar.app.data.Store;
 import com.cuvar.app.data.Unlocks;
 import com.cuvar.app.rules.DailyCode;
 import com.cuvar.app.rules.DailySchedule;
@@ -38,8 +38,8 @@ public final class BlockOverlayContent {
     public View build(String key, int kind, DailySchedule.Rule rule, boolean cooling, boolean code) {
         if (kind == GuardService.KIND_PAUSE) return host.pauseOverlayContent.build(key);
         final Context c = host;
-        final boolean isSite = key.startsWith("site:");
-        String name = isSite ? key.substring(5) : host.appLabel(key.substring(4));
+        final boolean isSite = ItemKey.isSite(key);
+        String name = isSite ? ItemKey.name(key) : host.appLabel(ItemKey.name(key));
 
         String title;
         String sub;
@@ -56,13 +56,13 @@ public final class BlockOverlayContent {
                     + " je zaključan do ponoći i ne može da se otključa, ni šifrom.";
             joke = Jokes.pick(Jokes.TIME_UP);
         } else if (kind == GuardService.KIND_OPENS) {
-            String pkg = key.substring(4);
+            String pkg = ItemKey.name(key);
             title = "Otvaranja za danas su potrošena";
             sub = name + " si danas otvorio " + Ui.count(host.store.usageLog.opensToday(key), "put", "puta", "puta") + ", a dozvoljeno je "
                     + host.store.appOpensNow(pkg) + ". Do ponoći se ne otvara, ni šifrom.";
             joke = Jokes.pick(Jokes.TIME_UP);
         } else if (kind == GuardService.KIND_BREAK) {
-            String pkg = key.substring(4);
+            String pkg = ItemKey.name(key);
             long left = host.store.sessions.sessionBreakLeft(pkg);
             title = "Vreme je za pauzu";
             sub = "Bio si u " + name + " " + host.store.appSessionNow(pkg) + " min u komadu. "
@@ -125,7 +125,7 @@ public final class BlockOverlayContent {
             joke = Jokes.pick(Jokes.SITE);
         } else {
             title = "Vreme je isteklo";
-            long used = host.store.usedShared(isSite ? key : key.substring(4));
+            long used = host.store.usedShared(isSite ? key : ItemKey.name(key));
             sub = "Danas si na " + name + " proveo " + Ui.fmt(used) + ". Dnevni limit je potrošen i "
                     + name + " je zaključan do ponoći, ni šifrom se ne otvara.";
             joke = Jokes.pick(Jokes.TIME_UP);
@@ -223,7 +223,7 @@ public final class BlockOverlayContent {
                 || kind == GuardService.KIND_UNSEEN_SITE) {
             TextView back = overlayButton(c, "Nazad");
             back.setOnClickListener(v -> {
-                if ((key.startsWith("site:") || k == GuardService.KIND_ADDRESS || k == GuardService.KIND_UNSEEN_SITE)
+                if ((ItemKey.isSite(key) || k == GuardService.KIND_ADDRESS || k == GuardService.KIND_UNSEEN_SITE)
                         && host.screen.browserForCurrentBlock() != null) {
                     host.screen.leaveBlock(key, k);
                 } else {

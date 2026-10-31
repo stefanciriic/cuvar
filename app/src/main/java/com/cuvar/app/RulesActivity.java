@@ -1,5 +1,6 @@
 package com.cuvar.app;
 
+import com.cuvar.app.rules.ItemKey;
 import com.cuvar.app.data.AppLabels;
 import com.cuvar.app.data.Store;
 import com.cuvar.app.data.Sessions;
@@ -20,7 +21,6 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -312,7 +312,7 @@ public class RulesActivity extends SubActivity {
         int limit = effective ? store.siteLimitNow(domain) : store.siteLimitLinked(domain);
         if (limit == 0) parts.add("🔒 uvek, šifrom");
         else if (code) parts.add("🔒 šifrom");
-        if (limit > 0) parts.add(limit + " min/dan" + used(store.usedShared("site:" + domain), effective));
+        if (limit > 0) parts.add(limit + " min/dan" + used(store.usedShared(ItemKey.site(domain)), effective));
         return parts;
     }
 
@@ -373,12 +373,12 @@ public class RulesActivity extends SubActivity {
 
     private void pendingToast() {
         if (!store.pendingChanges(getPackageManager()).isEmpty()) {
-            Toast.makeText(this, Ui.cyr("Pooštravanje važi odmah, a popuštanje tek sutra od 06:00."), Toast.LENGTH_LONG).show();
+            Ui.toast(this, "Pooštravanje važi odmah, a popuštanje tek sutra od 06:00.");
         }
     }
 
     private void removedToast() {
-        Toast.makeText(this, Ui.cyr("Uklonjeno iz pravila. Važi odmah."), Toast.LENGTH_LONG).show();
+        Ui.toast(this, "Uklonjeno iz pravila. Važi odmah.");
     }
 
     private boolean saveRules(List<DailySchedule.Rule> rules, List<CheckRow> rows, String key, boolean site) {
@@ -389,7 +389,7 @@ public class RulesActivity extends SubActivity {
             ok &= site ? store.modes.setScheduleSite(id, key, on) : store.modes.setScheduleApp(id, key, on);
         }
         if (!ok) {
-            Toast.makeText(this, Ui.cyr("Režim koji sada traje ne može da izgubi stavku dok traje"), Toast.LENGTH_LONG).show();
+            Ui.toast(this, "Režim koji sada traje ne može da izgubi stavku dok traje");
         }
         return ok;
     }
@@ -448,7 +448,7 @@ public class RulesActivity extends SubActivity {
         night.setChecked(wasFree);
         box.addView(night, Ui.fill(this, 14));
         box.addView(Ui.text(this, "Danas korišćeno: " + Ui.fmt(store.usedShared(pkg)) + ", otvoreno "
-                + Ui.count(store.usageLog.opensToday("app:" + pkg), "put", "puta", "puta"), 13, Ui.MUTED, false),
+                + Ui.count(store.usageLog.opensToday(ItemKey.app(pkg)), "put", "puta", "puta"), 13, Ui.MUTED, false),
                 Ui.fill(this, 8));
 
         Sheet sheet = new Sheet(this, label).view(box)
@@ -526,7 +526,7 @@ public class RulesActivity extends SubActivity {
     }
 
     private void busy() {
-        Toast.makeText(this, Ui.cyr("Režim koji sada traje ne može da izgubi stavku dok traje"), Toast.LENGTH_LONG).show();
+        Ui.toast(this, "Režim koji sada traje ne može da izgubi stavku dok traje");
     }
 
     private void editSite(String domain) {
@@ -554,7 +554,7 @@ public class RulesActivity extends SubActivity {
         limit.setText(String.valueOf(Math.max(0, current)));
         box.addView(limit, Ui.fill(this, 6));
         if (current > 0) {
-            box.addView(Ui.text(this, "Danas: " + Ui.fmt(store.usedShared("site:" + domain)), 13, Ui.MUTED, false),
+            box.addView(Ui.text(this, "Danas: " + Ui.fmt(store.usedShared(ItemKey.site(domain))), 13, Ui.MUTED, false),
                     Ui.fill(this, 8));
         }
 
@@ -619,7 +619,7 @@ public class RulesActivity extends SubActivity {
     }
 
     private void pickApp() {
-        Toast.makeText(this, Ui.cyr("Učitavam aplikacije…"), Toast.LENGTH_SHORT).show();
+        Ui.toastShort(this, "Učitavam aplikacije…");
         AppPicker.load(this, this::showAppPicker);
     }
 
