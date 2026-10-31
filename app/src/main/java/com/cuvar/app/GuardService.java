@@ -150,17 +150,21 @@ public class GuardService extends AccessibilityService {
     private final Runnable tick = new Runnable() {
         @Override
         public void run() {
-            updateWatched();
-            if (screen.overlay == null) overlayWindow.noteMusic(rawPkg);
-            // Dok je navigacija napred bez „Pristupa korišćenju“, njen prozor se ne čita ni povremeno;
-            // prelazak u drugu aplikaciju javlja ta aplikacija.
-            if (usageOk || !(currentQuiet && screen.overlay == null && kinds.handsOff(rawPkg))) safeCheck();
+            // Otkucaj se zakazuje u finally: jedna greška ne sme zauvek da zaustavi merenje i limite.
             try {
-                store.guardLog.guardBeat(false);
-            } catch (Throwable error) {
-                GuardDiagnostics.report("heartbeat", error);
+                guarded("watched", GuardService.this::updateWatched);
+                guarded("music", () -> {
+                    if (screen.overlay == null && overlayWindow != null) overlayWindow.noteMusic(rawPkg);
+                });
+                // Dok je navigacija napred bez „Pristupa korišćenju“, njen prozor se ne čita ni povremeno;
+                // prelazak u drugu aplikaciju javlja ta aplikacija.
+                guarded("tick", () -> {
+                    if (usageOk || !(currentQuiet && screen.overlay == null && kinds.handsOff(rawPkg))) safeCheck();
+                });
+                guarded("heartbeat", () -> store.guardLog.guardBeat(false));
+            } finally {
+                h.postDelayed(this, TICK_MS);
             }
-            h.postDelayed(this, TICK_MS);
         }
     };
 
@@ -220,11 +224,12 @@ public class GuardService extends AccessibilityService {
         public void onReceive(Context context, Intent intent) {
             String a = intent == null ? null : intent.getAction();
             if (Intent.ACTION_SCREEN_OFF.equals(a)) {
-                accounting.accountUntilNow(Collections.emptySet());
-                screen.hideOverlay();
+                // Svaki korak posebno: i kad merenje pukne, izmereno vreme se sačuva.
+                guarded("screenOffAccount", () -> accounting.accountUntilNow(Collections.emptySet()));
+                guarded("screenOffOverlay", screen::hideOverlay);
                 if (store != null) {
-                    store.flush();
-                    store.guardLog.guardBeat(true);
+                    guarded("screenOffFlush", store::flush);
+                    guarded("screenOffBeat", () -> store.guardLog.guardBeat(true));
                 }
             } else {
                 h.removeCallbacks(recheckSoon);
@@ -280,9 +285,25 @@ public class GuardService extends AccessibilityService {
     @Override
     protected void onServiceConnected() {
         super.onServiceConnected();
-        Ui.loadScript(this);
-        store = Store.get(this);
-        store.unlock.unlockSince(); // otključavanja se broje od prvog pokretanja ove verzije
+        // Pokretanje ne sme da padne: pad ovde se ponavlja pri svakom pokušaju i Android gasi Pristupačnost.
+        // Bez Store-a servis ostaje živ i ništa ne blokira, a greška se vidi u dijagnostici.
+        guarded("script", () -> Ui.loadScript(this));
+        try {
+            store = Store.get(this);
+        } catch (Throwable error) {
+            GuardDiagnostics.report("store", error);
+        }
+        guarded("unlockSince", () -> store.unlock.unlockSince()); // otključavanja se broje od prvog pokretanja ove verzije
+        try {
+            connectParts();
+        } catch (Throwable error) {
+            GuardDiagnostics.report("connect", error);
+        }
+        connectSystem();
+    }
+
+    /** Delovi servisa koji crtaju i čitaju ekran. */
+    private void connectParts() {
         browserMonitor = new BrowserMonitor(this);
         overlayWindow = new GuardOverlayWindow(this);
         pauseOverlayContent = new PauseOverlayContent(this, h, store, new PauseOverlayContent.Actions() {
@@ -303,7 +324,10 @@ public class GuardService extends AccessibilityService {
         power = (PowerManager) getSystemService(Context.POWER_SERVICE);
         keyguard = (KeyguardManager) getSystemService(Context.KEYGUARD_SERVICE);
         audio = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+    }
 
+    /** Događaji, prijemnici i otkucaj; otkucaj se zakazuje i kad neki korak pre njega pukne. */
+    private void connectSystem() {
         try {
             AccessibilityServiceInfo info = getServiceInfo();
             if (info != null) {
@@ -350,15 +374,13 @@ public class GuardService extends AccessibilityService {
 
         running = true;
         LoadMeter.GUARD.start(SystemClock.elapsedRealtime());
-        try {
-            store.guardLog.guardStarted();
-        } catch (Throwable error) {
-            GuardDiagnostics.report("guardStarted", error);
-        }
-        if (foreground != null) foreground.close();
-        foreground = new ForegroundApp(this);
-        if (usageOk) foreground.refresh(() -> h.post(this::safeCheck));
-        updateWatched();
+        guarded("guardStarted", () -> store.guardLog.guardStarted());
+        guarded("foreground", () -> {
+            if (foreground != null) foreground.close();
+            foreground = new ForegroundApp(this);
+            if (usageOk) foreground.refresh(() -> h.post(this::safeCheck));
+        });
+        guarded("watched", this::updateWatched);
         h.removeCallbacks(tick);
         h.postDelayed(tick, TICK_MS);
         h.removeCallbacks(foregroundPoll);
@@ -410,6 +432,14 @@ public class GuardService extends AccessibilityService {
         if (event == null) {
             return;
         }
+        try {
+            onEvent(event);
+        } catch (Throwable error) {
+            GuardDiagnostics.report("event", error);
+        }
+    }
+
+    private void onEvent(AccessibilityEvent event) {
         LoadMeter.GUARD.event();
         int type = event.getEventType();
         if (type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
@@ -480,11 +510,12 @@ public class GuardService extends AccessibilityService {
         running = false;
         h.removeCallbacksAndMessages(null);
         if (foreground != null) {
-            foreground.close();
+            guarded("foregroundClose", foreground::close);
             foreground = null;
         }
-        accounting.accountUntilNow(Collections.emptySet());
-        screen.hideOverlay();
+        // I kad merenje ili skidanje prozora pukne, prijemnici se odjave i podaci se sačuvaju.
+        guarded("stopAccount", () -> accounting.accountUntilNow(Collections.emptySet()));
+        guarded("stopOverlay", screen::hideOverlay);
         if (receiverOn) {
             try {
                 unregisterReceiver(screenReceiver);
@@ -500,15 +531,29 @@ public class GuardService extends AccessibilityService {
             packageReceiverOn = false;
         }
         if (store != null) {
-            store.flush();
+            guarded("stopFlush", store::flush);
+        }
+    }
+
+    /**
+     * Ulaz iz Androida (događaj, prijemnik, zakazan posao): greška se prijavi, a servis radi dalje.
+     * Neuhvaćena greška ruši ceo proces, a posle par padova Android gasi Pristupačnost.
+     */
+    private static void guarded(String where, Runnable work) {
+        try {
+            work.run();
+        } catch (Throwable error) {
+            GuardDiagnostics.report(where, error);
         }
     }
 
     public void safeCheck() {
         // Settle the OLD app/site before check() changes the observed context or shows a block.
-        accounting.accountUntilNow(null);
+        guarded("accountBefore", () -> accounting.accountUntilNow(null));
         // Muzika se beleži pre nego što se promeni aplikacija napred, da se zna iz koje je krenula.
-        if (screen.overlay == null && overlayWindow != null) overlayWindow.noteMusic(rawPkg);
+        guarded("musicBefore", () -> {
+            if (screen.overlay == null && overlayWindow != null) overlayWindow.noteMusic(rawPkg);
+        });
         long started = System.nanoTime();
         try {
             check();
@@ -520,8 +565,8 @@ public class GuardService extends AccessibilityService {
             try {
                 accounting.accountUntilNow(accounting.usageKeys());
             } catch (Throwable error) {
-                accounting.accountUntilNow(Collections.emptySet());
                 GuardDiagnostics.report("usageContext", error);
+                guarded("usageReset", () -> accounting.accountUntilNow(Collections.emptySet()));
             }
         }
     }
