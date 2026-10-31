@@ -33,6 +33,10 @@ final class SettingsSheets {
             sheet.dismiss();
             chooseScript();
         });
+        Ui.groupRow(a, g, "Pre otključavanja", challengeName(Ui.unlockChallenge(a)), v -> {
+            sheet.dismiss();
+            chooseChallenge();
+        });
         Ui.groupRow(a, g, "Opterećenje telefona", "Koliko Čuvar troši procesor i memoriju", v -> {
             sheet.dismiss();
             showLoad();
@@ -97,6 +101,31 @@ final class SettingsSheets {
             box.addView(Ui.text(a, "Nazivi aplikacija i adrese sajtova ostaju latinicom. Adresu sajta možeš da ukucaš i ćirilicom.",
                     13, Ui.MUTED, false), Ui.fill(a, 12));
         }
+        sheet.show();
+    }
+
+    static String challengeName(String challenge) {
+        return Ui.CHALLENGE_NUMBERS.equals(challenge) ? "Igrica: brojevi redom" : "Pitalice";
+    }
+
+    /** Pitalice ili igrica pre unosa šifre. */
+    void chooseChallenge() {
+        LinearLayout box = Ui.column(a);
+        Sheet sheet = new Sheet(a, "Pre otključavanja").view(box).secondary("Zatvori", null);
+        String current = Ui.unlockChallenge(a);
+        String[] all = {Ui.CHALLENGE_QUIZ, Ui.CHALLENGE_NUMBERS};
+        for (int i = 0; i < all.length; i++) {
+            final String ch = all[i];
+            TextView b = Ui.button(a, challengeName(ch), ch.equals(current));
+            b.setOnClickListener(v -> {
+                sheet.dismiss();
+                Ui.setUnlockChallenge(a, ch);
+            });
+            box.addView(b, Ui.fill(a, i == 0 ? 0 : 10));
+        }
+        box.addView(Ui.text(a, "Brojevi redom: tapni brojeve od 1 do " + NumberGame.SIZE + " redom za "
+                + NumberGame.TIME_MS / 1000 + " s. Pogrešan broj ili isteklo vreme vraća na početak.",
+                13, Ui.MUTED, false), Ui.fill(a, 12));
         sheet.show();
     }
 

@@ -683,3 +683,14 @@ Bez noćne blokade	No night block
 Od 22:00 do 06:00 ostaje otvorena, ako je ne zaključava nešto drugo. Uključivanje važi od sutra u 06:00	Stays open from 22:00 to 06:00 unless something else locks it. Turning this on applies from 06:00 tomorrow
 : bez noćne blokade	: no night block
 Uklonjeno iz pravila. Važi odmah.	Removed from rules. Applies right away.
+Pre otključavanja	Before unlocking
+Pitalice	Quiz questions
+Igrica: brojevi redom	Game: numbers in order
+Brojevi redom: tapni brojeve od 1 do 	Numbers in order: tap the numbers from 1 to 
+ redom za 	 in order within 
+ s. Pogrešan broj ili isteklo vreme vraća na početak.	 s. A wrong number or running out of time starts over.
+Tapni brojeve od 1 do 	Tap the numbers from 1 to 
+ redom	 in order
+Pogrešan broj. Kreni ispočetka.	Wrong number. Start over.
+Vreme je isteklo. Kreni ispočetka.	Time is up. Start over.
+Sledeći broj: 	Next number: 

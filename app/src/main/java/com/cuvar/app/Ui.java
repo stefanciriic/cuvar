@@ -177,6 +177,18 @@ final class Ui {
     static final String LANG_CYRILLIC = "sr-Cyrl";
     static final String LANG_ENGLISH = "en";
 
+    /** Šta se rešava pre šifre: pitalice ili igrica „Brojevi redom“. */
+    static final String CHALLENGE_QUIZ = "quiz";
+    static final String CHALLENGE_NUMBERS = "numbers";
+
+    static String unlockChallenge(Context c) {
+        return CHALLENGE_NUMBERS.equals(prefs(c).getString("challenge", null)) ? CHALLENGE_NUMBERS : CHALLENGE_QUIZ;
+    }
+
+    static void setUnlockChallenge(Context c, String challenge) {
+        prefs(c).edit().putString("challenge", challenge).apply();
+    }
+
     static String langChoice(Context c) {
         SharedPreferences p = prefs(c);
         String l = p.getString("lang", null);

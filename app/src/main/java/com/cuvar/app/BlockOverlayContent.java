@@ -1,6 +1,7 @@
 package com.cuvar.app;
 
 import android.content.Context;
+import android.os.SystemClock;
 import android.view.Gravity;
 import android.view.View;
 import android.graphics.Typeface;
@@ -10,6 +11,7 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 
 import java.util.Locale;
+import java.util.Random;
 
 /** Builds the guarded app and site lock screen and its unlock interactions. */
 final class BlockOverlayContent {
@@ -254,6 +256,10 @@ final class BlockOverlayContent {
     /** Pitanje pre šifre. Tačan odgovor vodi dalje, a pogrešan traži više tačnih zaredom. */
     private void showQuiz(final LinearLayout area, final Runnable onPass, String notice) {
         final Context c = host;
+        if (Ui.CHALLENGE_NUMBERS.equals(Ui.unlockChallenge(c))) {
+            showNumbers(area, onPass, null);
+            return;
+        }
         area.removeAllViews();
         final Quiz.Question q = Quiz.next();
 
@@ -289,6 +295,78 @@ final class BlockOverlayContent {
                 area.addView(b, Ui.fill(c, 10));
             }
         }
+    }
+
+    /** Igrica „Brojevi redom“ umesto pitanja: pobeda vodi dalje, greška ili isteklo vreme daje novu partiju. */
+    private void showNumbers(final LinearLayout area, final Runnable onPass, String notice) {
+        final Context c = host;
+        area.removeAllViews();
+        final NumberGame game = new NumberGame(new Random(), SystemClock.elapsedRealtime());
+
+        TextView head = Ui.text(c, "Tapni brojeve od 1 do " + NumberGame.SIZE + " redom", 20, 0xFFFFFFFF, true);
+        head.setGravity(Gravity.CENTER);
+        area.addView(head, Ui.fill(c, 0));
+        if (notice != null) {
+            TextView n = Ui.text(c, notice, 14, Ui.NIGHT_ACCENT, false);
+            n.setGravity(Gravity.CENTER);
+            area.addView(n, Ui.fill(c, 8));
+        }
+        final TextView status = Ui.text(c, "", 15, Ui.NIGHT_MUTED, true);
+        status.setGravity(Gravity.CENTER);
+        area.addView(status, Ui.fill(c, 10));
+
+        LinearLayout grid = Ui.column(c);
+        int gap = Ui.dp(c, 3);
+        for (int r = 0; r < NumberGame.SIDE; r++) {
+            LinearLayout row = Ui.row(c);
+            for (int col = 0; col < NumberGame.SIDE; col++) {
+                final int number = game.cells[r * NumberGame.SIDE + col];
+                final TextView cell = Ui.text(c, String.valueOf(number), 18, 0xFFFFFFFF, true);
+                cell.setGravity(Gravity.CENTER);
+                cell.setBackground(Ui.pressable(Ui.NIGHT_KEY, Ui.NIGHT_KEY_DOWN, Ui.dp(c, 10)));
+                cell.setOnClickListener(v -> {
+                    NumberGame.Tap t = game.tap(number, SystemClock.elapsedRealtime());
+                    if (t == NumberGame.Tap.OK) {
+                        cell.setBackground(null);
+                        cell.setTextColor(Ui.NIGHT_MUTED);
+                        status.setText(numbersStatus(game));
+                    } else if (t == NumberGame.Tap.DONE) {
+                        onPass.run();
+                    } else if (t == NumberGame.Tap.WRONG) {
+                        showNumbers(area, onPass, "Pogrešan broj. Kreni ispočetka.");
+                    } else if (t == NumberGame.Tap.LATE) {
+                        showNumbers(area, onPass, "Vreme je isteklo. Kreni ispočetka.");
+                    }
+                });
+                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, Ui.dp(c, 54), 1f);
+                lp.setMargins(gap, gap, gap, gap);
+                row.addView(cell, lp);
+            }
+            grid.addView(row, new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        }
+        area.addView(grid, Ui.fill(c, 12));
+        status.setText(numbersStatus(game));
+
+        // Odbrojavanje dok je igrica na ekranu; posle isteka nova partija.
+        host.h.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                if (game.over() || grid.getParent() != area) return;
+                if (game.leftMs(SystemClock.elapsedRealtime()) == 0) {
+                    // Zatvoren ekran blokade: samo stani.
+                    if (area.isAttachedToWindow()) showNumbers(area, onPass, "Vreme je isteklo. Kreni ispočetka.");
+                    return;
+                }
+                status.setText(numbersStatus(game));
+                host.h.postDelayed(this, 250);
+            }
+        }, 250);
+    }
+
+    private static String numbersStatus(NumberGame game) {
+        long s = (game.leftMs(SystemClock.elapsedRealtime()) + 999) / 1000;
+        return "Sledeći broj: " + game.next() + "   ·   " + s + " s";
     }
 
     /** Tastatura za PIN, ili za dnevnu šifru kod režima sa šifrom. */
