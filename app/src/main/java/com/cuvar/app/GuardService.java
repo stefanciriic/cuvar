@@ -119,6 +119,9 @@ public class GuardService extends AccessibilityService {
     private boolean checkPending;
     private boolean contentEvents = true; // da li stižu i događaji o promeni sadržaja (samo za pregledače)
     private long lastEventCheck;
+    private long lastContentCheck; // poslednja provera posle promene sadržaja (SystemClock.elapsedRealtime)
+    // Najkraći razmak provera dok se sadržaj stalno menja (skrolovanje): adresa se čita najviše ~2,5 puta u sekundi.
+    private static final long CONTENT_CHECK_MS = 400L;
     private long ruledSeenAt;     // kad je poslednji put viđena aplikacija sa pravilom ili pregledač napred (System.currentTimeMillis)
     public String leavingSiteKey;
     public String leavingSiteBrowser;
@@ -191,6 +194,7 @@ public class GuardService extends AccessibilityService {
         @Override
         public void run() {
             checkPending = false;
+            lastContentCheck = SystemClock.elapsedRealtime();
             safeCheck();
         }
     };
@@ -340,7 +344,7 @@ public class GuardService extends AccessibilityService {
                 contentEvents = false;
                 info.flags |= AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
                         | AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS;
-                info.notificationTimeout = 250;
+                info.notificationTimeout = 100; // manje čekanja na događaj: blokada stiže brže
                 setServiceInfo(info);
             }
         } catch (Throwable error) {
@@ -485,8 +489,17 @@ public class GuardService extends AccessibilityService {
             CharSequence p = event.getPackageName();
             if (p != null && (wantsContent(p.toString()) || secondaryContentPackages.contains(p.toString())
                     || (currentInApp && p.toString().equals(currentPkg))) && !checkPending) {
-                checkPending = true;
-                h.postDelayed(throttled, 700); // pri skrolovanju stranice događaji stižu stalno: adresa se čita najviše ~1,4 puta u sekundi
+                // Prva promena posle mirovanja (nova adresa) se proverava odmah, da se blokiran sajt ne vidi;
+                // promene koje stižu u nizu čekaju jednu zajedničku proveru.
+                long nowEl = SystemClock.elapsedRealtime();
+                long wait = CONTENT_CHECK_MS - (nowEl - lastContentCheck);
+                if (wait <= 0) {
+                    lastContentCheck = nowEl;
+                    safeCheck();
+                } else {
+                    checkPending = true;
+                    h.postDelayed(throttled, wait);
+                }
             }
         }
     }

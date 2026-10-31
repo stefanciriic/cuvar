@@ -14,6 +14,7 @@ app/src/main/java/com/cuvar/app/i18n/Translit.java
 app/src/main/java/com/cuvar/app/web/Hosts.java
 app/src/main/java/com/cuvar/app/i18n/Lang.java
 app/src/main/java/com/cuvar/app/web/WebAddress.java
+app/src/main/java/com/cuvar/app/web/Browsers.java
 app/src/main/java/com/cuvar/app/rules/UnlockStreak.java
 app/src/main/java/com/cuvar/app/rules/UnlockTimer.java
 app/src/main/java/com/cuvar/app/rules/CodeAttempts.java
@@ -21,6 +22,7 @@ app/src/main/java/com/cuvar/app/rules/TrustedClock.java
 app/src/main/java/com/cuvar/app/rules/SessionLimit.java
 app/src/main/java/com/cuvar/app/rules/RuleMerge.java
 app/src/main/java/com/cuvar/app/rules/AppRule.java
+app/src/main/java/com/cuvar/app/rules/EnforcedRules.java
 app/src/main/java/com/cuvar/app/rules/BlockKind.java
 app/src/main/java/com/cuvar/app/rules/BlockRules.java
 app/src/main/java/com/cuvar/app/rules/ItemKey.java

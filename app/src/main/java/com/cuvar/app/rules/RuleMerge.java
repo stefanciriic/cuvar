@@ -29,7 +29,6 @@ public final class RuleMerge {
         return Math.min(a, b);
     }
 
-    /** Da li pravilo aplikacije uopšte nešto ograničava (inače se ne čuva). */
     /** Izuzeci (npr. bez noćne blokade): novi izuzetak čeka sutra, a skidanje izuzetka važi odmah. */
     public static java.util.Set<String> stricterExempt(java.util.Set<String> now, java.util.Set<String> wanted) {
         java.util.Set<String> out = new java.util.HashSet<>(now);
@@ -37,6 +36,7 @@ public final class RuleMerge {
         return out;
     }
 
+    /** Da li pravilo aplikacije uopšte nešto ograničava (inače se ne čuva). */
     public static boolean anyAppRule(boolean lock, int limit, int opens, int session) {
         return lock || limit > 0 || opens > 0 || session > 0;
     }

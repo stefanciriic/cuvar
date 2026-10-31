@@ -5,6 +5,7 @@ import com.cuvar.app.rules.ItemKey;
 import com.cuvar.app.rules.DailyCode;
 import com.cuvar.app.rules.DailySchedule;
 import com.cuvar.app.rules.DomainRules;
+import com.cuvar.app.rules.EnforcedRules;
 import com.cuvar.app.rules.RuleMerge;
 import com.cuvar.app.rules.UsageCalendar;
 import com.cuvar.app.ui.Ui;
@@ -20,6 +21,7 @@ import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -515,65 +517,68 @@ public final class Store {
         if (!rulesDay().equals(eDay)) copyToEnforced();
     }
 
-    /** Posle svake izmene: ono što važi sada postaje strožije od starog i novog podešavanja. */
+    /** Posle svake izmene: ono što važi sada postaje strožije od starog i novog podešavanja (vidi EnforcedRules). */
     void enforce() {
         if (eApps == null) return;
         if (!rulesDay().equals(eDay)) {
             copyToEnforced();
             return;
         }
-        eNight = eNight || nightBlock();
-        eProtect = eProtect || protectSelf();
-        Set<String> free = RuleMerge.stricterExempt(eNightFree, nightFree());
-        eNightFree.clear();
-        eNightFree.addAll(free);
-        Set<String> codeFree = RuleMerge.stricterExempt(eCodeFree, codeFree());
-        eCodeFree.clear();
-        eCodeFree.addAll(codeFree);
-        eLinks.addAll(linkPairs());
-        JSONObject na = new JSONObject();
-        Set<String> keys = new HashSet<>(keysOf(eApps));
-        keys.addAll(keysOf(apps));
-        for (String pkg : keys) {
-            JSONObject d = apps.optJSONObject(pkg);
-            if (REMOVE_NOW && d == null) continue;
-            AppRule r = AppRule.stricter(appRule(eApps.optJSONObject(pkg)), appRule(d));
-            if (!r.any()) continue;
-            try {
-                na.put(pkg, toJson(r));
-            } catch (JSONException ignored) {
-                // put sa ispravnim ključem i vrednošću ne baca grešku; podaci ostaju kakvi su bili
-            }
-        }
-        JSONObject ns = new JSONObject();
-        keys = new HashSet<>(keysOf(eSites));
-        keys.addAll(keysOf(sites));
-        for (String dom : keys) {
-            JSONObject e = eSites.optJSONObject(dom), d = sites.optJSONObject(dom);
-            if (REMOVE_NOW && d == null) continue;
-            int a = e == null ? RuleMerge.NO_SITE : e.optInt("limit", 0), b = d == null ? RuleMerge.NO_SITE : d.optInt("limit", 0);
-            int limit = RuleMerge.stricterSite(a, b);
-            try {
-                ns.put(dom, new JSONObject().put("limit", limit));
-            } catch (JSONException ignored) {
-                // put sa ispravnim ključem i vrednošću ne baca grešku; podaci ostaju kakvi su bili
-            }
-        }
-        List<DailySchedule.Rule> nr = DailySchedule.tighten(eSchedules, modes.schedules);
-        if (REMOVE_NOW) {
-            // Stavka skinuta iz režima ne čeka 06:00.
-            for (DailySchedule.Rule r : nr) {
-                DailySchedule.Rule d = modes.rule(r.id);
-                if (d == null) continue;
-                r.apps.retainAll(d.apps);
-                r.sites.retainAll(d.sites);
-            }
+        setNow(EnforcedRules.tighten(nowRules(), wantedRules(), REMOVE_NOW));
+        saveEnforced();
+    }
+
+    /** Ono što sada važi. */
+    EnforcedRules nowRules() {
+        return new EnforcedRules(appMap(eApps), siteMap(eSites), eSchedules, eNight, eProtect, eNightFree, eCodeFree, eLinks);
+    }
+
+    /** Ono što je podešeno. */
+    EnforcedRules wantedRules() {
+        return new EnforcedRules(appMap(apps), siteMap(sites), modes.schedules, nightBlock(), protectSelf(),
+                nightFree(), codeFree(), new HashSet<>(linkPairs()));
+    }
+
+    private void setNow(EnforcedRules r) {
+        JSONObject na = new JSONObject(), ns = new JSONObject();
+        try {
+            for (Map.Entry<String, AppRule> e : r.apps.entrySet()) na.put(e.getKey(), toJson(e.getValue()));
+            for (Map.Entry<String, Integer> e : r.sites.entrySet()) ns.put(e.getKey(), new JSONObject().put("limit", e.getValue()));
+        } catch (JSONException ignored) {
+            // put sa ispravnim ključem i vrednošću ne baca grešku
         }
         eApps = na;
         eSites = ns;
         eSchedules.clear();
-        eSchedules.addAll(nr);
-        saveEnforced();
+        for (DailySchedule.Rule s : r.schedules) eSchedules.add(DailySchedule.copy(s));
+        eNight = r.night;
+        eProtect = r.protect;
+        eNightFree.clear();
+        eNightFree.addAll(r.nightFree);
+        eCodeFree.clear();
+        eCodeFree.addAll(r.codeFree);
+        eLinks.clear();
+        eLinks.addAll(r.links);
+    }
+
+    /** Pravila aplikacija iz JSON-a; stavka koja nije objekat (oštećena) se ne računa. */
+    static Map<String, AppRule> appMap(JSONObject o) {
+        Map<String, AppRule> out = new HashMap<>();
+        for (String k : keysOf(o)) {
+            JSONObject v = o.optJSONObject(k);
+            if (v != null) out.put(k, appRule(v));
+        }
+        return out;
+    }
+
+    /** Limiti sajtova iz JSON-a (0 = uvek blokiran); stavka koja nije objekat se ne računa. */
+    static Map<String, Integer> siteMap(JSONObject o) {
+        Map<String, Integer> out = new HashMap<>();
+        for (String k : keysOf(o)) {
+            JSONObject v = o.optJSONObject(k);
+            if (v != null) out.put(k, v.optInt("limit", 0));
+        }
+        return out;
     }
 
     /** Važeći režimi, uz aplikaciju i njen povezan sajt (i obrnuto). */
@@ -819,10 +824,8 @@ public final class Store {
             for (String change : AppRule.relaxations(appRuleNow(pkg), appRule(pkg))) out.add(name + ": " + change);
         }
         for (String dom : keysOf(eSites)) {
-            int ei = rawSite(dom), di = siteLimit(dom);
-            if (ei == di) continue;
-            out.add(dom + ": " + (di < 0 ? "skida se sa liste" : di == 0 ? "uvek blokiran" : "limit " + di + " min"
-                    + (ei == 0 ? " umesto stalne blokade" : " umesto " + ei)));
+            String change = EnforcedRules.siteRelaxation(dom, rawSite(dom), siteLimit(dom));
+            if (change != null) out.add(change);
         }
         Set<String> described = new HashSet<>();
         for (DailySchedule.Rule e : eSchedules) {

@@ -180,3 +180,15 @@ Pre toga promeniti pravilo "bez Kotlina" u CLAUDE.md.
 - [Google issue tracker: greška u AccessibilityNodeInfo.refresh](https://issuetracker.google.com/issues/68299168)
 - [AccessibilityLib: događaji na drugoj niti](https://github.com/dandaner/AccessibilityLib)
 - [Odbrambeno čitanje JSON-a iz SharedPreferences](https://codemia.io/knowledge-hub/path/save_arraylist_to_sharedpreferences)
+
+## Ostali nalazi (31.10.2026, emulator)
+
+- Blokada sajta je kasnila ~1 s posle promene adrese (provera tek 700 ms posle prve promene, događaji na
+  250 ms). Sada: prva promena se proverava odmah, događaji na 100 ms; izmereno ~0,25 s (0,1–0,6 s).
+- Dok Chrome prikazuje svoj prozor preko stranice (npr. ponuda za obaveštenja), blokada se nije pojavila
+  ~7 s, a pojavila se čim je prozor zatvoren. Uzrok nije potvrđen; treba ponoviti danju i ispitati.
+- Sistemsko dugme HOME ne skida blokadu: dok je blokada prikazana, aktivan prozor je Čuvarov, pa se ponovo
+  proverava aplikacija ispod (Chrome). Blokada ostaje preko početnog ekrana dok se ne pritisne "Zatvori".
+  Izlaz postoji, ali je nezgodno. Staro ponašanje (od 06.10.2026).
+- Plutajuće dugme sa katancem je Android-ova prečica za Pristupačnost, ne Čuvarovo dugme. Proveriti da li
+  tap na nju isključuje Čuvara (zaobilaženje) i da li zaštita treba to da spreči.
