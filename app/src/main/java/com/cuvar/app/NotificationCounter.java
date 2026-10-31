@@ -46,7 +46,7 @@ public class NotificationCounter extends NotificationListenerService {
                 seen.add(key);
             }
             if (!NotifCounts.counts(ongoing, summary, alertOnce, seenBefore)) return;
-            Store.get(this).countNotification(pkg);
+            Store.get(this).usageLog.countNotification(pkg);
         } catch (Throwable ignored) {
         }
     }

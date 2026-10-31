@@ -24,7 +24,7 @@ i **tok u jednom smeru**: ekran menja `Store`, servis čita `Store`.
 
 ```
 com.cuvar.app            Komponente iz AndroidManifest-a (aktivnosti, servisi)
-├── data                 Store: podešavanja, izmereno vreme, "popuštanje od sutra"
+├── data                 Store i delovi: podešavanja, vreme, režimi, otključavanje, "popuštanje od sutra"
 ├── rules                Čista pravila bez Android-a: limiti, režimi, šifra, sat, vrste blokade
 ├── guard                Delovi servisa: aplikacija napred, prozor blokade, pauza, dijagnostika
 ├── web                  Pregledači: adresna traka, domeni, veza aplikacija ↔ sajt
@@ -36,7 +36,7 @@ com.cuvar.app            Komponente iz AndroidManifest-a (aktivnosti, servisi)
 | Paket | Klase |
 |---|---|
 | `com.cuvar.app` | `MainActivity`, `RulesActivity`, `ScheduleActivity`, `FocusActivity`, `StatsActivity`, `SubActivity`, `GuardService`, `NotificationCounter` |
-| `data` | `Store` |
+| `data` | `Store` (ulaz: `Store.get(c)`, pravila aplikacija i sajtova, popuštanje od sutra) i njegovi delovi: `Clock` (pouzdano vreme), `Unlocks` (šifra, otključavanje, hitno), `Modes` (vremenski režimi), `DayLimits` (ukupni dnevni limit), `UsageLog` (izmereno vreme, otvaranja, notifikacije), `Sessions` (korišćenje u komadu), `Focus`, `GuardLog` (kad Čuvar nije radio) |
 | `rules` | `BlockKind`, `CodeAttempts`, `DailyCode`, `DailySchedule`, `DayLimit`, `DomainRules`, `LimitWarnings`, `NotifCounts`, `RuleMerge`, `SessionLimit`, `TrustedClock`, `UnlockCost`, `UnlockStreak`, `UnlockTimer`, `UsageCalendar`, `UsageTracker` |
 | `guard` | `BlockOverlayContent`, `Clones`, `ForegroundApp`, `GuardDiagnostics`, `GuardOverlayWindow`, `LoadMeter`, `MusicOwner`, `PauseOverlayContent`, `SystemScreens` |
 | `web` | `BrowserAddressState`, `BrowserMonitor`, `Hosts`, `Links`, `WebAddress` |
@@ -74,13 +74,25 @@ com.cuvar.app            Komponente iz AndroidManifest-a (aktivnosti, servisi)
 | podrška za novi pregledač | `web.BrowserMonitor` |
 | tekst u interfejsu | red u `app/src/main/assets/en.tsv` |
 
+## Kako se koristi `Store`
+
+`Store.get(c)` je jedini ulaz. Delovi su polja `Store`-a i dele isto stanje i isto
+zaključavanje (`synchronized` na `Store`):
+
+```java
+store.now();                 // pouzdano vreme, uvek odavde
+store.day();                 // današnji dan "yyyyMMdd"
+store.unlock.tryCode(code);  // dnevna šifra
+store.modes.schedules();     // vremenski režimi
+store.dayLimits.dayLimit();  // ukupni dnevni limit
+store.usageLog.usedToday(k); // izmereno vreme
+```
+
+Pravila aplikacija i sajtova i mehanizam "popuštanje od sutra" (`enforce()`,
+`pendingChanges()`, `cancelPending()`) su u samom `Store`-u, jer dodiruju sve delove.
+
 ## Sledeći korak
 
-`data/Store.java` (~2.200 redova) i `GuardService.java` (~1.500 redova) su i dalje
-preveliki. Plan, deo po deo i bez promene ponašanja:
-
-- `Store` → `Store` (prefs, keš, `...Now()`), `StorePending` (`enforce`,
-  `pendingChanges`, `cancelPending`), `StoreStats` (vreme, otvaranja, otključavanja),
-  `StoreSchedules` (režimi).
-- `GuardService` → odluka "koja blokada sada važi" kao čista klasa u `rules`
-  (sa testom), a servis samo skuplja stanje i prikazuje rezultat.
+`GuardService.java` (~1.500 redova) je i dalje preveliki: odluka "koja blokada sada
+važi" treba da postane čista klasa u `rules` (sa testom), a servis samo da skuplja
+stanje i prikazuje rezultat.

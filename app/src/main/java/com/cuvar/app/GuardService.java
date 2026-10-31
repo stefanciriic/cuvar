@@ -1,6 +1,8 @@
 package com.cuvar.app;
 
 import com.cuvar.app.data.Store;
+import com.cuvar.app.data.DayLimits;
+import com.cuvar.app.data.Sessions;
 import com.cuvar.app.guard.BlockOverlayContent;
 import com.cuvar.app.guard.Clones;
 import com.cuvar.app.guard.ForegroundApp;
@@ -189,7 +191,7 @@ public class GuardService extends AccessibilityService {
             // prelazak u drugu aplikaciju javlja ta aplikacija.
             if (usageOk || !(currentQuiet && overlay == null && handsOff(rawPkg))) safeCheck();
             try {
-                store.guardBeat(false);
+                store.guardLog.guardBeat(false);
             } catch (Throwable error) {
                 GuardDiagnostics.report("heartbeat", error);
             }
@@ -257,7 +259,7 @@ public class GuardService extends AccessibilityService {
                 hideOverlay();
                 if (store != null) {
                     store.flush();
-                    store.guardBeat(true);
+                    store.guardLog.guardBeat(true);
                 }
             } else {
                 h.removeCallbacks(recheckSoon);
@@ -315,7 +317,7 @@ public class GuardService extends AccessibilityService {
         super.onServiceConnected();
         Ui.loadScript(this);
         store = Store.get(this);
-        store.unlockSince(); // otključavanja se broje od prvog pokretanja ove verzije
+        store.unlock.unlockSince(); // otključavanja se broje od prvog pokretanja ove verzije
         browserMonitor = new BrowserMonitor(this);
         overlayWindow = new GuardOverlayWindow(this);
         pauseOverlayContent = new PauseOverlayContent(this, h, store, new PauseOverlayContent.Actions() {
@@ -384,7 +386,7 @@ public class GuardService extends AccessibilityService {
         running = true;
         LoadMeter.GUARD.start(SystemClock.elapsedRealtime());
         try {
-            store.guardStarted();
+            store.guardLog.guardStarted();
         } catch (Throwable error) {
             GuardDiagnostics.report("guardStarted", error);
         }
@@ -411,7 +413,7 @@ public class GuardService extends AccessibilityService {
             usageCheckedAt = now;
         }
         Set<String> want = new HashSet<>();
-        if (!usageOk || store.focusActive()) {
+        if (!usageOk || store.focus.focusActive()) {
             // Bez zapisa o korišćenju (ili tokom fokusa) prate se sve aplikacije sa ikonom i sistemski ekrani, ali ne i navigacija.
             want.addAll(launcherApps());
             want.add("android");
@@ -423,7 +425,7 @@ public class GuardService extends AccessibilityService {
         want.addAll(BrowserMonitor.BROWSER_PACKAGES);
         want.addAll(browserMonitor.webApps());
         want.addAll(store.guardedApps());
-        if (store.hasSiteRules() || store.focusHasSites()) Collections.addAll(want, IN_APP_APPS);
+        if (store.hasSiteRules() || store.focus.focusHasSites()) Collections.addAll(want, IN_APP_APPS);
         if (store.protectNow()) Collections.addAll(want, SETTINGS_APPS);
         for (String p : HANDS_OFF) if (handsOff(p)) want.remove(p);
         if (want.equals(watched)) return;
@@ -497,7 +499,7 @@ public class GuardService extends AccessibilityService {
     @Override
     public boolean onUnbind(Intent intent) {
         if (store != null) {
-            store.guardStopped();
+            store.guardLog.guardStopped();
         }
         shutdown();
         return super.onUnbind(intent);
@@ -569,7 +571,7 @@ public class GuardService extends AccessibilityService {
             // Meri se samo vreme sajtova sa pravilom (za limit); istorija ostalih sajtova se ne čuva.
             for (String domain : store.matchingSitesNow(host)) keys.add("site:" + domain);
         }
-        if (countsForDayLimit()) keys.add(Store.GUARDED_KEY);
+        if (countsForDayLimit()) keys.add(DayLimits.GUARDED_KEY);
         return keys;
     }
 
@@ -594,12 +596,12 @@ public class GuardService extends AccessibilityService {
             if (interval == null) return;
             long dt = interval.toMs - interval.fromMs;
             for (String key : interval.keys) {
-                store.addUsageBetween(key, interval.fromMs, interval.toMs);
-                if (key.startsWith("site:") || key.startsWith("web:") || key.equals(Store.GUARDED_KEY)) continue;
-                long left = store.addSession(key, dt);
+                store.usageLog.addUsageBetween(key, interval.fromMs, interval.toMs);
+                if (key.startsWith("site:") || key.startsWith("web:") || key.equals(DayLimits.GUARDED_KEY)) continue;
+                long left = store.sessions.addSession(key, dt);
                 if (left > 0 && left <= 60000L && left + dt > 60000L) {
                     Toast.makeText(this, Ui.cyr("Čuvar: još minut u komadu, pa pauza od "
-                            + Store.SESSION_BREAK_MS / 60000L + " min."), Toast.LENGTH_LONG).show();
+                            + Sessions.SESSION_BREAK_MS / 60000L + " min."), Toast.LENGTH_LONG).show();
                 }
             }
         } catch (Throwable error) {
@@ -717,7 +719,7 @@ public class GuardService extends AccessibilityService {
                 pausePkg = returnPause ? pkg : null;
             } else {
                 int max = store.appOpensNow(pkg);
-                opensBlocked = max > 0 && store.opensToday("app:" + pkg) >= max ? pkg : null;
+                opensBlocked = max > 0 && store.usageLog.opensToday("app:" + pkg) >= max ? pkg : null;
                 pendingOpen = opensBlocked == null && max > 0 ? pkg : null;
                 pausePkg = store.appGuarded(pkg) && !exempt().contains(pkg) ? pkg : null;
             }
@@ -791,15 +793,15 @@ public class GuardService extends AccessibilityService {
         List<Block> blocks = new ArrayList<>();
         String appKey = "app:" + pkg;
         boolean web = browsing && currentHost != null;
-        int dayLimit = store.dayLimit();
+        int dayLimit = store.dayLimits.dayLimit();
         if (dayLimit > 0) {
-            long used = store.guardedToday();
-            if (DayLimit.warn(dayLimit, used) && store.firstDayLimitWarning()) {
+            long used = store.dayLimits.guardedToday();
+            if (DayLimit.warn(dayLimit, used) && store.dayLimits.firstDayLimitWarning()) {
                 long left = dayLimit * 60000L - used;
                 Toast.makeText(this, Ui.cyr("Čuvar: do dnevnog limita ostalo je " + Ui.fmt(left) + "."),
                         Toast.LENGTH_LONG).show();
             }
-            if (DayLimit.reached(dayLimit, used)) store.markDayLimitHit();
+            if (DayLimit.reached(dayLimit, used)) store.dayLimits.markDayLimitHit();
             if (DayLimit.reached(dayLimit, used) && !exempt().contains(pkg)) {
                 String site = web ? store.siteGuarded(currentHost) : null;
                 if (guarded(pkg)) {
@@ -817,22 +819,22 @@ public class GuardService extends AccessibilityService {
                 blocks.add(new Block("site:" + site, KIND_NIGHT, null, false));
             }
         }
-        if (store.focusActive() && !exempt().contains(pkg)
-                && !store.focusAllowsApp(pkg)
-                && !(web && store.focusAllowsSite(currentHost))) {
+        if (store.focus.focusActive() && !exempt().contains(pkg)
+                && !store.focus.focusAllowsApp(pkg)
+                && !(web && store.focus.focusAllowsSite(currentHost))) {
             blocks.add(new Block(appKey, KIND_FOCUS, null, false));
         }
         if (pkg.equals(opensBlocked)) {
             blocks.add(new Block(appKey, KIND_OPENS, null, false));
         }
-        if (store.sessionBreakLeft(pkg) > 0) {
+        if (store.sessions.sessionBreakLeft(pkg) > 0) {
             blocks.add(new Block(appKey, KIND_BREAK, null, false));
         }
-        DailySchedule.Rule rule = store.scheduleBlockingApp(pkg);
+        DailySchedule.Rule rule = store.modes.scheduleBlockingApp(pkg);
         if (rule != null) {
             blocks.add(new Block(appKey, KIND_SCHEDULE, rule, false));
         }
-        DailySchedule.Rule siteRule = web ? store.scheduleBlockingSite(currentHost) : null;
+        DailySchedule.Rule siteRule = web ? store.modes.scheduleBlockingSite(currentHost) : null;
         if (siteRule != null) {
             blocks.add(new Block("site:" + DailySchedule.matchDomain(currentHost, siteRule.sites),
                     KIND_SCHEDULE, siteRule, false));
@@ -843,7 +845,7 @@ public class GuardService extends AccessibilityService {
             boolean timeUp = limit > 0 && store.usedShared(pkg) >= limit * 60000L;
             if (limit > 0 && !timeUp) warnLimit(appKey, appLabel(pkg), limit, store.usedShared(pkg));
             // Van perioda režim sa dnevnom šifrom drži svoje aplikacije zaključane, a umesto PIN-a traži šifru.
-            DailySchedule.Rule codeRule = store.codeRuleForApp(pkg);
+            DailySchedule.Rule codeRule = store.modes.codeRuleForApp(pkg);
             if (lock || timeUp || codeRule != null) {
                 int k = timeUp ? KIND_TIME : codeRule != null ? KIND_CODE : KIND_LOCK;
                 blocks.add(new Block(appKey, k, null, true));
@@ -856,7 +858,7 @@ public class GuardService extends AccessibilityService {
             blocks.add(new Block(appKey, KIND_CLONER, null, true));
         }
         if (web && siteRule == null) {
-            DailySchedule.Rule codeRule = store.codeRuleForSite(currentHost);
+            DailySchedule.Rule codeRule = store.modes.codeRuleForSite(currentHost);
             if (codeRule != null) {
                 blocks.add(new Block("site:" + DailySchedule.matchDomain(currentHost, codeRule.sites),
                         KIND_CODE, null, true));
@@ -904,13 +906,13 @@ public class GuardService extends AccessibilityService {
             }
             if (host != null) {
                 visibleHosts.add(host);
-                if (store.focusActive() && !exempt().contains(other.pkg)
-                        && !store.focusAllowsApp(other.pkg) && !store.focusAllowsSite(host)) {
+                if (store.focus.focusActive() && !exempt().contains(other.pkg)
+                        && !store.focus.focusAllowsApp(other.pkg) && !store.focus.focusAllowsSite(host)) {
                     secondary.add(new Block("app:" + other.pkg, KIND_FOCUS, null, false));
                 }
                 addSecondarySiteBlocks(secondary, other.pkg, host);
-            } else if (store.focusActive() && !exempt().contains(other.pkg)
-                    && !store.focusAllowsApp(other.pkg)) {
+            } else if (store.focus.focusActive() && !exempt().contains(other.pkg)
+                    && !store.focus.focusAllowsApp(other.pkg)) {
                 secondary.add(new Block("app:" + other.pkg, KIND_FOCUS, null, false));
             }
         }
@@ -947,13 +949,13 @@ public class GuardService extends AccessibilityService {
                 show = new Block(appKey, KIND_PAUSE, null, false);
             }
         }
-        long coolLeft = show == null || hard(show.kind) || show.kind == KIND_PAUSE ? 0 : store.cooldownLeft(show.key);
+        long coolLeft = show == null || hard(show.kind) || show.kind == KIND_PAUSE ? 0 : store.unlock.cooldownLeft(show.key);
 
         if (show != null && show.kind != KIND_PAUSE && (overlay == null || !show.key.equals(overlayKey) || overlayKind == KIND_PAUSE)) {
-            store.countOpen("try:" + show.key); // novi pokušaj da se otvori nešto blokirano
+            store.usageLog.countOpen("try:" + show.key); // novi pokušaj da se otvori nešto blokirano
         }
         if (show == null && pkg.equals(pendingOpen)) {
-            store.countOpen("app:" + pkg); // otvaranje se broji tek kad se aplikacija zaista vidi
+            store.usageLog.countOpen("app:" + pkg); // otvaranje se broji tek kad se aplikacija zaista vidi
             pendingOpen = null;
         }
 
@@ -1070,16 +1072,16 @@ public class GuardService extends AccessibilityService {
     private void addSecondarySiteBlocks(List<Block> blocks, String pkg, String host) {
         String guardedSite = store.siteGuarded(host);
         if (guardedSite != null && !exempt().contains(pkg)) {
-            if (DayLimit.reached(store.dayLimit(), store.guardedToday())) {
+            if (DayLimit.reached(store.dayLimits.dayLimit(), store.dayLimits.guardedToday())) {
                 blocks.add(new Block("site:" + guardedSite, KIND_DAY, null, false));
             }
             if (store.nightActive()) blocks.add(new Block("site:" + guardedSite, KIND_NIGHT, null, false));
         }
-        DailySchedule.Rule rule = store.scheduleBlockingSite(host);
+        DailySchedule.Rule rule = store.modes.scheduleBlockingSite(host);
         if (rule != null) {
             blocks.add(new Block("site:" + DailySchedule.matchDomain(host, rule.sites), KIND_SCHEDULE, rule, false));
         } else {
-            DailySchedule.Rule codeRule = store.codeRuleForSite(host);
+            DailySchedule.Rule codeRule = store.modes.codeRuleForSite(host);
             if (codeRule != null) {
                 blocks.add(new Block("site:" + DailySchedule.matchDomain(host, codeRule.sites), KIND_CODE, null, true));
             }
@@ -1098,21 +1100,21 @@ public class GuardService extends AccessibilityService {
         if (exempt().contains(p)) return null;
         String k = "app:" + p;
         Block b = null;
-        int dayLimit = store.dayLimit();
-        if (guarded(p) && DayLimit.reached(dayLimit, store.guardedToday())) {
+        int dayLimit = store.dayLimits.dayLimit();
+        if (guarded(p) && DayLimit.reached(dayLimit, store.dayLimits.guardedToday())) {
             b = new Block(k, KIND_DAY, null, false);
         } else if (guarded(p) && store.nightBlocksApp(p)) {
             b = new Block(k, KIND_NIGHT, null, false);
-        } else if (store.sessionBreakLeft(p) > 0) {
+        } else if (store.sessions.sessionBreakLeft(p) > 0) {
             b = new Block(k, KIND_BREAK, null, false);
         } else {
-            DailySchedule.Rule rule = store.scheduleBlockingApp(p);
+            DailySchedule.Rule rule = store.modes.scheduleBlockingApp(p);
             if (rule != null) {
                 b = new Block(k, KIND_SCHEDULE, rule, false);
             } else {
                 int limit = store.appLimitNow(p);
                 boolean timeUp = limit > 0 && store.usedShared(p) >= limit * 60000L;
-                DailySchedule.Rule codeRule = store.codeRuleForApp(p);
+                DailySchedule.Rule codeRule = store.modes.codeRuleForApp(p);
                 if (store.appLockNow(p) || timeUp || codeRule != null) {
                     b = new Block(k, timeUp ? KIND_TIME : codeRule != null ? KIND_CODE : KIND_LOCK, null, true);
                 } else if (unknownBrowser(p)) {
@@ -1128,7 +1130,7 @@ public class GuardService extends AccessibilityService {
 
     /** Vrsta blokade za pregledač u kome Čuvar ne vidi sajt (vidi BlockKind.unseenSite). */
     private int unseen(int softKind) {
-        return BlockKind.unseenSite(softKind, store.hardSiteBlockNow());
+        return BlockKind.unseenSite(softKind, store.modes.hardSiteBlockNow());
     }
 
     public static boolean hard(int kind) {
@@ -1220,7 +1222,7 @@ public class GuardService extends AccessibilityService {
      */
     private boolean quiet(String raw) {
         if (handsOff(raw)) return true;
-        if (raw.equals(getPackageName()) || BrowserMonitor.isBrowser(raw) || store.focusActive()) return false;
+        if (raw.equals(getPackageName()) || BrowserMonitor.isBrowser(raw) || store.focus.focusActive()) return false;
         if (settingsLike(raw) && store.protectNow()) return false;
         if (inAppBrowser(raw)) return false;
         if (webApkHost(raw) != null && store.hasSiteRules()) return false;
@@ -1263,7 +1265,7 @@ public class GuardService extends AccessibilityService {
     }
 
     private boolean wantsContent(String p) {
-        return (BrowserMonitor.isBrowser(p) && (store == null || store.hasSiteRules() || store.focusHasSites()))
+        return (BrowserMonitor.isBrowser(p) && (store == null || store.hasSiteRules() || store.focus.focusHasSites()))
                 || (settingsLike(p) && store != null && store.protectNow());
     }
 
@@ -1363,7 +1365,7 @@ public class GuardService extends AccessibilityService {
 
     /** Stavka je upravo otključana šifrom ili hitnim otključavanjem. */
     private boolean unlockedNow(String key) {
-        return store.unlockLeft(key) > 0 || store.emergencyLeft(key) > 0;
+        return store.unlock.unlockLeft(key) > 0 || store.unlock.emergencyLeft(key) > 0;
     }
 
     public static String cooldownText(long left) {

@@ -148,17 +148,17 @@ public final class SettingsSheets {
     }
 
     public String dayLimitSummary() {
-        int limit = store.dayLimit();
+        int limit = store.dayLimits.dayLimit();
         if (limit <= 0) return "Zajedničko vreme za sve iz tvojih pravila; kad ga potrošiš, zaključano je do ponoći";
         String s = DayLimit.label(limit) + " za sve iz tvojih pravila, posle toga ništa ne otključava";
-        if (store.dayLimitNext() == 0) s += " · isključuje se od sutra";
+        if (store.dayLimits.dayLimitNext() == 0) s += " · isključuje se od sutra";
         return s;
     }
 
     /** Izbor ukupnog limita: manji važi odmah, povećanje jednom dnevno za deo limita, isključivanje od sutra. */
     public void chooseDayLimit() {
-        final int limit = store.dayLimit();
-        boolean offTomorrow = store.dayLimitNext() == 0;
+        final int limit = store.dayLimits.dayLimit();
+        boolean offTomorrow = store.dayLimits.dayLimitNext() == 0;
         LinearLayout box = Ui.column(a);
         String intro = "Računa se samo vreme u aplikacijama i na sajtovima koji imaju pravilo "
                 + "(zaključani, ograničeni ili u režimu). Mape, pozivi, poruke i sve ostalo bez pravila ne troši limit. "
@@ -177,10 +177,10 @@ public final class SettingsSheets {
             box.addView(Sheet.label(a, "TRENUTNI LIMIT"), Ui.fill(a, 0));
             box.addView(Ui.text(a, DayLimit.label(limit), 28, Ui.INK, true), Ui.fill(a, 2));
 
-            boolean can = store.canRaiseDayLimit();
+            boolean can = store.dayLimits.canRaiseDayLimit();
             final int add = DayLimit.maxRaise(limit);
             String raise = can ? "Povećaj za " + Ui.fmt(add * 60000L) + " → " + DayLimit.label(limit + add)
-                    : store.dayLimitHitToday() ? "Limit je potrošen, danas se više ne povećava"
+                    : store.dayLimits.dayLimitHitToday() ? "Limit je potrošen, danas se više ne povećava"
                     : "Povećanje je danas već iskorišćeno";
             TextView up = Ui.button(a, raise, can);
             up.setEnabled(can);
@@ -190,8 +190,8 @@ public final class SettingsSheets {
                 confirm("Povećati limit?", "Limit ide sa " + DayLimit.label(limit) + " na " + DayLimit.label(limit + add)
                         + ". Ovo je jedino povećanje danas i ne može se ponoviti do sutra.",
                         "Povećaj", () -> {
-                            int added = store.raiseDayLimit();
-                            Toast.makeText(a, Ui.cyr(added > 0 ? "Limit je sada " + DayLimit.label(store.dayLimit())
+                            int added = store.dayLimits.raiseDayLimit();
+                            Toast.makeText(a, Ui.cyr(added > 0 ? "Limit je sada " + DayLimit.label(store.dayLimits.dayLimit())
                                     : "Povećanje je danas već iskorišćeno."), Toast.LENGTH_LONG).show();
                         });
             });
@@ -212,7 +212,7 @@ public final class SettingsSheets {
             b.setOnClickListener(v -> {
                 sheet.dismiss();
                 Runnable apply = () -> {
-                    if (store.lowerDayLimit(min)) {
+                    if (store.dayLimits.lowerDayLimit(min)) {
                         Toast.makeText(a, Ui.cyr("Limit je sada " + DayLimit.label(min)), Toast.LENGTH_LONG).show();
                     }
                 };
@@ -226,7 +226,7 @@ public final class SettingsSheets {
                             "Limit postaje ukupno " + DayLimit.label(min) + " umesto " + DayLimit.label(limit)
                                     + ". Važi odmah i ne može se vratiti: posle toga se danas "
                                     + "može povećati najviše za " + Ui.fmt(DayLimit.maxRaise(min) * 60000L)
-                                    + (store.canRaiseDayLimit() ? "." : ", a povećanje je danas već iskorišćeno."),
+                                    + (store.dayLimits.canRaiseDayLimit() ? "." : ", a povećanje je danas već iskorišćeno."),
                             "Smanji", apply);
                 }
             });
@@ -238,10 +238,10 @@ public final class SettingsSheets {
             off.setOnClickListener(v -> {
                 sheet.dismiss();
                 if (offTomorrow) {
-                    store.keepDayLimit();
+                    store.dayLimits.keepDayLimit();
                     Toast.makeText(a, Ui.cyr("Limit ostaje uključen."), Toast.LENGTH_LONG).show();
                 } else {
-                    store.turnOffDayLimitTomorrow();
+                    store.dayLimits.turnOffDayLimitTomorrow();
                     Toast.makeText(a, Ui.cyr("Isključuje se od sutra. Danas ostaje "
                             + DayLimit.label(limit).toLowerCase(Locale.ROOT) + "."), Toast.LENGTH_LONG).show();
                 }

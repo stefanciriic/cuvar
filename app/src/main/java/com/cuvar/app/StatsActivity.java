@@ -1,6 +1,7 @@
 package com.cuvar.app;
 
 import com.cuvar.app.data.Store;
+import com.cuvar.app.data.UsageLog;
 import com.cuvar.app.i18n.Translit;
 import com.cuvar.app.rules.DailySchedule;
 import com.cuvar.app.rules.NotifCounts;
@@ -149,10 +150,10 @@ public class StatsActivity extends SubActivity {
         long grandTotal = 0;
 
         // Kalendarski dani zaključno sa danas; dani bez korišćenja se računaju kao nula.
-        List<String> dayKeys = days == 1 ? Collections.singletonList(selectedDay()) : store.lastDays(days);
+        List<String> dayKeys = days == 1 ? Collections.singletonList(selectedDay()) : store.usageLog.lastDays(days);
         for (String dk : dayKeys) {
             Map<String, Long> apps = new HashMap<>();
-            Map<String, Long> day = store.dayMap(dk);
+            Map<String, Long> day = store.usageLog.dayMap(dk);
             for (Map.Entry<String, Long> e : day.entrySet()) {
                 String key = e.getKey();
                 long ms = e.getValue();
@@ -196,7 +197,7 @@ public class StatsActivity extends SubActivity {
     }
 
     private String today() {
-        List<String> k = store.lastDays(1);
+        List<String> k = store.usageLog.lastDays(1);
         return k.get(0);
     }
 
@@ -213,7 +214,7 @@ public class StatsActivity extends SubActivity {
         dayStrip.removeAllViews();
         dayStrip.setVisibility(days == 1 ? View.VISIBLE : View.GONE);
         if (days != 1) return;
-        List<String> week = store.lastDays(7);
+        List<String> week = store.usageLog.lastDays(7);
         String sel = selectedDay();
         for (int i = 0; i < week.size(); i++) {
             final String key = week.get(i);
@@ -231,7 +232,7 @@ public class StatsActivity extends SubActivity {
             num.setGravity(Gravity.CENTER);
             b.addView(name, Ui.fill(this, 0));
             b.addView(num, Ui.fill(this, 4));
-            b.setContentDescription(Store.dayLabel(key));
+            b.setContentDescription(UsageLog.dayLabel(key));
             b.setOnClickListener(v -> {
                 pickedDay = key;
                 render();
@@ -248,7 +249,7 @@ public class StatsActivity extends SubActivity {
     /** Ukupno vreme aplikacija za dan (bez početnog ekrana i Čuvara), i da li dan uopšte ima podatke. */
     private long totalOf(String dayKey) {
         long t = 0;
-        for (Map.Entry<String, Long> e : store.dayMap(dayKey).entrySet()) {
+        for (Map.Entry<String, Long> e : store.usageLog.dayMap(dayKey).entrySet()) {
             String k = e.getKey();
             if (k.startsWith("web:") || k.startsWith("site:") || skip.contains(k) || !GuardService.tracked(this, k)) continue;
             t += e.getValue();
@@ -259,8 +260,8 @@ public class StatsActivity extends SubActivity {
     /** Kalendarski prosek od prvog zabeleženog dana; kasniji prazni dani vrede nula. */
     private long avgOf(List<String> keys) {
         String first = null;
-        for (String day : store.lastDays(14)) {
-            if (store.hasDay(day)) { first = day; break; }
+        for (String day : store.usageLog.lastDays(14)) {
+            if (store.usageLog.hasDay(day)) { first = day; break; }
         }
         if (first == null) return -1;
         long t = 0;
@@ -276,7 +277,7 @@ public class StatsActivity extends SubActivity {
     private View summaryCard(long total, long avg) {
         LinearLayout card = Ui.card(this);
         String dayTitle = days != 1 ? "UKUPNO ZA " + days + " DANA"
-                : pickedToday() ? "UKUPNO DANAS" : "UKUPNO · " + Store.dayLabel(selectedDay()).toUpperCase(Locale.ROOT);
+                : pickedToday() ? "UKUPNO DANAS" : "UKUPNO · " + UsageLog.dayLabel(selectedDay()).toUpperCase(Locale.ROOT);
         TextView eyebrow = Ui.text(this, dayTitle, 12, Ui.MUTED, true);
         eyebrow.setLetterSpacing(0.15f);
         card.addView(eyebrow);
@@ -288,11 +289,11 @@ public class StatsActivity extends SubActivity {
         int changeColor;
         if (days == 1) {
             // Dan pre izabranog i prosek 7 dana pre njega.
-            List<String> week = store.lastDays(21);
+            List<String> week = store.usageLog.lastDays(21);
             int at = week.indexOf(selectedDay());
             if (at < 7) at = week.size() - 1;
             String prev = week.get(at - 1);
-            long yesterday = store.hasDay(prev) ? totalOf(prev) : -1;
+            long yesterday = store.usageLog.hasDay(prev) ? totalOf(prev) : -1;
             long weekAvg = avgOf(week.subList(at - 7, at));
             tiles.addView(tile(pickedToday() ? "Juče" : "Dan pre", yesterday < 0 ? "–" : Ui.fmt(yesterday)), tileParams(false));
             tiles.addView(tile("Prosek 7 dana pre", weekAvg < 0 ? "–" : Ui.fmt(weekAvg)), tileParams(true));
@@ -305,7 +306,7 @@ public class StatsActivity extends SubActivity {
                 changeColor = Ui.MUTED;
             }
         } else {
-            List<String> two = store.lastDays(14);
+            List<String> two = store.usageLog.lastDays(14);
             long now = avgOf(two.subList(7, 14));
             long before = avgOf(two.subList(0, 7));
             tiles.addView(tile("Prosek po danu", Ui.fmt(avg)), tileParams(false));
@@ -334,9 +335,9 @@ public class StatsActivity extends SubActivity {
 
     /** Nedeljni izveštaj o otključavanju: niz dana bez otključavanja, ovih i prethodnih 7 dana. */
     private View unlocksCard() {
-        Map<String, Integer> counts = store.unlockDays();
+        Map<String, Integer> counts = store.unlock.unlockDays();
         String today = store.day();
-        String since = store.unlockSince();
+        String since = store.unlock.unlockSince();
         int streak = UnlockStreak.current(counts, today, since);
         int best = UnlockStreak.best(counts, today, since);
         int week = UnlockStreak.week(counts, today, since, 0);
@@ -415,10 +416,10 @@ public class StatsActivity extends SubActivity {
             return card;
         }
 
-        Map<String, Map<String, Integer>> days = store.notifDays();
+        Map<String, Map<String, Integer>> days = store.usageLog.notifDays();
         Map<String, Integer> perDay = NotifCounts.perDay(days);
         String today = store.day();
-        String since = store.notifSince();
+        String since = store.usageLog.notifSince();
         if (since == null) since = today;
         Integer t = perDay.get(today);
         int todayCount = t == null ? 0 : t;
@@ -500,7 +501,7 @@ public class StatsActivity extends SubActivity {
         }
         if (rest > 0) parts.add(new Charts.Part(rest, Charts.color(0, true)));
 
-        Charts.Donut donut = new Charts.Donut(this, parts, Ui.fmt(total), days == 1 ? (pickedToday() ? "danas" : Store.dayLabel(selectedDay())) : "za " + days + " dana");
+        Charts.Donut donut = new Charts.Donut(this, parts, Ui.fmt(total), days == 1 ? (pickedToday() ? "danas" : UsageLog.dayLabel(selectedDay())) : "za " + days + " dana");
         card.addView(donut, Ui.fill(this, 12));
 
         for (int i = 0; i < colored.size(); i++) {
@@ -556,7 +557,7 @@ public class StatsActivity extends SubActivity {
             cols.add(parts);
             labels.add(columnLabel(dayKeys.get(d)));
             if (desc.length() > 0) desc.append(", ");
-            desc.append(Store.dayLabel(dayKeys.get(d))).append(' ').append(Ui.fmt(dayTotal));
+            desc.append(UsageLog.dayLabel(dayKeys.get(d))).append(' ').append(Ui.fmt(dayTotal));
         }
         Charts.Columns chart = new Charts.Columns(this, cols, labels, dayKeys.size() - 1, avg);
         chart.setContentDescription(desc);

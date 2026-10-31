@@ -47,8 +47,8 @@ public class FocusActivity extends SubActivity {
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
-        selectedApps.addAll(store.focusApps());
-        selectedSites.addAll(store.focusSites());
+        selectedApps.addAll(store.focus.focusApps());
+        selectedSites.addAll(store.focus.focusSites());
         render();
         loadApps();
     }
@@ -56,23 +56,23 @@ public class FocusActivity extends SubActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        if (status != null && store.focusActive()) render();
+        if (status != null && store.focus.focusActive()) render();
     }
 
     private void render() {
         captureSites();
         LinearLayout root = Ui.column(this);
         root.setBackgroundColor(Ui.BG);
-        if (store.focusActive()) {
+        if (store.focus.focusActive()) {
             root.addView(header("Fokus režim", "Dozvoli samo izabrano · ručno pokrenuto"));
             LinearLayout card = Ui.card(this);
             card.addView(Ui.text(this, "Fokus je aktivan", 22, Ui.INK, true));
-            card.addView(Ui.text(this, "Još " + Ui.fmt(store.focusLeft()) + ". Dozvoljeno: "
-                    + store.focusApps().size() + " aplikacija i " + store.focusSites().size() + " sajtova.",
+            card.addView(Ui.text(this, "Još " + Ui.fmt(store.focus.focusLeft()) + ". Dozvoljeno: "
+                    + store.focus.focusApps().size() + " aplikacija i " + store.focus.focusSites().size() + " sajtova.",
                     14, Ui.MUTED, false), Ui.fill(this, 8));
             TextView stop = Ui.button(this, "Zaustavi fokus", true);
             stop.setOnClickListener(v -> {
-                store.stopFocus();
+                store.focus.stopFocus();
                 finish();
             });
             card.addView(stop, Ui.fill(this, 14));
@@ -245,7 +245,7 @@ public class FocusActivity extends SubActivity {
             status.setTextColor(Ui.ACCENT);
             return;
         }
-        store.startFocus(durationMin * 60000L, selectedApps, sites);
+        store.focus.startFocus(durationMin * 60000L, selectedApps, sites);
         Toast.makeText(this, Ui.cyr("Fokus je pokrenut na " + durationMin + " min."), Toast.LENGTH_LONG).show();
         finish();
     }

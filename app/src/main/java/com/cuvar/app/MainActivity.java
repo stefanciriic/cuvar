@@ -1,6 +1,7 @@
 package com.cuvar.app;
 
 import com.cuvar.app.data.Store;
+import com.cuvar.app.data.Unlocks;
 import com.cuvar.app.guard.ForegroundApp;
 import com.cuvar.app.i18n.Lang;
 import com.cuvar.app.i18n.Translit;
@@ -231,8 +232,8 @@ public class MainActivity extends Activity {
     }
 
     private String focusSummary() {
-        if (!store.focusActive()) return "Isključen · pokreće se ručno kad ti treba";
-        return "Uključen · još " + Ui.fmt(store.focusLeft()) + " · samo izabrano je dostupno";
+        if (!store.focus.focusActive()) return "Isključen · pokreće se ručno kad ti treba";
+        return "Uključen · još " + Ui.fmt(store.focus.focusLeft()) + " · samo izabrano je dostupno";
     }
 
     // ---------- Kartica „Sada“ ----------
@@ -246,9 +247,9 @@ public class MainActivity extends Activity {
     }
 
     private String codeState() {
-        DailySchedule.Rule active = store.activeCodeRule();
+        DailySchedule.Rule active = store.modes.activeCodeRule();
         if (active != null) return "hidden:" + active.id + ":" + active.name + ":" + active.end;
-        return store.dailyCodeVisible() ? "visible:" + store.dailyCode() : "unavailable";
+        return store.unlock.dailyCodeVisible() ? "visible:" + store.unlock.dailyCode() : "unavailable";
     }
 
     /** Menja samo kartice čiji je vremenski sadržaj promenjen; dijalozi i skrol ostaju otvoreni. */
@@ -294,7 +295,7 @@ public class MainActivity extends Activity {
             nowLine("●  Čuvar je isključen", "Ništa se ne meri ni blokira dok ga ne uključiš.", Ui.ACCENT);
         }
 
-        List<String> gaps = store.guardGaps(7);
+        List<String> gaps = store.guardLog.guardGaps(7);
         if (!gaps.isEmpty()) {
             nowLine("Čuvar nije radio", android.text.TextUtils.join("\n", gaps.subList(0, Math.min(3, gaps.size()))), Ui.ACCENT);
         }
@@ -304,7 +305,7 @@ public class MainActivity extends Activity {
             nowLine("Noćna blokada", "Do 0" + DailyCode.NIGHT_END_HOUR + ":00 sve iz pravila je zaključano.", Ui.INK);
             any = true;
         }
-        for (DailySchedule.Rule r : store.activeSchedules()) {
+        for (DailySchedule.Rule r : store.modes.activeSchedules()) {
             if (r.apps.isEmpty() && r.sites.isEmpty()) continue;
             nowLine("Režim „" + r.name + "“", "Traje do " + DailySchedule.label(r.end)
                     + ". Do tada se " + (r.apps.size() + r.sites.size() == 1 ? "njegova stavka ne otključava." : "njegove stavke ne otključavaju."),
@@ -312,11 +313,11 @@ public class MainActivity extends Activity {
             any = true;
         }
 
-        long use = store.unlockUseLeft();
-        long busy = store.unlockBusyLeft();
+        long use = store.unlock.unlockUseLeft();
+        long busy = store.unlock.unlockBusyLeft();
         if (use > 0) {
             nowLine("Otključano", "Još " + minutes(use) + ", pa pauza od "
-                    + Store.UNLOCK_COOLDOWN_MS / 60000L + " min bez otključavanja.", Ui.INK);
+                    + Unlocks.UNLOCK_COOLDOWN_MS / 60000L + " min bez otključavanja.", Ui.INK);
             any = true;
         } else if (busy > 0) {
             nowLine("Pauza posle otključavanja", "Još " + minutes(busy) + " ništa ne može da se otključa.", Ui.INK);
@@ -331,9 +332,9 @@ public class MainActivity extends Activity {
         }
         over.addAll(store.sitesOverLimit());
         List<String> rest = new ArrayList<>();
-        for (String pkg : store.appsOnBreak()) {
+        for (String pkg : store.sessions.appsOnBreak()) {
             String label = labelOf(pm, pkg);
-            rest.add((label == null ? pkg : label) + " još " + minutes(store.sessionBreakLeft(pkg)));
+            rest.add((label == null ? pkg : label) + " još " + minutes(store.sessions.sessionBreakLeft(pkg)));
         }
         if (!rest.isEmpty()) {
             nowLine("Pauza posle korišćenja u komadu", android.text.TextUtils.join(", ", rest) + ".", Ui.INK);
@@ -348,10 +349,10 @@ public class MainActivity extends Activity {
         if (!any) {
             nowLine("Nijedan režim ni limit trenutno ne traje", null, Ui.MUTED);
         }
-        nowLine("Hitno otključavanje", store.emergencyAvailable()
+        nowLine("Hitno otključavanje", store.unlock.emergencyAvailable()
                 ? "Dostupno još jednom danas."
                 : "Danas je iskorišćeno. Novo je posle ponoći.", Ui.MUTED);
-        int streak = store.unlockStreak();
+        int streak = store.unlock.unlockStreak();
         if (streak > 0) {
             nowLine("Niz bez otključavanja", Ui.count(streak, "dan", "dana", "dana") + " zaredom.", Ui.MUTED);
         }
@@ -408,20 +409,20 @@ public class MainActivity extends Activity {
         TextView eyebrow = Ui.text(this, "DNEVNA ŠIFRA", 12, Ui.MUTED, true);
         eyebrow.setLetterSpacing(0.15f);
         card.addView(eyebrow);
-        DailySchedule.Rule active = store.activeCodeRule();
+        DailySchedule.Rule active = store.modes.activeCodeRule();
         if (active != null) {
             card.addView(Ui.text(this, "Skrivena", 30, Ui.INK, true), Ui.fill(this, 4));
             card.addView(Ui.text(this, "Režim „" + active.name + "“ traje do " + DailySchedule.label(active.end)
                     + ". Šifra se vidi tek posle toga.", 14, Ui.MUTED, false), Ui.fill(this, 6));
             return card;
         }
-        if (!store.dailyCodeVisible()) {
+        if (!store.unlock.dailyCodeVisible()) {
             card.addView(Ui.text(this, "Stiže u " + DailyCode.CHANGE_HOUR + ":00", 30, Ui.INK, true), Ui.fill(this, 4));
             card.addView(Ui.text(this, "Svaki dan dobijaš jednu novu šifru u " + DailyCode.CHANGE_HOUR
                     + ":00 i vidi se ovde do " + DailyCode.LOCK_HOUR + ":00.", 14, Ui.MUTED, false), Ui.fill(this, 6));
             return card;
         }
-        TextView code = Ui.text(this, store.dailyCode(), 38, Ui.INK, true);
+        TextView code = Ui.text(this, store.unlock.dailyCode(), 38, Ui.INK, true);
         code.setLetterSpacing(0.2f);
         card.addView(code, Ui.fill(this, 4));
         card.addView(Ui.text(this, "Današnja šifra. Jedino ona otključava zaključane aplikacije i sajtove, i to samo do " + DailyCode.LOCK_HOUR + ":00."
@@ -431,7 +432,7 @@ public class MainActivity extends Activity {
     }
 
     private String scheduleSummary() {
-        List<DailySchedule.Rule> rules = store.schedulesNow();
+        List<DailySchedule.Rule> rules = store.modes.schedulesNow();
         if (rules.isEmpty()) return "Još nema režima";
         java.util.Set<String> ids = new java.util.HashSet<>(), enabled = new java.util.HashSet<>();
         java.util.Set<String> periods = new java.util.LinkedHashSet<>();
@@ -483,7 +484,7 @@ public class MainActivity extends Activity {
         String me = getPackageName();
         List<Row> rows = new ArrayList<>();
         long total = 0;
-        for (Map.Entry<String, Long> e : store.todayMap().entrySet()) {
+        for (Map.Entry<String, Long> e : store.usageLog.todayMap().entrySet()) {
             String key = e.getKey();
             if (key.startsWith("site:") || key.startsWith("web:") || key.equals(home) || key.equals(me)
                     || !GuardService.tracked(this, key)) {
@@ -502,10 +503,10 @@ public class MainActivity extends Activity {
         Collections.sort(rows, (a, b) -> Long.compare(b.ms, a.ms));
 
         card.addView(Ui.text(this, Ui.fmt(total), 38, Ui.INK, true), Ui.fill(this, 2));
-        int limit = store.dayLimit();
+        int limit = store.dayLimits.dayLimit();
         if (limit > 0) {
             // Limit troši samo vreme pod pravilima, pa je manje od ukupnog vremena iznad.
-            long counted = store.guardedToday();
+            long counted = store.dayLimits.guardedToday();
             String line = DayLimit.reached(limit, counted)
                     ? "Dnevni limit od " + DayLimit.label(limit).toLowerCase(Locale.ROOT) + " je potrošen. Zaključano je do ponoći."
                     : "Dnevni limit: " + Ui.fmt(counted) + " od " + DayLimit.label(limit).toLowerCase(Locale.ROOT)

@@ -120,7 +120,7 @@ iz koda, bez XML rasporeda. Zašto baš ovako i gde ide nova klasa:
 | `ScheduleActivity.java`, `FocusActivity.java` | Vremenski režimi, ručni fokus |
 | `StatsActivity.java` | Statistika |
 | `NotificationCounter.java` | Broj primljenih notifikacija (samo paket, bez teksta) |
-| `data/Store.java` | Sva podešavanja, izmereno vreme, otključavanja, pouzdan sat, "popuštanje od sutra" |
+| `data/` | `Store` (sva podešavanja, "popuštanje od sutra") i njegovi delovi: `Clock` (pouzdan sat), `Unlocks`, `Modes` (režimi), `DayLimits`, `UsageLog`, `Sessions`, `Focus`, `GuardLog` |
 | `rules/` | Čista pravila bez Android-a, sa testovima: `BlockKind` (vrste blokade), `UnlockTimer`, `UnlockCost`, `CodeAttempts`, `TrustedClock`, `SessionLimit`, `RuleMerge`, `LimitWarnings`, `DailySchedule` (režimi), `DailyCode` (dnevna šifra), `DayLimit`, `DomainRules`, `UsageTracker`, `UsageCalendar`, `UnlockStreak`, `NotifCounts` |
 | `guard/` | Delovi servisa: `BlockOverlayContent` (ekran blokade i otključavanje), `PauseOverlayContent` (pauza 6 s), `GuardOverlayWindow` (prozor preko svega, muzika), `ForegroundApp`, `SystemScreens`, `Clones`, `MusicOwner`, `LoadMeter`, `GuardDiagnostics` |
 | `web/` | Pregledači: `BrowserMonitor`, `BrowserAddressState`, `WebAddress` (pravi sajt), `Hosts`, `Links` (aplikacija ↔ sajt) |

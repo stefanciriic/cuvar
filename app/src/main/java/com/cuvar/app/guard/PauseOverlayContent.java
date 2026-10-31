@@ -64,7 +64,7 @@ public final class PauseOverlayContent {
         if (limit > 0) message.append(" od ").append(limit).append(" min");
         int opens = store.appOpensNow(pkg);
         if (opens > 0) {
-            message.append(", a otvorio ").append(Ui.count(store.opensToday(key), "put", "puta", "puta"))
+            message.append(", a otvorio ").append(Ui.count(store.usageLog.opensToday(key), "put", "puta", "puta"))
                     .append(" od ").append(opens);
         }
         message.append(". Da li ti zaista treba sada?");

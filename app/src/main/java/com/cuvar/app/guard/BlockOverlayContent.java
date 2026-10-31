@@ -2,6 +2,7 @@ package com.cuvar.app.guard;
 
 import com.cuvar.app.GuardService;
 import com.cuvar.app.data.Store;
+import com.cuvar.app.data.Unlocks;
 import com.cuvar.app.rules.DailyCode;
 import com.cuvar.app.rules.DailySchedule;
 import com.cuvar.app.rules.DayLimit;
@@ -51,25 +52,25 @@ public final class BlockOverlayContent {
         } else if (kind == GuardService.KIND_DAY) {
             title = "Dnevni limit je potrošen";
             sub = "Danas si u aplikacijama i na sajtovima iz svojih pravila proveo "
-                    + Ui.fmt(host.store.guardedToday()) + ", a limit je " + DayLimit.label(host.store.dayLimit()) + ". " + name
+                    + Ui.fmt(host.store.dayLimits.guardedToday()) + ", a limit je " + DayLimit.label(host.store.dayLimits.dayLimit()) + ". " + name
                     + " je zaključan do ponoći i ne može da se otključa, ni šifrom.";
             joke = Jokes.pick(Jokes.TIME_UP);
         } else if (kind == GuardService.KIND_OPENS) {
             String pkg = key.substring(4);
             title = "Otvaranja za danas su potrošena";
-            sub = name + " si danas otvorio " + Ui.count(host.store.opensToday(key), "put", "puta", "puta") + ", a dozvoljeno je "
+            sub = name + " si danas otvorio " + Ui.count(host.store.usageLog.opensToday(key), "put", "puta", "puta") + ", a dozvoljeno je "
                     + host.store.appOpensNow(pkg) + ". Do ponoći se ne otvara, ni šifrom.";
             joke = Jokes.pick(Jokes.TIME_UP);
         } else if (kind == GuardService.KIND_BREAK) {
             String pkg = key.substring(4);
-            long left = host.store.sessionBreakLeft(pkg);
+            long left = host.store.sessions.sessionBreakLeft(pkg);
             title = "Vreme je za pauzu";
             sub = "Bio si u " + name + " " + host.store.appSessionNow(pkg) + " min u komadu. "
                     + name + " se ponovo otvara posle pauze, za " + Ui.fmt(left) + ", ni šifrom ranije.";
             joke = Jokes.pick(Jokes.TIME_UP);
         } else if (kind == GuardService.KIND_FOCUS) {
             title = "Fokus režim je aktivan";
-            long left = host.store.focusLeft();
+            long left = host.store.focus.focusLeft();
             sub = "Dozvoljene su samo aplikacije i sajtovi koje si izabrao. Fokus traje još "
                     + Ui.fmt(left) + " i ne može se zaobići dnevnom šifrom.";
             joke = Jokes.pick(Jokes.SCHEDULE);
@@ -153,7 +154,7 @@ public final class BlockOverlayContent {
         s.setGravity(Gravity.CENTER);
         box.addView(s, Ui.fill(c, 8));
 
-        int tries = host.store.opensToday("try:" + key);
+        int tries = host.store.usageLog.opensToday("try:" + key);
         if (tries > 1) {
             TextView tr = Ui.text(c, "Ovo ti je danas " + tries + ". pokušaj.", 15, 0xFFFFFFFF, true);
             tr.setGravity(Gravity.CENTER);
@@ -175,26 +176,26 @@ public final class BlockOverlayContent {
 
         if (cooling) {
             // Pauza posle otključavanja: nema dugmeta ni PIN-a, samo odbrojavanje.
-            host.cooldownLabel = Ui.text(c, GuardService.cooldownText(host.store.cooldownLeft(key)), 15, 0xFFFFFFFF, true);
+            host.cooldownLabel = Ui.text(c, GuardService.cooldownText(host.store.unlock.cooldownLeft(key)), 15, 0xFFFFFFFF, true);
             host.cooldownLabel.setGravity(Gravity.CENTER);
             box.addView(host.cooldownLabel, Ui.fill(c, 22));
-            if (host.store.emergencyAvailable() && host.store.dailyCodeVisible()) {
+            if (host.store.unlock.emergencyAvailable() && host.store.unlock.dailyCodeVisible()) {
                 final LinearLayout urgent = Ui.column(c);
                 urgent.setGravity(Gravity.CENTER_HORIZONTAL);
                 box.addView(urgent, Ui.fill(c, 16));
-                TextView ask = overlayButton(c, "Hitno otključavanje (" + Store.EMERGENCY_MS / 60000L + " min)");
+                TextView ask = overlayButton(c, "Hitno otključavanje (" + Unlocks.EMERGENCY_MS / 60000L + " min)");
                 ask.setTextColor(Ui.NIGHT_MUTED);
                 ask.setBackground(null);
                 ask.setOnClickListener(v -> showQuiz(urgent, () -> showEmergencyPad(urgent, key, code), null));
                 urgent.addView(ask);
             }
-        } else if (code && !GuardService.hard(kind) && !host.store.dailyCodeVisible()) {
+        } else if (code && !GuardService.hard(kind) && !host.store.unlock.dailyCodeVisible()) {
             // Šifra van 17–22 ne radi, pa nema smisla igrati igricu ili odgovarati na pitanja.
             TextView later = Ui.text(c, "Otključavanje je moguće samo od " + DailyCode.CHANGE_HOUR + ":00 do "
                     + DailyCode.LOCK_HOUR + ":00, uz igricu ili pitanja i dnevnu šifru.", 14, Ui.NIGHT_MUTED, false);
             later.setGravity(Gravity.CENTER);
             box.addView(later, Ui.fill(c, 22));
-        } else if (code && !GuardService.hard(kind) && UnlockCost.next(host.store.unlocksToday()) == null) {
+        } else if (code && !GuardService.hard(kind) && UnlockCost.next(host.store.unlock.unlocksToday()) == null) {
             // Svako otključavanje u danu je skuplje, a posle poslednjeg nema više do sutra.
             TextView spent = Ui.text(c, "Danas si već otključao " + UnlockCost.MAX
                     + " puta. Sledeće otključavanje je moguće sutra od " + DailyCode.CHANGE_HOUR + ":00.", 14, Ui.NIGHT_MUTED, false);
@@ -280,7 +281,7 @@ public final class BlockOverlayContent {
     /** Pitanje pre šifre. Tačan odgovor vodi dalje, a pogrešan traži više tačnih zaredom. */
     private void showQuiz(final LinearLayout area, final Runnable onPass, String notice) {
         final Context c = host;
-        int done = host.store.unlocksToday();
+        int done = host.store.unlock.unlocksToday();
         UnlockCost cost = UnlockCost.emergency(done);
         if (notice == null) Quiz.LADDER.atLeast(cost.answers);
         String ch = Ui.unlockChallenge(c);
@@ -335,13 +336,13 @@ public final class BlockOverlayContent {
         area.addView(rulesNote(host), Ui.fill(host, code ? 6 : 0));
         final PinPad pad = new PinPad(host, true);
         pad.setListener(pin -> {
-            if (host.store.cooldownLeft(key) > 0) {
+            if (host.store.unlock.cooldownLeft(key) > 0) {
                 host.safeCheck(); // pauza je počela dok je tastatura bila otvorena
                 return;
             }
-            String err = host.store.tryCode(pin);
+            String err = host.store.unlock.tryCode(pin);
             if (err == null) {
-                host.store.startUnlock(key);
+                host.store.unlock.startUnlock(key);
                 host.safeCheck(); // another matching domain or rule may still require a block
             } else {
                 pad.clear();
@@ -358,9 +359,9 @@ public final class BlockOverlayContent {
         TextView t = Ui.text(c, "Hitno otključavanje", 20, 0xFFFFFFFF, true);
         t.setGravity(Gravity.CENTER);
         area.addView(t, Ui.fill(c, 0));
-        String times = Store.EMERGENCY_PER_DAY == 1 ? "samo jednom dnevno"
-                : Store.EMERGENCY_PER_DAY + " puta dnevno";
-        TextView note = Ui.text(c, "Otključava na " + Store.EMERGENCY_MS / 60000L
+        String times = Unlocks.EMERGENCY_PER_DAY == 1 ? "samo jednom dnevno"
+                : Unlocks.EMERGENCY_PER_DAY + " puta dnevno";
+        TextView note = Ui.text(c, "Otključava na " + Unlocks.EMERGENCY_MS / 60000L
                 + " min i može se iskoristiti " + times + ". Ako ga sada potrošiš, do ponoći ga više nemaš.",
                 13, Ui.NIGHT_MUTED, false);
         note.setGravity(Gravity.CENTER);
@@ -368,14 +369,14 @@ public final class BlockOverlayContent {
         if (code) area.addView(codeNote(c), Ui.fill(c, 8));
         final PinPad pad = new PinPad(c, true);
         pad.setListener(pin -> {
-            if (!host.store.emergencyAvailable()) {
+            if (!host.store.unlock.emergencyAvailable()) {
                 pad.clear();
                 pad.setMessage("Hitno otključavanje je danas već iskorišćeno");
                 return;
             }
-            String err = host.store.tryCode(pin);
+            String err = host.store.unlock.tryCode(pin);
             if (err == null) {
-                host.store.startEmergency(key);
+                host.store.unlock.startEmergency(key);
                 host.safeCheck();
             } else {
                 pad.clear();
@@ -393,8 +394,8 @@ public final class BlockOverlayContent {
 
     /** Upozorenje pre otključavanja: koliko traje i šta sledi posle. */
     private static TextView rulesNote(Context c) {
-        TextView t = Ui.text(c, "Otključano je " + Store.UNLOCK_USE_MS / 60000L
-                + " min, a posle toga " + Store.UNLOCK_COOLDOWN_MS / 60000L
+        TextView t = Ui.text(c, "Otključano je " + Unlocks.UNLOCK_USE_MS / 60000L
+                + " min, a posle toga " + Unlocks.UNLOCK_COOLDOWN_MS / 60000L
                 + " min nema otključavanja ničega, ni šifrom.", 13, Ui.NIGHT_MUTED, false);
         t.setGravity(Gravity.CENTER);
         return t;

@@ -1,6 +1,7 @@
 package com.cuvar.app;
 
 import com.cuvar.app.data.Store;
+import com.cuvar.app.data.Sessions;
 import com.cuvar.app.i18n.Translit;
 import com.cuvar.app.rules.DailySchedule;
 import com.cuvar.app.ui.CheckRow;
@@ -76,8 +77,8 @@ public class RulesActivity extends SubActivity {
         add.setOnClickListener(v -> addItem());
         content.addView(add, Ui.fill(this, 14));
 
-        List<DailySchedule.Rule> rules = store.schedulesNow();
-        List<DailySchedule.Rule> next = store.schedules();
+        List<DailySchedule.Rule> rules = store.modes.schedulesNow();
+        List<DailySchedule.Rule> next = store.modes.schedules();
         PackageManager pm = getPackageManager();
 
         // 1. Šta važi upravo sada.
@@ -88,7 +89,7 @@ public class RulesActivity extends SubActivity {
             now.addView(Ui.text(this, "⛔ Noćna blokada do 06:00: sve ispod je zaključano", 15, Ui.ACCENT, true));
             any = true;
         }
-        for (DailySchedule.Rule r : store.activeSchedules()) {
+        for (DailySchedule.Rule r : store.modes.activeSchedules()) {
             int n = items(r, pm, null).size();
             if (n == 0) continue;
             now.addView(Ui.text(this, "⛔ " + r.name + " do " + hm(r.end) + ": blokirano "
@@ -96,7 +97,7 @@ public class RulesActivity extends SubActivity {
             any = true;
         }
         if (!any) now.addView(Ui.text(this, "Nijedan režim sada ne blokira", 15, Ui.INK, true));
-        now.addView(Ui.text(this, store.dailyCodeVisible() ? "Zaključano se sada otvara dnevnom šifrom (do 22:00)"
+        now.addView(Ui.text(this, store.unlock.dailyCodeVisible() ? "Zaključano se sada otvara dnevnom šifrom (do 22:00)"
                 : "Zaključano se otvara dnevnom šifrom od 17:00 do 22:00", 13, Ui.MUTED, false), Ui.fill(this, 6));
         content.addView(now, Ui.fill(this, 8));
 
@@ -397,7 +398,7 @@ public class RulesActivity extends SubActivity {
         for (int i = 0; i < rules.size(); i++) {
             String id = rules.get(i).id;
             boolean on = rows.get(i).isChecked();
-            ok &= site ? store.setScheduleSite(id, key, on) : store.setScheduleApp(id, key, on);
+            ok &= site ? store.modes.setScheduleSite(id, key, on) : store.modes.setScheduleApp(id, key, on);
         }
         if (!ok) {
             Toast.makeText(this, Ui.cyr("Režim koji sada traje ne može da izgubi stavku dok traje"), Toast.LENGTH_LONG).show();
@@ -406,13 +407,13 @@ public class RulesActivity extends SubActivity {
     }
 
     private void editApp(String pkg, String label) {
-        List<DailySchedule.Rule> rules = store.schedules();
+        List<DailySchedule.Rule> rules = store.modes.schedules();
         String dom = store.linkedSite(pkg);
         List<String> siteRules = store.linkedSiteRules(pkg);
         Set<String> in = new HashSet<>();
         for (DailySchedule.Rule r : rules) if (r.apps.contains(pkg) || covers(dom, r.sites)) in.add(r.id);
         Set<String> now = new HashSet<>();
-        for (DailySchedule.Rule r : store.schedulesNow()) {
+        for (DailySchedule.Rule r : store.modes.schedulesNow()) {
             if (r.enabled && (r.apps.contains(pkg) || covers(dom, r.sites))) now.add(r.id);
         }
 
@@ -445,7 +446,7 @@ public class RulesActivity extends SubActivity {
         opens.setText(String.valueOf(store.appOpens(pkg)));
         box.addView(opens, Ui.fill(this, 6));
         box.addView(Sheet.label(this, "Najduže u komadu, u minutima, pa pauza od "
-                + Store.SESSION_BREAK_MS / 60000L + " min (0 = bez)"), Ui.fill(this, 14));
+                + Sessions.SESSION_BREAK_MS / 60000L + " min (0 = bez)"), Ui.fill(this, 14));
         EditText session = Sheet.input(this, "0", true);
         session.setText(String.valueOf(store.appSession(pkg)));
         box.addView(session, Ui.fill(this, 6));
@@ -459,7 +460,7 @@ public class RulesActivity extends SubActivity {
         night.setChecked(wasFree);
         box.addView(night, Ui.fill(this, 14));
         box.addView(Ui.text(this, "Danas korišćeno: " + Ui.fmt(store.usedShared(pkg)) + ", otvoreno "
-                + Ui.count(store.opensToday("app:" + pkg), "put", "puta", "puta"), 13, Ui.MUTED, false),
+                + Ui.count(store.usageLog.opensToday("app:" + pkg), "put", "puta", "puta"), 13, Ui.MUTED, false),
                 Ui.fill(this, 8));
 
         Sheet sheet = new Sheet(this, label).view(box)
@@ -491,7 +492,7 @@ public class RulesActivity extends SubActivity {
                             for (int i = 0; i < rules.size(); i++) {
                                 if (rows.get(i).isChecked()) continue;
                                 for (String x : rules.get(i).sites) {
-                                    if (Links.covers(dom, x) && !store.setScheduleSite(rules.get(i).id, x, false)) busy();
+                                    if (Links.covers(dom, x) && !store.modes.setScheduleSite(rules.get(i).id, x, false)) busy();
                                 }
                             }
                         }
@@ -523,8 +524,8 @@ public class RulesActivity extends SubActivity {
                     return true;
                 }
                 for (DailySchedule.Rule r : rules) {
-                    if (r.apps.contains(pkg) && !store.setScheduleApp(r.id, pkg, false)) busy();
-                    for (String x : r.sites) if (dom != null && Links.covers(dom, x) && !store.setScheduleSite(r.id, x, false)) busy();
+                    if (r.apps.contains(pkg) && !store.modes.setScheduleApp(r.id, pkg, false)) busy();
+                    for (String x : r.sites) if (dom != null && Links.covers(dom, x) && !store.modes.setScheduleSite(r.id, x, false)) busy();
                 }
                 store.setApp(pkg, false, 0, 0, 0);
                 for (String x : siteRules) store.removeSite(x);
@@ -546,11 +547,11 @@ public class RulesActivity extends SubActivity {
             editApp(app, appLabel(getPackageManager(), app));
             return;
         }
-        List<DailySchedule.Rule> rules = store.schedules();
+        List<DailySchedule.Rule> rules = store.modes.schedules();
         Set<String> in = new HashSet<>();
         for (DailySchedule.Rule r : rules) if (r.sites.contains(domain)) in.add(r.id);
         Set<String> now = new HashSet<>();
-        for (DailySchedule.Rule r : store.schedulesNow()) if (r.enabled && r.sites.contains(domain)) now.add(r.id);
+        for (DailySchedule.Rule r : store.modes.schedulesNow()) if (r.enabled && r.sites.contains(domain)) now.add(r.id);
         int current = store.siteLimit(domain);
 
         LinearLayout box = Ui.column(this);
@@ -591,7 +592,7 @@ public class RulesActivity extends SubActivity {
                     render();
                     return true;
                 }
-                for (DailySchedule.Rule r : rules) if (in.contains(r.id) && !store.setScheduleSite(r.id, domain, false)) busy();
+                for (DailySchedule.Rule r : rules) if (in.contains(r.id) && !store.modes.setScheduleSite(r.id, domain, false)) busy();
                 if (current >= 0) store.removeSite(domain);
                 pendingToast();
                 render();

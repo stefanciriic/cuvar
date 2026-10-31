@@ -1,21 +1,12 @@
 package com.cuvar.app.data;
 
-import com.cuvar.app.GuardService;
 import com.cuvar.app.i18n.Translit;
-import com.cuvar.app.rules.CodeAttempts;
 import com.cuvar.app.rules.DailyCode;
 import com.cuvar.app.rules.DailySchedule;
-import com.cuvar.app.rules.DayLimit;
 import com.cuvar.app.rules.DomainRules;
-import com.cuvar.app.rules.NotifCounts;
 import com.cuvar.app.rules.RuleMerge;
-import com.cuvar.app.rules.SessionLimit;
-import com.cuvar.app.rules.TrustedClock;
-import com.cuvar.app.rules.UnlockStreak;
-import com.cuvar.app.rules.UnlockTimer;
 import com.cuvar.app.rules.UsageCalendar;
 import com.cuvar.app.ui.Ui;
-import com.cuvar.app.web.Hosts;
 import com.cuvar.app.web.Links;
 
 import android.content.Context;
@@ -27,22 +18,17 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.security.SecureRandom;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Calendar;
-import java.util.Date;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.TimeZone;
 
 /** Sva podešavanja i izmereno vreme. Čuva se samo na telefonu. */
 public final class Store {
@@ -55,69 +41,61 @@ public final class Store {
         return instance;
     }
 
-    private final SharedPreferences sp;
-    private final JSONObject apps;   // paket -> {lock, limit}
-    private final JSONObject sites;  // domen -> {limit}
-    private final JSONObject usage;  // dan -> {ključ: ms}
-    private final JSONObject opens;  // dan -> {"app:paket" ili "try:ključ": koliko puta}
-    private final JSONObject sessions; // paket -> {u: ms u komadu, l: poslednji put viđena, b: pauza do}
-    private final List<DailySchedule.Rule> schedules = new ArrayList<>();
+    public final Focus focus = new Focus(this);
+    public final Clock clock = new Clock(this);
+    public final Unlocks unlock = new Unlocks(this);
+    public final Modes modes = new Modes(this);
+    public final UsageLog usageLog = new UsageLog(this);
+    public final DayLimits dayLimits = new DayLimits(this);
+    public final GuardLog guardLog = new GuardLog(this);
+    public final Sessions sessions = new Sessions(this);
+    final SharedPreferences sp;
+    final JSONObject apps;   // paket -> {lock, limit}
+    final JSONObject sites;  // domen -> {limit}
     // Pravila koja servis zaista primenjuje. Pooštravanje važi odmah, a popuštanje tek od sledećeg dana:
     // ovde ostaje strožija verzija dok se dan ne promeni (vidi enforce()).
-    private JSONObject eApps;
-    private JSONObject eSites;
-    private final List<DailySchedule.Rule> eSchedules = new ArrayList<>();
-    private final JSONObject links;   // paket -> domen njegovog sajta; "" = razdvojen poznat par (vidi Links)
-    private final Set<String> eLinks = new HashSet<>(); // parovi "paket|domen" koji sada važe
-    private List<DailySchedule.Rule> expanded;           // važeći režimi sa povezanim stavkama
-    private String eDay;
-    private boolean eNight;
-    private boolean eProtect;
+    JSONObject eApps;
+    JSONObject eSites;
+    final List<DailySchedule.Rule> eSchedules = new ArrayList<>();
+    final JSONObject links;   // paket -> domen njegovog sajta; "" = razdvojen poznat par (vidi Links)
+    final Set<String> eLinks = new HashSet<>(); // parovi "paket|domen" koji sada važe
+    List<DailySchedule.Rule> expanded;           // važeći režimi sa povezanim stavkama
+    String eDay;
+    boolean eNight;
+    boolean eProtect;
     /** Aplikacije koje noćna blokada ne zaključava, kako sada važi. */
-    private final Set<String> eNightFree = new HashSet<>();
-    private final Set<String> eCodeFree = new HashSet<>();
-    private boolean dirty;
-    private long lastSave;
-    private final CodeAttempts codeTries = new CodeAttempts();
-    private final int boot;          // redni broj paljenja telefona, -1 ako nije poznat
-    private final JSONObject unlocks; // "app:paket" / "site:domen" -> kada je otključano PIN-om
-    private final JSONObject emergency; // hitno otključavanje: koliko je danas iskorišćeno i šta je otključano
-    private final Set<String> focusApps = new HashSet<>();
-    private final Set<String> focusSites = new HashSet<>();
-    private long focusUntil;
-    private boolean stampMoved;        // elapsed() je posle restarta pomerio žig, treba ga sačuvati
-    private final android.content.ContentResolver resolver;
-    private long clockOff;             // pouzdano vreme = vreme od paljenja + clockOff
-    private long clockSaved;           // kada je pouzdano vreme poslednji put sačuvano (vreme od paljenja)
-    private long skewSaved;            // koliko je sat telefona bio pomeren pri poslednjem čuvanju
-    private TimeZone zone;             // vremenska zona zapamćena u ovom paljenju telefona
+    final Set<String> eNightFree = new HashSet<>();
+    final Set<String> eCodeFree = new HashSet<>();
+    boolean dirty;
+    long lastSave;
+    final int boot;          // redni broj paljenja telefona, -1 ako nije poznat
 
     private Store(Context c) {
         sp = c.getSharedPreferences("cuvar", Context.MODE_PRIVATE);
-        resolver = c.getContentResolver();
+        clock.resolver = c.getContentResolver();
         boot = bootCount(c);
-        startClock();
-        unlocks = parse(sp.getString("unlocks", "{}"));
-        emergency = parse(sp.getString("emergency", "{}"));
-        loadFocus();
-        loadCodeLockout();
+        clock.startClock();
+        unlock.unlocks = parse(sp.getString("unlocks", "{}"));
+        unlock.emergency = parse(sp.getString("emergency", "{}"));
+        focus.loadFocus();
+        unlock.loadCodeLockout();
         apps = parse(sp.getString("apps", "{}"));
         sites = parse(sp.getString("sites", "{}"));
         links = parse(sp.getString("links", "{}"));
-        usage = parse(sp.getString("usage", "{}"));
-        opens = parse(sp.getString("opens", "{}"));
-        sessions = parse(sp.getString("sessions", "{}"));
-        dropSiteHistory();
-        migrateSchedule();
-        loadSchedules();
-        workEveryDay();
-        prune();
+        usageLog.usage = parse(sp.getString("usage", "{}"));
+        usageLog.opens = parse(sp.getString("opens", "{}"));
+        sessions.sessions = parse(sp.getString("sessions", "{}"));
+        usageLog.dropSiteHistory();
+        modes.migrateSchedule();
+        modes.loadSchedules();
+        modes.workEveryDay();
+        usageLog.prune();
         loadEnforced();
-        countOnlyGuarded(c);
+        dayLimits.countOnlyGuarded(c);
         if (sp.contains("pin")) sp.edit().remove("pin").apply(); // PIN više ne postoji, otključava samo dnevna šifra
     }
 
-    private static JSONObject parse(String s) {
+    static JSONObject parse(String s) {
         try {
             return new JSONObject(s == null ? "{}" : s);
         } catch (JSONException e) {
@@ -125,7 +103,7 @@ public final class Store {
         }
     }
 
-    private static List<String> keysOf(JSONObject o) {
+    static List<String> keysOf(JSONObject o) {
         List<String> out = new ArrayList<>();
         Iterator<String> it = o.keys();
         while (it.hasNext()) {
@@ -134,412 +112,19 @@ public final class Store {
         return out;
     }
 
-    // ---------- Ručni Fokus režim ----------
-
-    private void loadFocus() {
-        JSONObject o = parse(sp.getString("focus", "{}"));
-        focusUntil = Math.max(0L, o.optLong("until", 0L));
-        JSONArray a = o.optJSONArray("apps");
-        for (int i = 0; a != null && i < a.length(); i++) {
-            String p = a.optString(i, "");
-            if (!p.isEmpty()) focusApps.add(p);
-        }
-        JSONArray s = o.optJSONArray("sites");
-        for (int i = 0; s != null && i < s.length(); i++) {
-            String d = s.optString(i, "");
-            if (!d.isEmpty()) focusSites.add(d);
-        }
+    /** Pouzdano trenutno vreme u milisekundama (vidi Clock). Pravila uzimaju vreme samo odavde. */
+    public long now() {
+        return clock.now();
     }
 
-    private void saveFocus() {
-        try {
-            JSONObject o = new JSONObject();
-            o.put("until", focusUntil);
-            o.put("apps", new JSONArray(focusApps));
-            o.put("sites", new JSONArray(focusSites));
-            sp.edit().putString("focus", o.toString()).apply();
-        } catch (JSONException ignored) {
-        }
-    }
+    // ---------- Paljenje telefona ----------
 
-    public synchronized boolean focusActive() {
-        if (focusUntil <= now()) {
-            if (focusUntil != 0L || !focusApps.isEmpty() || !focusSites.isEmpty()) {
-                focusUntil = 0L;
-                focusApps.clear();
-                focusSites.clear();
-                saveFocus();
-            }
-            return false;
-        }
-        return true;
-    }
-
-    public synchronized long focusLeft() {
-        return focusActive() ? Math.max(0L, focusUntil - now()) : 0L;
-    }
-
-    public synchronized Set<String> focusApps() {
-        return new HashSet<>(focusApps);
-    }
-
-    public synchronized Set<String> focusSites() {
-        return new HashSet<>(focusSites);
-    }
-
-    public synchronized boolean focusHasSites() {
-        return focusActive() && !focusSites.isEmpty();
-    }
-
-    public synchronized boolean focusAllowsApp(String pkg) {
-        return focusActive() && focusApps.contains(pkg);
-    }
-
-    public synchronized boolean focusAllowsSite(String host) {
-        return focusActive() && host != null && DailySchedule.matchDomain(host, focusSites) != null;
-    }
-
-    public synchronized void startFocus(long durationMs, Collection<String> apps, Collection<String> sites) {
-        focusApps.clear();
-        focusApps.addAll(apps);
-        focusSites.clear();
-        for (String site : sites) {
-            String host = Hosts.hostOf(site);
-            if (host != null && host.contains(".")) focusSites.add(host);
-        }
-        focusUntil = now() + Math.max(1L, durationMs);
-        saveFocus();
-    }
-
-    public synchronized void stopFocus() {
-        focusUntil = 0L;
-        focusApps.clear();
-        focusSites.clear();
-        saveFocus();
-    }
-
-    // ---------- Dnevna šifra: provera ----------
-
-    /** Vraća pokušaje i kratku blokadu i posle restartovanja procesa. */
-    private void loadCodeLockout() {
-        JSONObject o = parse(sp.getString("codeLockout", "{}"));
-        codeTries.fails = Math.max(0, o.optInt("fails", 0));
-        boolean sameBoot = boot != -1 && o.optInt("boot", -2) == boot;
-        codeTries.blockedUntil = CodeAttempts.restore(o.optLong("wall", 0L), o.optLong("el", 0L), sameBoot,
-                now(), SystemClock.elapsedRealtime());
-    }
-
-    private void saveCodeLockout() {
-        long now = now();
-        long left = codeTries.waitLeft(SystemClock.elapsedRealtime());
-        try {
-            JSONObject o = new JSONObject();
-            o.put("fails", codeTries.fails);
-            o.put("wall", now + left);
-            o.put("el", SystemClock.elapsedRealtime() + left);
-            o.put("boot", boot);
-            sp.edit().putString("codeLockout", o.toString()).apply();
-        } catch (JSONException ignored) {
-        }
-    }
-
-    /** Vraća null ako je dnevna šifra tačna, inače poruku. Važi samo od 17:00 do 22:00; 5 grešaka donosi 30 s čekanja. */
-    public synchronized String tryCode(String code) {
-        long now = SystemClock.elapsedRealtime();
-        if (codeTries.expire(now)) saveCodeLockout();
-        long wait = codeTries.waitLeft(now);
-        if (wait > 0) {
-            return "Previše pokušaja. Sačekaj " + CodeAttempts.waitSeconds(wait) + " s";
-        }
-        if (!dailyCodeVisible()) {
-            return "Dnevna šifra važi od " + DailyCode.CHANGE_HOUR + ":00 do " + DailyCode.LOCK_HOUR + ":00";
-        }
-        if (dailyCode().equals(code)) {
-            codeTries.success();
-            saveCodeLockout();
-            return null;
-        }
-        boolean blocked = codeTries.fail(now);
-        saveCodeLockout();
-        return blocked ? "Previše pokušaja. Sačekaj " + CodeAttempts.WAIT_MS / 1000 + " s" : "Pogrešna dnevna šifra";
-    }
-
-    // ---------- Otključavanje sa pauzom ----------
-
-    /** Koliko se dugo sme koristiti posle otključavanja šifrom. */
-    public static final long UNLOCK_USE_MS = UnlockTimer.USE_MS;
-    /** Koliko posle toga nema nikakvog otključavanja. */
-    public static final long UNLOCK_COOLDOWN_MS = UnlockTimer.COOLDOWN_MS;
-
-    private static int bootCount(Context c) {
+    static int bootCount(Context c) {
         try {
             return Settings.Global.getInt(c.getContentResolver(), Settings.Global.BOOT_COUNT, -1);
         } catch (Throwable t) {
             return -1;
         }
-    }
-
-    /** Pamti da je stavka upravo otključana; ponovno otključavanje dok traje pauza ne pomera vreme. */
-    public synchronized void startUnlock(String key) {
-        if (sinceUnlock(key) >= 0) {
-            return;
-        }
-        saveUnlock(key, 0);
-        countUnlock();
-    }
-
-    // ---------- Otključavanja po danima (za niz dana bez otključavanja) ----------
-
-    /** Upisuje jedno otključavanje (šifrom ili hitno) u današnji dan; čuva se 70 dana. */
-    private void countUnlock() {
-        unlockSince();
-        JSONObject o = parse(sp.getString("unlockDays", "{}"));
-        String d = day();
-        try {
-            o.put(d, o.optInt(d, 0) + 1);
-        } catch (JSONException e) {
-            return;
-        }
-        List<String> days = keysOf(o);
-        Collections.sort(days);
-        while (days.size() > 70) o.remove(days.remove(0));
-        sp.edit().putString("unlockDays", o.toString()).apply();
-    }
-
-    /** Jedna primljena notifikacija od aplikacije (samo paket, bez teksta). */
-    public synchronized void countNotification(String pkg) {
-        Map<String, Map<String, Integer>> d = NotifCounts.decode(sp.getString("notifDays", ""));
-        NotifCounts.add(d, day(), pkg);
-        SharedPreferences.Editor ed = sp.edit().putString("notifDays", NotifCounts.encode(d));
-        if (!sp.contains("notifSince")) ed.putString("notifSince", day());
-        ed.apply();
-    }
-
-    /** Notifikacije po danu ("yyyyMMdd") i aplikaciji, poslednjih 14 dana. */
-    public synchronized Map<String, Map<String, Integer>> notifDays() {
-        return NotifCounts.decode(sp.getString("notifDays", ""));
-    }
-
-    /** Dan od kog se notifikacije broje, ili null ako još nijedna nije izbrojana. */
-    public synchronized String notifSince() {
-        return sp.getString("notifSince", null);
-    }
-
-    /** Koliko je puta danas otključano (šifrom ili hitno). */
-    public synchronized int unlocksToday() {
-        Integer n = unlockDays().get(day());
-        return n == null ? 0 : n;
-    }
-
-    /** Broj otključavanja po danu ("yyyyMMdd"). */
-    public synchronized Map<String, Integer> unlockDays() {
-        JSONObject o = parse(sp.getString("unlockDays", "{}"));
-        Map<String, Integer> out = new HashMap<>();
-        for (String k : keysOf(o)) out.put(k, o.optInt(k, 0));
-        return out;
-    }
-
-    /** Dan od kada se broje otključavanja; prvi poziv ga postavlja na danas. */
-    public synchronized String unlockSince() {
-        String s = sp.getString("unlockSince", null);
-        if (s == null) {
-            s = day();
-            sp.edit().putString("unlockSince", s).apply();
-        }
-        return s;
-    }
-
-    public synchronized int unlockStreak() {
-        return UnlockStreak.current(unlockDays(), day(), unlockSince());
-    }
-
-    /** Koliko je još ostalo od 5 minuta korišćenja (0 ako nije otključano). */
-    public synchronized long unlockLeft(String key) {
-        return UnlockTimer.useLeft(sinceUnlock(key));
-    }
-
-    /**
-     * Koliko je još ostalo do kraja pauze u kojoj se ne može otključati (0 ako pauze nema).
-     * Pauza važi za sve: dok traje otključavanje ili pauza bilo čega, ništa drugo se ne otključava PIN-om.
-     */
-    public synchronized long cooldownLeft(String key) {
-        long left = 0;
-        for (String k : keysOf(unlocks)) {
-            left = Math.max(left, UnlockTimer.cooldownFor(sinceUnlock(k), k.equals(key)));
-        }
-        return left;
-    }
-
-    /** Koliko još traju otključavanje i pauza bilo čega; dotle se postojeća pravila ne mogu menjati. */
-    public synchronized long unlockBusyLeft() {
-        long left = 0;
-        for (String k : keysOf(unlocks)) {
-            left = Math.max(left, UnlockTimer.busyLeft(sinceUnlock(k)));
-        }
-        return left;
-    }
-
-    /** Najduže preostalo vreme korišćenja posle otključavanja bilo čega (0 ako ništa nije otključano). */
-    public synchronized long unlockUseLeft() {
-        long left = 0;
-        for (String k : keysOf(unlocks)) {
-            left = Math.max(left, unlockLeft(k));
-        }
-        return left;
-    }
-
-    /**
-     * Koliko je prošlo od otključavanja, ili -1 ako je i pauza završena.
-     * U istom paljenju telefona meri se vremenom od paljenja, pa pomeranje sata ne pomaže.
-     * Posle restarta meri se pouzdanim vremenom (vidi now()), pa ni pomeranje sata pa restart ne pomaže.
-     */
-    private long sinceUnlock(String key) {
-        JSONObject o = unlocks.optJSONObject(key);
-        if (o == null) {
-            return -1;
-        }
-        long since;
-        if (boot != -1 && o.optInt("boot", -2) == boot) {
-            since = SystemClock.elapsedRealtime() - o.optLong("el", 0L);
-        } else {
-            since = UnlockTimer.sinceAfterRestart(now(), o.optLong("wall", 0L));
-            saveUnlock(key, since); // od sada opet meri vremenom od paljenja
-        }
-        since = Math.max(0L, since);
-        if (UnlockTimer.finished(since)) {
-            unlocks.remove(key);
-            sp.edit().putString("unlocks", unlocks.toString()).apply();
-            return -1;
-        }
-        return since;
-    }
-
-    // ---------- Hitno otključavanje ----------
-
-    /** Koliko traje hitno otključavanje. Jedini izuzetak od pauze posle otključavanja. */
-    public static final long EMERGENCY_MS = 10 * 60000L;
-    /** Koliko puta dnevno sme hitno otključavanje; brojač se vraća u ponoć. */
-    public static final int EMERGENCY_PER_DAY = 1;
-
-    /** Da li danas još ima hitnog otključavanja. */
-    public synchronized boolean emergencyAvailable() {
-        return emergency().optInt("used", 0) < EMERGENCY_PER_DAY;
-    }
-
-    /** Koliko je još ostalo od hitnog otključavanja ove stavke (0 ako ga nema). */
-    public synchronized long emergencyLeft(String key) {
-        JSONObject o = emergency();
-        JSONObject at = o.optJSONObject("at");
-        if (at == null || !key.equals(o.optString("key"))) {
-            return 0;
-        }
-        long since = elapsed(at, EMERGENCY_MS);
-        if (since >= EMERGENCY_MS) {
-            o.remove("at");
-            o.remove("key");
-            saveEmergency();
-            return 0;
-        }
-        if (stampMoved) {
-            saveEmergency();
-        }
-        return EMERGENCY_MS - since;
-    }
-
-    /** Troši jedno hitno otključavanje za stavku; vraća false ako ga danas više nema. */
-    public synchronized boolean startEmergency(String key) {
-        if (!emergencyAvailable()) {
-            return false;
-        }
-        JSONObject o = emergency();
-        try {
-            if (!o.has("day")) {
-                // Pamti se koliko je ostalo do ponoći, pa pomeranje sata ne donosi novi dan ranije.
-                Calendar midnight = calendarNow(); // pouzdano vreme, ne sat telefona
-                midnight.add(Calendar.DAY_OF_MONTH, 1);
-                midnight.set(Calendar.HOUR_OF_DAY, 0);
-                midnight.set(Calendar.MINUTE, 0);
-                midnight.set(Calendar.SECOND, 0);
-                midnight.set(Calendar.MILLISECOND, 0);
-                o.put("day", stamp());
-                o.put("toMidnight", midnight.getTimeInMillis() - now());
-            }
-            o.put("used", o.optInt("used", 0) + 1);
-            o.put("key", key);
-            o.put("at", stamp());
-        } catch (JSONException e) {
-            return false;
-        }
-        saveEmergency();
-        countUnlock();
-        return true;
-    }
-
-    /** Zapis o hitnom otključavanju; posle ponoći brojač kreće ispočetka, a započeto otključavanje traje. */
-    private JSONObject emergency() {
-        JSONObject day = emergency.optJSONObject("day");
-        if (day != null) {
-            long since = elapsed(day, 0L);
-            if (since >= emergency.optLong("toMidnight", 0L)) {
-                emergency.remove("day");
-                emergency.remove("toMidnight");
-                emergency.remove("used");
-                saveEmergency();
-            } else if (stampMoved) {
-                saveEmergency();
-            }
-        }
-        return emergency;
-    }
-
-    private void saveEmergency() {
-        sp.edit().putString("emergency", emergency.toString()).apply();
-    }
-
-    /** Vremenski žig koji se meri isto kao otključavanje: od paljenja telefona, a posle restarta po pouzdanom vremenu. */
-    private JSONObject stamp() throws JSONException {
-        JSONObject o = new JSONObject();
-        o.put("wall", now());
-        o.put("el", SystemClock.elapsedRealtime());
-        o.put("boot", boot);
-        return o;
-    }
-
-    /**
-     * Koliko je prošlo od žiga; posle restarta žig se pomera da opet meri od paljenja.
-     * Ako je sat u međuvremenu vraćen unazad, uzima se ifBack.
-     */
-    private long elapsed(JSONObject t, long ifBack) {
-        stampMoved = false;
-        long since;
-        if (boot != -1 && t.optInt("boot", -2) == boot) {
-            since = SystemClock.elapsedRealtime() - t.optLong("el", 0L);
-        } else {
-            since = now() - t.optLong("wall", 0L);
-            if (since < 0) {
-                since = ifBack;
-            }
-            try {
-                t.put("wall", now() - since);
-                t.put("el", SystemClock.elapsedRealtime() - since);
-                t.put("boot", boot);
-                stampMoved = true;
-            } catch (JSONException ignored) {
-            }
-        }
-        return Math.max(0L, since);
-    }
-
-    private void saveUnlock(String key, long since) {
-        try {
-            JSONObject o = new JSONObject();
-            o.put("wall", now() - since);
-            o.put("el", SystemClock.elapsedRealtime() - since);
-            o.put("boot", boot);
-            unlocks.put(key, o);
-        } catch (JSONException ignored) {
-        }
-        sp.edit().putString("unlocks", unlocks.toString()).apply();
     }
 
     // ---------- Aplikacije ----------
@@ -572,7 +157,7 @@ public final class Store {
         for (String pkg : appKeysNow()) {
             int limit = appLimitNow(pkg);
             int max = appOpensNow(pkg);
-            if ((limit > 0 && usedShared(pkg) >= limit * 60000L) || (max > 0 && opensToday("app:" + pkg) >= max)) out.add(pkg);
+            if ((limit > 0 && usedShared(pkg) >= limit * 60000L) || (max > 0 && usageLog.opensToday("app:" + pkg) >= max)) out.add(pkg);
         }
         return out;
     }
@@ -626,334 +211,6 @@ public final class Store {
         enforce();
     }
 
-    // ---------- Vremenski režimi ----------
-
-    /** Prebacuje stari jedini režim (pre više režima) u prvi režim liste, bez gubitka izbora. */
-    private void migrateSchedule() {
-        if (sp.contains("schedules")) {
-            return;
-        }
-        DailySchedule.Rule first = new DailySchedule.Rule(newScheduleId(), "Režim 1",
-                sp.getBoolean("scheduleEnabled", false),
-                sp.getInt("scheduleStart", 21 * 60), sp.getInt("scheduleEnd", 9 * 60));
-        for (String pkg : keysOf(apps)) {
-            JSONObject o = apps.optJSONObject(pkg);
-            if (o == null || !o.has("scheduled")) continue;
-            if (o.optBoolean("scheduled", false)) first.apps.add(pkg);
-            o.remove("scheduled");
-            if (!o.optBoolean("lock", false) && o.optInt("limit", 0) <= 0) apps.remove(pkg);
-        }
-        first.sites.addAll(sp.getStringSet("scheduledSites", Collections.emptySet()));
-        boolean hadOld = sp.contains("scheduleEnabled") || !first.apps.isEmpty() || !first.sites.isEmpty();
-        if (hadOld) schedules.add(first);
-        sp.edit().putString("apps", apps.toString()).putString("schedules", schedulesJson())
-                .remove("scheduleEnabled").remove("scheduleStart").remove("scheduleEnd")
-                .remove("scheduledSites").apply();
-    }
-
-    private void loadSchedules() {
-        parseSchedules(sp.getString("schedules", "[]"), schedules);
-    }
-
-    private static void parseSchedules(String json, List<DailySchedule.Rule> schedules) {
-        schedules.clear();
-        JSONArray arr;
-        try {
-            arr = new JSONArray(json);
-        } catch (JSONException e) {
-            arr = new JSONArray();
-        }
-        for (int i = 0; i < arr.length(); i++) {
-            JSONObject o = arr.optJSONObject(i);
-            if (o == null) continue;
-            DailySchedule.Rule r = new DailySchedule.Rule(o.optString("id", newScheduleId()),
-                    o.optString("name", "Režim " + (i + 1)), o.optBoolean("enabled", false),
-                    o.optInt("start", 21 * 60), o.optInt("end", 9 * 60));
-            r.days = o.optInt("days", DailySchedule.ALL_DAYS);
-            r.code = o.optBoolean("code", false);
-            JSONArray a = o.optJSONArray("apps");
-            for (int k = 0; a != null && k < a.length(); k++) r.apps.add(a.optString(k));
-            JSONArray s = o.optJSONArray("sites");
-            for (int k = 0; s != null && k < s.length(); k++) r.sites.add(s.optString(k));
-            schedules.add(r);
-        }
-    }
-
-    private String schedulesJson() {
-        return schedulesJson(schedules);
-    }
-
-    private static String schedulesJson(List<DailySchedule.Rule> schedules) {
-        JSONArray arr = new JSONArray();
-        for (DailySchedule.Rule r : schedules) {
-            try {
-                JSONObject o = new JSONObject();
-                o.put("id", r.id);
-                o.put("name", r.name);
-                o.put("enabled", r.enabled);
-                o.put("start", r.start);
-                o.put("end", r.end);
-                o.put("days", r.days);
-                o.put("code", r.code);
-                o.put("apps", new JSONArray(r.apps));
-                o.put("sites", new JSONArray(r.sites));
-                arr.put(o);
-            } catch (JSONException ignored) {
-            }
-        }
-        return arr.toString();
-    }
-
-    private void saveSchedules() {
-        sp.edit().putString("schedules", schedulesJson()).apply();
-        enforce();
-    }
-
-    private static String newScheduleId() {
-        return Long.toString(System.currentTimeMillis(), 36) + Integer.toString((int) (Math.random() * 1296), 36);
-    }
-
-    private DailySchedule.Rule rule(String id) {
-        for (DailySchedule.Rule r : schedules) if (r.id.equals(id)) return r;
-        return null;
-    }
-
-    private static DailySchedule.Rule copy(DailySchedule.Rule r) {
-        return DailySchedule.copy(r);
-    }
-
-    /** Kopije režima, da ih ekran i servis ne menjaju mimo Store-a. */
-    public synchronized List<DailySchedule.Rule> schedules() {
-        List<DailySchedule.Rule> out = new ArrayList<>();
-        for (DailySchedule.Rule r : schedules) out.add(copy(r));
-        return out;
-    }
-
-    /** Važeći periodi; jedan izmenjen režim do jutra može imati više segmenata sa istim id-em. */
-    public synchronized List<DailySchedule.Rule> schedulesNow() {
-        List<DailySchedule.Rule> out = new ArrayList<>();
-        for (DailySchedule.Rule r : enforcedRaw()) out.add(copy(r));
-        return out;
-    }
-
-    public synchronized DailySchedule.Rule schedule(String id) {
-        DailySchedule.Rule r = rule(id);
-        return r == null ? null : copy(r);
-    }
-
-    /** Gotov noćni režim: uključen, bez otključavanja, aplikacije bira korisnik. */
-    public static final String NIGHT_NAME = "Noćno zaključavanje";
-
-    public synchronized DailySchedule.Rule addNightSchedule() {
-        DailySchedule.Rule r = new DailySchedule.Rule(newScheduleId(), NIGHT_NAME, true, 22 * 60 + 30, 6 * 60);
-        schedules.add(r);
-        saveSchedules();
-        return copy(r);
-    }
-
-    public synchronized boolean hasNightSchedule() {
-        for (DailySchedule.Rule r : schedules) if (r.name.equals(NIGHT_NAME)) return true;
-        return false;
-    }
-
-    /** Gotovo radno vreme: svakog dana 09:00–17:00 bez otključavanja, posle toga dnevnom šifrom. */
-    public static final String WORK_NAME = "Radno vreme";
-
-    public synchronized DailySchedule.Rule addWorkSchedule() {
-        DailySchedule.Rule r = new DailySchedule.Rule(newScheduleId(), WORK_NAME, true, 9 * 60, 17 * 60);
-        r.code = true;
-        schedules.add(r);
-        saveSchedules();
-        return copy(r);
-    }
-
-    /** Jednom: postojeće radno vreme sa samo radnim danima važi i vikendom (dodaje dane, ne slabi režim). */
-    private void workEveryDay() {
-        if (sp.getBoolean("workEveryDay", false)) return;
-        boolean changed = false;
-        for (DailySchedule.Rule r : schedules) {
-            if (r.name.equals(WORK_NAME) && r.days == DailySchedule.WORK_DAYS) {
-                r.days = DailySchedule.ALL_DAYS;
-                changed = true;
-            }
-        }
-        if (changed) saveSchedules();
-        sp.edit().putBoolean("workEveryDay", true).apply();
-    }
-
-    public synchronized boolean hasWorkSchedule() {
-        for (DailySchedule.Rule r : schedules) if (r.name.equals(WORK_NAME)) return true;
-        return false;
-    }
-
-    public synchronized DailySchedule.Rule addSchedule() {
-        int n = schedules.size() + 1;
-        while (true) {
-            boolean taken = false;
-            for (DailySchedule.Rule r : schedules) if (r.name.equals("Režim " + n)) taken = true;
-            if (!taken) break;
-            n++;
-        }
-        DailySchedule.Rule r = new DailySchedule.Rule(newScheduleId(), "Režim " + n, false, 21 * 60, 9 * 60);
-        schedules.add(r);
-        saveSchedules();
-        return copy(r);
-    }
-
-    /**
-     * Dok je režim aktivan ne može da se oslabi: isključi, obriše, promeni mu se period, dani ili šifra,
-     * niti da se iz njega uklone aplikacije i sajtovi. Dodavanje i promena naziva su dozvoljeni.
-     */
-    public synchronized boolean scheduleActive(String id) {
-        Calendar now = calendarNow();
-        for (DailySchedule.Rule r : enforced()) {
-            if (r.id.equals(id) && r.active(minuteOf(now), dayOf(now))) return true;
-        }
-        return false;
-    }
-
-    /** Briše režim; vraća false ako je upravo aktivan. */
-    public synchronized boolean removeSchedule(String id) {
-        DailySchedule.Rule r = rule(id);
-        if (r == null) return true;
-        if (scheduleActive(id)) return false;
-        if (schedules.remove(r)) saveSchedules();
-        return true;
-    }
-
-    /** Vraća false (i ništa ne menja) ako bi izmena oslabila aktivan režim. */
-    public synchronized boolean setSchedule(String id, String name, boolean enabled, int start, int end) {
-        DailySchedule.Rule r = rule(id);
-        if (r == null) return true;
-        if (scheduleActive(id) && (!enabled || start != r.start || end != r.end)) return false;
-        r.name = name;
-        r.enabled = enabled;
-        r.start = start;
-        r.end = end;
-        saveSchedules();
-        return true;
-    }
-
-    public synchronized boolean setScheduleDays(String id, int days) {
-        DailySchedule.Rule r = rule(id);
-        if (r == null) return true;
-        if (scheduleActive(id) && days != r.days) return false;
-        r.days = days;
-        saveSchedules();
-        return true;
-    }
-
-    public synchronized boolean setScheduleCode(String id, boolean code) {
-        DailySchedule.Rule r = rule(id);
-        if (r == null) return true;
-        if (scheduleActive(id) && !code && r.code) return false;
-        r.code = code;
-        saveSchedules();
-        return true;
-    }
-
-    public synchronized boolean setScheduleApp(String id, String pkg, boolean selected) {
-        DailySchedule.Rule r = rule(id);
-        if (r == null) return true;
-        if (!selected && r.apps.contains(pkg) && scheduleActive(id)) return false;
-        if (selected) r.apps.add(pkg); else r.apps.remove(pkg);
-        saveSchedules();
-        return true;
-    }
-
-    public synchronized boolean setScheduleSite(String id, String domain, boolean selected) {
-        DailySchedule.Rule r = rule(id);
-        if (r == null) return true;
-        if (!selected && r.sites.contains(domain) && scheduleActive(id)) return false;
-        if (selected) r.sites.add(domain); else r.sites.remove(domain);
-        saveSchedules();
-        return true;
-    }
-
-    private static int minuteOf(Calendar c) {
-        return c.get(Calendar.HOUR_OF_DAY) * 60 + c.get(Calendar.MINUTE);
-    }
-
-    /** 0 = ponedeljak … 6 = nedelja. */
-    private static int dayOf(Calendar c) {
-        return (c.get(Calendar.DAY_OF_WEEK) + 5) % 7;
-    }
-
-    /** Režim koji trenutno blokira aplikaciju, ili null. */
-    public synchronized DailySchedule.Rule scheduleBlockingApp(String pkg) {
-        Calendar now = calendarNow();
-        DailySchedule.Rule r = DailySchedule.blockingApp(enforced(), pkg, minuteOf(now), dayOf(now));
-        return r == null ? null : copy(r);
-    }
-
-    /** Režim koji trenutno blokira host (i poddomene), ili null. */
-    /**
-     * Da li je neki sajt sada blokiran bez otključavanja: uključen režim sa sajtovima upravo traje
-     * ili je dnevni limit nekog sajta potrošen. Tada se ni pregledač u kome Čuvar ne vidi sajt ne otključava.
-     */
-    public synchronized boolean hardSiteBlockNow() {
-        Calendar now = calendarNow();
-        int m = minuteOf(now), d = dayOf(now);
-        for (DailySchedule.Rule r : enforced()) if (!r.sites.isEmpty() && r.active(m, d)) return true;
-        for (String dom : siteKeysNow()) {
-            int limit = siteLimitNow(dom);
-            if (limit > 0 && usedShared("site:" + dom) >= limit * 60000L) return true;
-        }
-        return false;
-    }
-
-    public synchronized DailySchedule.Rule scheduleBlockingSite(String host) {
-        Calendar now = calendarNow();
-        DailySchedule.Rule r = DailySchedule.blockingSite(enforced(), host, minuteOf(now), dayOf(now));
-        return r == null ? null : copy(r);
-    }
-
-    /** Režim sa dnevnom šifrom koji sadrži aplikaciju, ili null. */
-    public synchronized DailySchedule.Rule codeRuleForApp(String pkg) {
-        if (codeFreeNow().contains(pkg)) return null;
-        DailySchedule.Rule r = DailySchedule.codeApp(enforced(), pkg);
-        return r == null ? null : copy(r);
-    }
-
-    /** Režim sa dnevnom šifrom koji sadrži host (i poddomene), ili null. */
-    public synchronized DailySchedule.Rule codeRuleForSite(String host) {
-        // Sajt aplikacije koja je van režima slobodna je slobodan i sam.
-        for (String pkg : codeFreeNow()) {
-            for (String d : Links.domainsOf(eLinks.isEmpty() ? linkPairs() : eLinks, pkg)) {
-                if (Links.covers(d, host)) return null;
-            }
-        }
-        DailySchedule.Rule r = DailySchedule.codeSite(enforced(), host);
-        return r == null ? null : copy(r);
-    }
-
-    /** Režimi koji upravo traju (bez obzira da li imaju aplikacije ili sajtove). */
-    public synchronized List<DailySchedule.Rule> activeSchedules() {
-        Calendar now = calendarNow();
-        List<DailySchedule.Rule> out = new ArrayList<>();
-        for (DailySchedule.Rule r : enforcedRaw()) {
-            if (r.active(minuteOf(now), dayOf(now))) out.add(copy(r));
-        }
-        return out;
-    }
-
-    /** Uključen režim sa dnevnom šifrom koji je upravo aktivan (tada se šifra ne prikazuje), ili null. */
-    public synchronized DailySchedule.Rule activeCodeRule() {
-        Calendar now = calendarNow();
-        for (DailySchedule.Rule r : enforced()) {
-            if (r.code && r.active(minuteOf(now), dayOf(now))) return copy(r);
-        }
-        return null;
-    }
-
-    // ---------- Dnevna šifra ----------
-
-    /** Šifra se prikazuje i važi samo od 17:00 do 22:00. */
-    public synchronized boolean dailyCodeVisible() {
-        int h = calendarNow().get(Calendar.HOUR_OF_DAY);
-        return h >= DailyCode.CHANGE_HOUR && h < DailyCode.LOCK_HOUR;
-    }
-
     // ---------- Zaštita od isključivanja ----------
 
     /** Podešena zaštita: Čuvar ne da da se otvore njegova podešavanja u Pristupačnosti, podaci o aplikaciji i brisanje. */
@@ -975,10 +232,10 @@ public final class Store {
 
     // Servis ova pravila pita više puta pri svakoj proveri ekrana, a menjaju se retko: računaju se jednom
     // i brišu kad se važeća pravila promene (saveEnforced). Pre učitavanja važećih pravila (eApps == null) ne pamte se.
-    private Set<String> cacheAppKeys, cacheSiteKeys, cacheGuarded;
-    private Boolean cacheSiteRules;
+    Set<String> cacheAppKeys, cacheSiteKeys, cacheGuarded;
+    Boolean cacheSiteRules;
 
-    private void clearRuleCache() {
+    void clearRuleCache() {
         expanded = null;
         cacheAppKeys = null;
         cacheSiteKeys = null;
@@ -1070,7 +327,7 @@ public final class Store {
         enforce();
     }
 
-    private Set<String> codeFreeNow() {
+    Set<String> codeFreeNow() {
         roll();
         return eApps == null ? codeFree() : eCodeFree;
     }
@@ -1085,124 +342,8 @@ public final class Store {
     /** Da li noćna blokada upravo traje: od 22:00 do 06:00 sve iz pravila je zaključano. */
     public synchronized boolean nightActive() {
         boolean on = nightBlockNow();
-        int h = calendarNow().get(Calendar.HOUR_OF_DAY);
+        int h = clock.calendarNow().get(Calendar.HOUR_OF_DAY);
         return on && (h >= DailyCode.LOCK_HOUR || h < DailyCode.NIGHT_END_HOUR);
-    }
-
-    /** Šifra koja važi sada (od 17:00 do 17:00 sledećeg dana, po pouzdanom vremenu). */
-    public synchronized String dailyCode() {
-        return DailyCode.code(codeKey(), DailyCode.dayKey(now(), zone()));
-    }
-
-    /** Tajni ključ za dnevnu šifru, nasumičan i samo na ovom telefonu (bez rezervne kopije). */
-    private byte[] codeKey() {
-        String hex = sp.getString("codeKey", null);
-        if (hex == null || hex.length() != 64) {
-            byte[] k = new byte[32];
-            new SecureRandom().nextBytes(k);
-            StringBuilder sb = new StringBuilder();
-            for (byte b : k) sb.append(String.format(Locale.US, "%02x", b & 0xff));
-            hex = sb.toString();
-            sp.edit().putString("codeKey", hex).apply();
-        }
-        byte[] out = new byte[32];
-        for (int i = 0; i < 32; i++) out[i] = (byte) Integer.parseInt(hex.substring(2 * i, 2 * i + 2), 16);
-        return out;
-    }
-
-    // ---------- Pouzdano vreme ----------
-
-    /**
-     * U jednom paljenju telefona vreme se meri od paljenja, pa pomeranje sata ne skraćuje režim
-     * i ne donosi novu šifru ranije. Pamti se i koliko je sat telefona ručno pomeren u odnosu na
-     * pouzdano vreme, pa ni pomeranje sata pa restart ne pomaže: posle paljenja se ta razlika oduzme.
-     * Kad je uključeno automatsko vreme (sa mreže), sat telefona je pouzdan i prati se.
-     */
-    private void startClock() {
-        JSONObject o = parse(sp.getString("clock", "{}"));
-        long el = SystemClock.elapsedRealtime();
-        long wall = System.currentTimeMillis();
-        boolean sameBoot = TrustedClock.sameBoot(o.has("off"), boot, o.optInt("boot", -2), el, o.optLong("el", Long.MAX_VALUE));
-        if (sameBoot) {
-            clockOff = o.optLong("off");
-            zone = TimeZone.getTimeZone(o.optString("zone", TimeZone.getDefault().getID()));
-        } else {
-            clockOff = TrustedClock.offsetAfterBoot(wall, el, o.optLong("last", 0L), o.optLong("skew", 0L), autoTime());
-            // Ručno izabrana zona ne važi ni posle restarta; prati se samo automatska zona.
-            zone = autoZone() || !o.has("zone") ? TimeZone.getDefault() : TimeZone.getTimeZone(o.optString("zone"));
-        }
-        saveClock();
-    }
-
-    private void saveClock() {
-        long el = SystemClock.elapsedRealtime();
-        try {
-            JSONObject o = new JSONObject();
-            o.put("off", clockOff);
-            o.put("boot", boot);
-            o.put("el", el);
-            o.put("last", el + clockOff);
-            skewSaved = System.currentTimeMillis() - (el + clockOff);
-            o.put("skew", skewSaved);
-            o.put("zone", zone.getID());
-            sp.edit().putString("clock", o.toString()).apply();
-        } catch (JSONException ignored) {
-        }
-        clockSaved = el;
-    }
-
-    /** Pouzdano trenutno vreme u milisekundama. */
-    public synchronized long now() {
-        long el = SystemClock.elapsedRealtime();
-        long wall = System.currentTimeMillis();
-        int action = TrustedClock.onRead(el, wall, clockOff, skewSaved, clockSaved, this::autoTime);
-        if (action == TrustedClock.RESET) clockOff = wall - el;
-        if (action != TrustedClock.KEEP) saveClock();
-        return el + clockOff;
-    }
-
-    private long autoTimeAt = -1;
-    private boolean autoTime;
-
-    /** Da li telefon uzima vreme sa mreže (provera najviše jednom u 10 s). */
-    private boolean autoTime() {
-        long el = SystemClock.elapsedRealtime();
-        if (autoTimeAt < 0 || el - autoTimeAt > 10000L) {
-            try {
-                autoTime = Settings.Global.getInt(resolver, Settings.Global.AUTO_TIME, 0) == 1;
-            } catch (Throwable t) {
-                autoTime = false;
-            }
-            autoTimeAt = el;
-        }
-        return autoTime;
-    }
-
-    /**
-     * Vremenska zona: ručna promena zone ne pomera režim do restarta telefona.
-     * Kad telefon sam bira zonu (putovanje), prati se sistemska.
-     */
-    private TimeZone zone() {
-        TimeZone sys = TimeZone.getDefault();
-        if (!sys.getID().equals(zone.getID()) && autoZone()) {
-            zone = sys;
-            saveClock();
-        }
-        return zone;
-    }
-
-    private boolean autoZone() {
-        try {
-            return Settings.Global.getInt(resolver, Settings.Global.AUTO_TIME_ZONE, 0) == 1;
-        } catch (Throwable t) {
-            return false;
-        }
-    }
-
-    private Calendar calendarNow() {
-        Calendar c = Calendar.getInstance(zone());
-        c.setTimeInMillis(now());
-        return c;
     }
 
     // ---------- Sajtovi ----------
@@ -1255,255 +396,28 @@ public final class Store {
             sites.remove(d);
             if (eSites != null) eSites.remove(d);
         }
-        for (List<DailySchedule.Rule> list : java.util.Arrays.asList(schedules, eSchedules)) {
+        for (List<DailySchedule.Rule> list : java.util.Arrays.asList(modes.schedules, eSchedules)) {
             for (DailySchedule.Rule r : list) {
                 if (pkg != null) r.apps.remove(pkg);
                 r.sites.removeAll(domains);
             }
         }
         sp.edit().putString("apps", apps.toString()).putString("sites", sites.toString())
-                .putString("schedules", schedulesJson()).apply();
+                .putString("schedules", modes.schedulesJson()).apply();
         if (eApps != null) saveEnforced();
         enforce();
     }
 
-    // ---------- Izmereno vreme ----------
+    // ---------- Dan ----------
 
     /** Ključ današnjeg dana ("yyyyMMdd") po pouzdanom vremenu, pa pomeranje sata ne vraća dnevne limite. */
     public synchronized String day() {
-        Calendar c = calendarNow();
+        Calendar c = clock.calendarNow();
         return String.format(Locale.US, "%04d%02d%02d",
                 c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH));
     }
 
-    private void prune() {
-        List<String> days = keysOf(usage);
-        Collections.sort(days);
-        while (days.size() > 14) {
-            usage.remove(days.remove(0));
-            dirty = true;
-        }
-    }
-
-    /**
-     * Istorija sajtova se ne čuva: brišu se svi zapisi "web:" (ranije se merio svaki sajt) i vreme
-     * sajtova sa pravilom iz ranijih dana. Današnje vreme sajtova sa pravilom ostaje jer ga troši limit.
-     */
-    private void dropSiteHistory() {
-        String today = day();
-        boolean changed = false;
-        for (String dk : keysOf(usage)) {
-            JSONObject d = usage.optJSONObject(dk);
-            if (d == null) continue;
-            for (String k : keysOf(d)) {
-                if (k.startsWith("web:") || (k.startsWith("site:") && !dk.equals(today))) {
-                    d.remove(k);
-                    changed = true;
-                }
-            }
-        }
-        if (changed) sp.edit().putString("usage", usage.toString()).apply();
-    }
-
-    /** Interval po pouzdanom vremenu: deo pre ponoći pripada prethodnom danu. */
-    public synchronized void addUsageBetween(String key, long from, long to) {
-        if (from >= to) return;
-        for (Map.Entry<String, Long> part : UsageCalendar.split(from, to, zone()).entrySet()) {
-            JSONObject d = usage.optJSONObject(part.getKey());
-            try {
-                if (d == null) {
-                    d = new JSONObject();
-                    usage.put(part.getKey(), d);
-                }
-                d.put(key, d.optLong(key, 0L) + part.getValue());
-            } catch (JSONException ignored) {
-            }
-        }
-        prune();
-        dirty = true;
-        if (SystemClock.elapsedRealtime() - lastSave > 20000L) {
-            flush();
-        }
-    }
-
-    public synchronized long usedToday(String key) {
-        JSONObject d = usage.optJSONObject(day());
-        return d == null ? 0L : d.optLong(key, 0L);
-    }
-
-    public synchronized Map<String, Long> todayMap() {
-        Map<String, Long> out = new HashMap<>();
-        JSONObject d = usage.optJSONObject(day());
-        if (d != null) {
-            for (String k : keysOf(d)) {
-                if (!k.equals(GUARDED_KEY)) out.put(k, d.optLong(k, 0L));
-            }
-        }
-        return out;
-    }
-
-    /** Ključevi poslednjih n kalendarskih dana zaključno sa danas (najstariji prvi), i dani bez korišćenja. */
-    public synchronized List<String> lastDays(int n) {
-        Calendar c = calendarNow();
-        c.add(Calendar.DAY_OF_MONTH, -(n - 1));
-        List<String> out = new ArrayList<>();
-        for (int i = 0; i < n; i++) {
-            out.add(String.format(Locale.US, "%04d%02d%02d",
-                    c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH)));
-            c.add(Calendar.DAY_OF_MONTH, 1);
-        }
-        return out;
-    }
-
-    /** Da li za dan postoji ijedan zapis (pre instalacije Čuvara ih nema). */
-    public synchronized boolean hasDay(String dayKey) {
-        return usage.has(dayKey);
-    }
-
-    public synchronized Map<String, Long> dayMap(String dayKey) {
-        Map<String, Long> out = new HashMap<>();
-        JSONObject d = usage.optJSONObject(dayKey);
-        if (d != null) {
-            for (String k : keysOf(d)) {
-                if (!k.equals(GUARDED_KEY)) out.put(k, d.optLong(k, 0L));
-            }
-        }
-        return out;
-    }
-
-    /** Dan kao "pet 3.10." za prikaz u statistici. */
-    public static String dayLabel(String dayKey) {
-        try {
-            Date d = new SimpleDateFormat("yyyyMMdd", Locale.US).parse(dayKey);
-            return new SimpleDateFormat("EEE d.M.", Ui.locale()).format(d);
-        } catch (Exception e) {
-            return dayKey;
-        }
-    }
-
-    // ---------- Ukupni dnevni limit ----------
-
-    /**
-     * Ključ u izmerenom vremenu pod kojim servis beleži vreme pod pravilima: dok je napred aplikacija
-     * sa pravilom ili se vidi sajt sa pravilom. Nije aplikacija, pa se ne prikazuje u vremenu ni statistici.
-     */
-    public static final String GUARDED_KEY = "limit:guarded";
-
-    /** Danas pod pravilima. Samo ovo troši ukupni dnevni limit; mape, pozivi i ostalo bez pravila ne. */
-    public synchronized long guardedToday() {
-        return usedToday(GUARDED_KEY);
-    }
-
-    /**
-     * Ranije je limit trošilo sve vreme na telefonu. Pri prvom pokretanju ove verzije današnje vreme
-     * pod pravilima se procenjuje iz već izmerenog, a ako po tome limit nije potrošen, današnja
-     * blokada i upozorenje se poništavaju.
-     */
-    private void countOnlyGuarded(Context c) {
-        if (sp.getBoolean("dayLimitGuarded", false)) return;
-        String today = day();
-        JSONObject d = usage.optJSONObject(today);
-        if (d != null && !d.has(GUARDED_KEY)) {
-            Set<String> guarded = guardedApps();
-            guarded.removeAll(GuardService.exemptApps(c));
-            try {
-                d.put(GUARDED_KEY, DayLimit.guardedEstimate(dayMap(today), guarded, siteKeysNow()));
-                dirty = true;
-            } catch (JSONException ignored) {
-            }
-        }
-        SharedPreferences.Editor e = sp.edit().putBoolean("dayLimitGuarded", true);
-        if (!DayLimit.reached(dayLimit(), guardedToday())) e.remove("dayLimitHit").remove("dayLimitWarned");
-        e.apply();
-        flush();
-    }
-
-    /** Ukupni dnevni limit u minutima koji danas važi (0 = isključen); zakazana promena stupa na snagu u ponoć. */
-    public synchronized int dayLimit() {
-        int cur = sp.getInt("dayLimit", 0);
-        String from = sp.getString("dayLimitFrom", null);
-        if (from != null && sp.getInt("dayLimitNext", -1) > 0) {
-            // Zakazano povećanje iz ranije verzije više ne važi: povećava se samo jednom dnevno i malo.
-            sp.edit().remove("dayLimitNext").remove("dayLimitFrom").apply();
-            from = null;
-        }
-        String today = day();
-        int eff = DayLimit.effective(cur, sp.getInt("dayLimitNext", -1), from, today);
-        if (from != null && today.compareTo(from) >= 0) {
-            sp.edit().putInt("dayLimit", eff).remove("dayLimitNext").remove("dayLimitFrom").apply();
-        }
-        return eff;
-    }
-
-    /** Vrednost zakazana od sutra, ili -1 ako je nema. */
-    public synchronized int dayLimitNext() {
-        dayLimit();
-        return sp.contains("dayLimitFrom") ? sp.getInt("dayLimitNext", -1) : -1;
-    }
-
-    /** Strožiji limit (ili uključivanje) važi odmah i poništava zakazano isključivanje. Vraća false ako bi bio blaži. */
-    public synchronized boolean lowerDayLimit(int min) {
-        int cur = dayLimit();
-        if (!DayLimit.appliesNow(cur, min)) return false;
-        sp.edit().putInt("dayLimit", min).remove("dayLimitNext").remove("dayLimitFrom").apply();
-        return true;
-    }
-
-    /** Da li danas još može da se poveća limit (jednom dnevno, samo kad je uključen i još nije potrošen). */
-    public synchronized boolean canRaiseDayLimit() {
-        String d = day();
-        return dayLimit() > 0 && !d.equals(sp.getString("dayLimitRaised", null)) && !d.equals(sp.getString("dayLimitHit", null));
-    }
-
-    /** Da li je ukupni limit danas već potrošen; tada je sve zaključano do ponoći i povećanje ne pomaže. */
-    public synchronized boolean dayLimitHitToday() {
-        return day().equals(sp.getString("dayLimitHit", null));
-    }
-
-    /** Servis beleži da je limit potrošen, pa se posle toga danas više ne može povećati. */
-    /** Zašto bi aplikacija bez pravila bila zaključana do jutra čim dobije pravilo, ili null. */
-    public synchronized String lockedOnceGuarded() {
-        if (nightActive()) return "Sada traje noćna blokada";
-        if (dayLimit() > 0 && dayLimitHitToday()) return "Ukupni dnevni limit je danas potrošen";
-        return null;
-    }
-
-    public synchronized void markDayLimitHit() {
-        String d = day();
-        if (!d.equals(sp.getString("dayLimitHit", null))) sp.edit().putString("dayLimitHit", d).apply();
-    }
-
-    /** Povećava limit za najviše dozvoljeno; vraća koliko je minuta dodato (0 ako danas više ne može). */
-    public synchronized int raiseDayLimit() {
-        if (!canRaiseDayLimit()) return 0;
-        int cur = dayLimit();
-        int add = DayLimit.maxRaise(cur);
-        sp.edit().putInt("dayLimit", cur + add).putString("dayLimitRaised", day()).apply();
-        return add;
-    }
-
-    /** Isključivanje važi tek od sutra. */
-    public synchronized void turnOffDayLimitTomorrow() {
-        if (dayLimit() <= 0) return;
-        Calendar c = calendarNow();
-        c.add(Calendar.DAY_OF_MONTH, 1);
-        String tomorrow = String.format(Locale.US, "%04d%02d%02d",
-                c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH));
-        sp.edit().putInt("dayLimitNext", 0).putString("dayLimitFrom", tomorrow).apply();
-    }
-
-    /** Poništava zakazano isključivanje. */
-    public synchronized void keepDayLimit() {
-        sp.edit().remove("dayLimitNext").remove("dayLimitFrom").apply();
-    }
-
-    /** Da li je danas već stiglo upozorenje pred kraj limita (pa se vraća true samo prvi put). */
-    public synchronized boolean firstDayLimitWarning() {
-        String d = day();
-        if (d.equals(sp.getString("dayLimitWarned", null))) return false;
-        sp.edit().putString("dayLimitWarned", d).apply();
-        return true;
-    }
+    // ---------- Da li je stavka pod pravilom ----------
 
     /** Da li je aplikacija u nekom pravilu: zaključana, sa limitom ili u uključenom režimu. */
     public synchronized boolean appGuarded(String pkg) {
@@ -1525,7 +439,7 @@ public final class Store {
 
     // ---------- Pravila koja važe sada (popuštanje od sutra) ----------
 
-    private void loadEnforced() {
+    void loadEnforced() {
         eDay = sp.getString("eDay", null);
         if (eDay == null) {
             // Prvo pokretanje ove verzije: važi ono što je podešeno.
@@ -1540,7 +454,7 @@ public final class Store {
         eNightFree.addAll(sp.getStringSet("eNightFree", Collections.emptySet()));
         eCodeFree.clear();
         eCodeFree.addAll(sp.getStringSet("eCodeFree", Collections.emptySet()));
-        parseSchedules(sp.getString("eSchedules", "[]"), eSchedules);
+        Modes.parseSchedules(sp.getString("eSchedules", "[]"), eSchedules);
         eLinks.clear();
         JSONArray el = parseArray(sp.getString("eLinks", null));
         if (el == null) eLinks.addAll(linkPairs());
@@ -1548,11 +462,11 @@ public final class Store {
         enforce();
     }
 
-    private void copyToEnforced() {
+    void copyToEnforced() {
         eApps = parse(apps.toString());
         eSites = parse(sites.toString());
         eSchedules.clear();
-        for (DailySchedule.Rule r : schedules) eSchedules.add(copy(r));
+        for (DailySchedule.Rule r : modes.schedules) eSchedules.add(Modes.copy(r));
         eNight = nightBlock();
         eProtect = protectSelf();
         eNightFree.clear();
@@ -1565,9 +479,9 @@ public final class Store {
         saveEnforced();
     }
 
-    private void saveEnforced() {
+    void saveEnforced() {
         sp.edit().putString("eApps", eApps.toString()).putString("eSites", eSites.toString())
-                .putString("eSchedules", schedulesJson(eSchedules)).putString("eDay", eDay)
+                .putString("eSchedules", Modes.schedulesJson(eSchedules)).putString("eDay", eDay)
                 .putBoolean("eNight", eNight).putBoolean("eProtect", eProtect)
                 .putStringSet("eNightFree", new HashSet<>(eNightFree))
                 .putStringSet("eCodeFree", new HashSet<>(eCodeFree))
@@ -1575,7 +489,7 @@ public final class Store {
         clearRuleCache();
     }
 
-    private static JSONArray parseArray(String s) {
+    static JSONArray parseArray(String s) {
         if (s == null) return null;
         try {
             return new JSONArray(s);
@@ -1585,18 +499,18 @@ public final class Store {
     }
 
     /** Dan za odložena popuštanja: menja se u 06:00, kad se završi noćna blokada, a ne u ponoć dok ona traje. */
-    private String rulesDay() {
-        return UsageCalendar.rulesDay(now(), zone(), DailyCode.NIGHT_END_HOUR);
+    String rulesDay() {
+        return UsageCalendar.rulesDay(clock.now(), clock.zone(), DailyCode.NIGHT_END_HOUR);
     }
 
     /** U 06:00 važi tačno ono što je podešeno, i sva odložena popuštanja stupaju na snagu. */
-    private void roll() {
+    void roll() {
         if (eApps == null) return;
         if (!rulesDay().equals(eDay)) copyToEnforced();
     }
 
     /** Posle svake izmene: ono što važi sada postaje strožije od starog i novog podešavanja. */
-    private void enforce() {
+    void enforce() {
         if (eApps == null) return;
         if (!rulesDay().equals(eDay)) {
             copyToEnforced();
@@ -1640,11 +554,11 @@ public final class Store {
             } catch (JSONException ignored) {
             }
         }
-        List<DailySchedule.Rule> nr = DailySchedule.tighten(eSchedules, schedules);
+        List<DailySchedule.Rule> nr = DailySchedule.tighten(eSchedules, modes.schedules);
         if (REMOVE_NOW) {
             // Stavka skinuta iz režima ne čeka 06:00.
             for (DailySchedule.Rule r : nr) {
-                DailySchedule.Rule d = rule(r.id);
+                DailySchedule.Rule d = modes.rule(r.id);
                 if (d == null) continue;
                 r.apps.retainAll(d.apps);
                 r.sites.retainAll(d.sites);
@@ -1658,45 +572,45 @@ public final class Store {
     }
 
     /** Važeći režimi, uz aplikaciju i njen povezan sajt (i obrnuto). */
-    private List<DailySchedule.Rule> enforced() {
+    List<DailySchedule.Rule> enforced() {
         roll();
-        if (eApps == null) return schedules;
+        if (eApps == null) return modes.schedules;
         if (expanded == null) expanded = Links.expand(eSchedules, eLinks);
         return expanded;
     }
 
     /** Važeći režimi tačno kako su podešeni, za prikaz. */
-    private List<DailySchedule.Rule> enforcedRaw() {
+    List<DailySchedule.Rule> enforcedRaw() {
         roll();
-        return eApps == null ? schedules : eSchedules;
+        return eApps == null ? modes.schedules : eSchedules;
     }
 
-    private JSONObject enforcedApps() {
+    JSONObject enforcedApps() {
         roll();
         return eApps == null ? apps : eApps;
     }
 
-    private JSONObject enforcedSites() {
+    JSONObject enforcedSites() {
         roll();
         return eSites == null ? sites : eSites;
     }
 
-    private boolean rawLock(String pkg) {
+    boolean rawLock(String pkg) {
         JSONObject o = enforcedApps().optJSONObject(pkg);
         return o != null && o.optBoolean("lock", false);
     }
 
-    private int rawLimit(String pkg) {
+    int rawLimit(String pkg) {
         JSONObject o = enforcedApps().optJSONObject(pkg);
         return o == null ? 0 : o.optInt("limit", 0);
     }
 
-    private int rawSite(String domain) {
+    int rawSite(String domain) {
         JSONObject o = enforcedSites().optJSONObject(domain);
         return o == null ? -1 : o.optInt("limit", 0);
     }
 
-    private Set<String> linksNow() {
+    Set<String> linksNow() {
         roll();
         return eApps == null ? new HashSet<>(linkPairs()) : eLinks;
     }
@@ -1711,20 +625,20 @@ public final class Store {
         return groupLimit(pkg, true);
     }
 
-    private JSONObject appsOf(boolean now) {
+    JSONObject appsOf(boolean now) {
         return now ? enforcedApps() : apps;
     }
 
-    private JSONObject sitesOf(boolean now) {
+    JSONObject sitesOf(boolean now) {
         return now ? enforcedSites() : sites;
     }
 
-    private Collection<String> pairsOf(boolean now) {
+    Collection<String> pairsOf(boolean now) {
         return now ? linksNow() : linkPairs();
     }
 
     /** Sajtovi sa pravilom koje pokriva povezan sajt aplikacije (npr. youtube.com i m.youtube.com). */
-    private List<String> coveredSites(String pkg, boolean now) {
+    List<String> coveredSites(String pkg, boolean now) {
         List<String> out = new ArrayList<>();
         List<String> bases = Links.domainsOf(pairsOf(now), pkg);
         if (bases.isEmpty()) return out;
@@ -1732,14 +646,14 @@ public final class Store {
         return out;
     }
 
-    private boolean groupLock(String pkg, boolean now) {
+    boolean groupLock(String pkg, boolean now) {
         JSONObject o = appsOf(now).optJSONObject(pkg);
         if (o != null && o.optBoolean("lock", false)) return true;
         for (String k : coveredSites(pkg, now)) if (sitesOf(now).optJSONObject(k).optInt("limit", 0) == 0) return true;
         return false;
     }
 
-    private int groupLimit(String pkg, boolean now) {
+    int groupLimit(String pkg, boolean now) {
         JSONObject o = appsOf(now).optJSONObject(pkg);
         int limit = o == null ? 0 : o.optInt("limit", 0);
         for (String k : coveredSites(pkg, now)) limit = RuleMerge.stricterLimit(limit, sitesOf(now).optJSONObject(k).optInt("limit", 0));
@@ -1747,7 +661,7 @@ public final class Store {
     }
 
     /** Sajt dobija i pravilo cele stavke: aplikacije, njenog sajta i poddomena. */
-    private int groupSite(String domain, boolean now) {
+    int groupSite(String domain, boolean now) {
         JSONObject o = sitesOf(now).optJSONObject(domain);
         int limit = o == null ? -1 : o.optInt("limit", 0);
         for (String pkg : Links.appsOf(pairsOf(now), domain)) {
@@ -1774,7 +688,7 @@ public final class Store {
     }
 
     /** Sajtovi sa sopstvenim pravilom i povezani sajtovi stavki koje imaju pravilo. */
-    private Set<String> siteKeysNow() {
+    Set<String> siteKeysNow() {
         roll();
         if (eApps != null && cacheSiteKeys != null) return cacheSiteKeys;
         Set<String> out = new HashSet<>(keysOf(enforcedSites()));
@@ -1788,7 +702,7 @@ public final class Store {
     }
 
     /** Aplikacije sa sopstvenim pravilom i aplikacije čiji sajt (ili poddomen) ima pravilo. */
-    private Set<String> appKeysNow() {
+    Set<String> appKeysNow() {
         roll();
         if (eApps != null && cacheAppKeys != null) return cacheAppKeys;
         Set<String> out = new HashSet<>(keysOf(enforcedApps()));
@@ -1810,15 +724,15 @@ public final class Store {
         String pkg = key;
         if (key.startsWith("site:")) {
             List<String> owners = Links.appsOf(pairs, key.substring(5));
-            if (owners.isEmpty()) return usedToday(key);
+            if (owners.isEmpty()) return usageLog.usedToday(key);
             pkg = owners.get(0);
         }
         List<String> bases = Links.domainsOf(pairs, pkg);
-        if (bases.isEmpty()) return usedToday(pkg);
+        if (bases.isEmpty()) return usageLog.usedToday(pkg);
         long site = 0;
-        for (String d : bases) site = Math.max(site, usedToday("site:" + d));
-        for (String d : coveredSites(pkg, true)) site = Math.max(site, usedToday("site:" + d));
-        return usedToday(pkg) + site;
+        for (String d : bases) site = Math.max(site, usageLog.usedToday("site:" + d));
+        for (String d : coveredSites(pkg, true)) site = Math.max(site, usageLog.usedToday("site:" + d));
+        return usageLog.usedToday(pkg) + site;
     }
 
     public synchronized String matchSiteNow(String host) {
@@ -1834,7 +748,7 @@ public final class Store {
     // ---------- Aplikacija i sajt kao jedna stavka ----------
 
     /** Podešeni parovi "paket|domen": poznati parovi, osim razdvojenih, i oni koje je korisnik povezao. */
-    private List<String> linkPairs() {
+    List<String> linkPairs() {
         List<String> out = new ArrayList<>();
         for (Map.Entry<String, String> e : Links.KNOWN.entrySet()) {
             if (!links.has(e.getKey())) out.add(Links.pair(e.getKey(), e.getValue()));
@@ -1932,7 +846,7 @@ public final class Store {
         Set<String> described = new HashSet<>();
         for (DailySchedule.Rule e : eSchedules) {
             if (!described.add(e.id)) continue;
-            DailySchedule.Rule d = rule(e.id);
+            DailySchedule.Rule d = modes.rule(e.id);
             if (d == null) {
                 out.add("Režim „" + e.name + "“ se briše");
                 continue;
@@ -1974,12 +888,12 @@ public final class Store {
             for (String k : keysOf(s)) sites.put(k, s.get(k));
         } catch (JSONException ignored) {
         }
-        schedules.clear();
+        modes.schedules.clear();
         Set<String> ids = new HashSet<>();
         for (DailySchedule.Rule r : eSchedules) {
             String id = r.id;
-            while (!ids.add(id)) id = newScheduleId();
-            schedules.add(DailySchedule.copy(r, id));
+            while (!ids.add(id)) id = Modes.newScheduleId();
+            modes.schedules.add(DailySchedule.copy(r, id));
         }
         List<String> want = linkPairs();
         try {
@@ -1987,209 +901,21 @@ public final class Store {
         } catch (JSONException ignored) {
         }
         sp.edit().putString("apps", apps.toString()).putString("sites", sites.toString()).putString("links", links.toString())
-                .putString("schedules", schedulesJson()).putBoolean("night", eNight).putBoolean("protect", eProtect)
+                .putString("schedules", modes.schedulesJson()).putBoolean("night", eNight).putBoolean("protect", eProtect)
                 .putStringSet("nightFree", new HashSet<>(eNightFree))
                 .putStringSet("codeFree", new HashSet<>(eCodeFree))
                 .apply();
         copyToEnforced();
     }
 
-    // ---------- Kad Čuvar nije radio ----------
-
-    private long beatSaved;
-
-    /** Servis radi; čuva se najviše jednom u minutu, ili odmah kad force. */
-    public synchronized void guardBeat(boolean force) {
-        long el = SystemClock.elapsedRealtime();
-        if (!force && el - beatSaved < 60000L) return;
-        saveBeat(false);
-    }
-
-    /** Servis je ugašen (isključen u Pristupačnosti ili zaustavljen). */
-    public synchronized void guardStopped() {
-        saveBeat(true);
-    }
-
-    private void saveBeat(boolean stopped) {
-        long el = SystemClock.elapsedRealtime();
-        try {
-            JSONObject o = new JSONObject();
-            o.put("t", now());
-            o.put("el", el);
-            o.put("boot", boot);
-            o.put("stopped", stopped);
-            sp.edit().putString("beat", o.toString()).apply();
-        } catch (JSONException ignored) {
-        }
-        beatSaved = el;
-    }
-
-    /**
-     * Pri pokretanju servisa: ako je posle poslednjeg znaka života prošlo vreme u kome Čuvar nije radio,
-     * to se zapisuje. Safe Mode se vidi po tome što je telefon u međuvremenu paljen više puta.
-     */
-    public synchronized void guardStarted() {
-        JSONObject b = parse(sp.getString("beat", "{}"));
-        long el = SystemClock.elapsedRealtime();
-        long t = now();
-        if (b.has("t")) {
-            int lastBoot = b.optInt("boot", -1);
-            long lastT = b.optLong("t");
-            if (boot != -1 && lastBoot == boot) {
-                long gap = el - b.optLong("el", el);
-                if (gap > 2 * 60000L) {
-                    logGap(lastT, t, b.optBoolean("stopped") ? "isključen u Pristupačnosti" : "zaustavljen (verovatno zbog baterije)");
-                }
-            } else {
-                long bootAt = t - el;
-                if (boot != -1 && lastBoot != -1 && boot - lastBoot > 1) {
-                    logGap(lastT, bootAt, "telefon je paljen bez Čuvara, na primer u Safe Mode-u");
-                }
-                if (el > 3 * 60000L) {
-                    logGap(bootAt, t, "posle paljenja telefona nije radio " + Ui.fmt(el));
-                }
-            }
-        }
-        saveBeat(false);
-    }
-
-    private void logGap(long from, long to, String what) {
-        JSONArray a;
-        try {
-            a = new JSONArray(sp.getString("gaps", "[]"));
-        } catch (JSONException e) {
-            a = new JSONArray();
-        }
-        try {
-            a.put(new JSONObject().put("from", from).put("to", to).put("what", what));
-        } catch (JSONException ignored) {
-        }
-        while (a.length() > 20) a.remove(0);
-        sp.edit().putString("gaps", a.toString()).apply();
-    }
-
-    /** Zapisi iz poslednjih n dana, najnoviji prvi, npr. "pet 9.10. 14:05–14:40: isključen u Pristupačnosti". */
-    public synchronized List<String> guardGaps(int days) {
-        List<String> out = new ArrayList<>();
-        JSONArray a;
-        try {
-            a = new JSONArray(sp.getString("gaps", "[]"));
-        } catch (JSONException e) {
-            return out;
-        }
-        long since = now() - days * 86400000L;
-        SimpleDateFormat f = new SimpleDateFormat("EEE d.M. HH:mm", Ui.locale());
-        SimpleDateFormat hm = new SimpleDateFormat("HH:mm", Locale.US);
-        f.setTimeZone(zone());
-        hm.setTimeZone(zone());
-        for (int i = a.length() - 1; i >= 0; i--) {
-            JSONObject o = a.optJSONObject(i);
-            if (o == null || o.optLong("to") < since) continue;
-            out.add(f.format(new Date(o.optLong("from"))) + "–" + hm.format(new Date(o.optLong("to")))
-                    + ": " + o.optString("what"));
-        }
-        return out;
-    }
-
-    // ---------- Broj otvaranja i pokušaja ----------
-
-    /** Koliko je danas puta otvoreno ("app:paket") ili pokušano ("try:ključ"). */
-    public synchronized int opensToday(String key) {
-        JSONObject d = opens.optJSONObject(day());
-        return d == null ? 0 : d.optInt(key, 0);
-    }
-
-    /** Broji jedno otvaranje ili pokušaj; vraća novi broj za danas. */
-    public synchronized int countOpen(String key) {
-        String k = day();
-        JSONObject d = opens.optJSONObject(k);
-        try {
-            if (d == null) {
-                d = new JSONObject();
-                opens.put(k, d);
-                List<String> days = keysOf(opens);
-                Collections.sort(days);
-                while (days.size() > 14) opens.remove(days.remove(0));
-            }
-            d.put(key, d.optInt(key, 0) + 1);
-        } catch (JSONException ignored) {
-        }
-        sp.edit().putString("opens", opens.toString()).apply();
-        return d.optInt(key, 0);
-    }
-
-    // ---------- Korišćenje u komadu ----------
-
-    /** Koliko traje obavezna pauza posle najdužeg dozvoljenog korišćenja u komadu. */
-    public static final long SESSION_BREAK_MS = SessionLimit.BREAK_MS;
-
-    /**
-     * Dodaje vreme u komadu za aplikaciju sa tim pravilom. Izlazak kraći od pauze ne prekida komad,
-     * inače bi se ograničenje zaobišlo kratkim izlaskom na početni ekran. Vraća koliko je ostalo do pauze
-     * (0 kad pauza upravo počinje), ili -1 ako aplikacija nema ovo pravilo.
-     */
-    public synchronized long addSession(String pkg, long ms) {
-        int cap = appSessionNow(pkg);
-        if (cap <= 0) return -1;
-        long now = now();
-        JSONObject o = sessions.optJSONObject(pkg);
-        try {
-            if (o == null) {
-                o = new JSONObject();
-                sessions.put(pkg, o);
-            }
-            long oldBreak = o.optLong("b", 0);
-            if (oldBreak > now) return 0;
-            SessionLimit.State st = new SessionLimit.State(o.optLong("u", 0), o.optLong("l", 0), oldBreak);
-            long left = SessionLimit.add(st, cap * 60000L, now, ms);
-            o.put("u", st.used);
-            o.put("l", st.lastSeen);
-            if (st.breakUntil != oldBreak) {
-                o.put("b", st.breakUntil);
-                sp.edit().putString("sessions", sessions.toString()).apply();
-                return 0;
-            }
-            dirty = true;
-            return left;
-        } catch (JSONException e) {
-            return -1;
-        }
-    }
-
-    /** Koliko je ostalo obavezne pauze posle korišćenja u komadu (0 ako je nema). */
-    public synchronized long sessionBreakLeft(String pkg) {
-        JSONObject o = sessions.optJSONObject(pkg);
-        if (o == null) return 0;
-        return SessionLimit.breakLeft(o.optLong("b", 0), now());
-    }
-
-    /** Ne zadržava sesije za aplikacije koje više nemaju pravilo. */
-    private void pruneSessions() {
-        long now = now();
-        for (String pkg : keysOf(sessions)) {
-            JSONObject o = sessions.optJSONObject(pkg);
-            if (o == null) {
-                sessions.remove(pkg);
-                continue;
-            }
-            boolean hasRule = appSession(pkg) > 0 || appSessionNow(pkg) > 0;
-            if (SessionLimit.stale(hasRule, o.optLong("b", 0L), o.optLong("l", 0L), now)) sessions.remove(pkg);
-        }
-    }
-
-    /** Aplikacije koje su sada na obaveznoj pauzi. */
-    public synchronized List<String> appsOnBreak() {
-        List<String> out = new ArrayList<>();
-        for (String pkg : keysOf(sessions)) if (sessionBreakLeft(pkg) > 0) out.add(pkg);
-        return out;
-    }
+    // ---------- Čuvanje ----------
 
     public synchronized void flush() {
         if (!dirty) {
             return;
         }
-        pruneSessions();
-        sp.edit().putString("usage", usage.toString()).putString("sessions", sessions.toString()).apply();
+        sessions.pruneSessions();
+        sp.edit().putString("usage", usageLog.usage.toString()).putString("sessions", sessions.sessions.toString()).apply();
         dirty = false;
         lastSave = SystemClock.elapsedRealtime();
     }

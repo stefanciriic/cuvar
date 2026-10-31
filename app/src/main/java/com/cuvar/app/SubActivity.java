@@ -65,7 +65,7 @@ public abstract class SubActivity extends Activity {
      * a pravilo se skida tek sutra. Zato se pre toga pita, da se to ne desi slučajno.
      */
     protected void saveGuarding(String pkg, String label, boolean adding, Runnable save) {
-        String why = adding && !store.appGuarded(pkg) ? store.lockedOnceGuarded() : null;
+        String why = adding && !store.appGuarded(pkg) ? store.dayLimits.lockedOnceGuarded() : null;
         if (why == null) {
             save.run();
             return;

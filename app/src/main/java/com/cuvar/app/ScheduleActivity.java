@@ -71,30 +71,30 @@ public class ScheduleActivity extends SubActivity {
     private void renderList() {
         page("Vremenski režimi", "Svaki režim ima svoj period, dane i svoje aplikacije i sajtove koji će tada biti blokirani.");
         TextView add = Ui.button(this, "+  Dodaj režim", true);
-        add.setOnClickListener(v -> open(store.addSchedule().id));
+        add.setOnClickListener(v -> open(store.modes.addSchedule().id));
         content.addView(add, Ui.fill(this, 10));
 
         View pending = MainActivity.pendingCard(this, store, this::render);
         if (pending != null) content.addView(pending, Ui.fill(this, 14));
-        List<DailySchedule.Rule> rules = new ArrayList<>(store.schedules());
+        List<DailySchedule.Rule> rules = new ArrayList<>(store.modes.schedules());
         Set<String> listed = new HashSet<>();
         for (DailySchedule.Rule r : rules) listed.add(r.id);
         // Zakazano brisanje ne sme sakriti režim koji još blokira.
-        for (DailySchedule.Rule r : store.schedulesNow()) if (listed.add(r.id)) rules.add(r);
+        for (DailySchedule.Rule r : store.modes.schedulesNow()) if (listed.add(r.id)) rules.add(r);
         content.addView(Ui.section(this, "Tvoji režimi"), Ui.fill(this, 26));
         if (rules.isEmpty()) empty("Još nema režima.");
         for (DailySchedule.Rule r : rules) content.addView(ruleCard(r), Ui.fill(this, 10));
 
-        boolean work = !store.hasWorkSchedule(), night = !store.hasNightSchedule();
+        boolean work = !store.modes.hasWorkSchedule(), night = !store.modes.hasNightSchedule();
         if (work || night) {
             content.addView(Ui.section(this, "Gotovi režimi"), Ui.fill(this, 26));
             if (work) {
                 content.addView(presetCard("Radno vreme", "09:00–17:00 · svakog dana · posle toga dnevnom šifrom",
-                        () -> open(store.addWorkSchedule().id)), Ui.fill(this, 10));
+                        () -> open(store.modes.addWorkSchedule().id)), Ui.fill(this, 10));
             }
             if (night) {
                 content.addView(presetCard("Noćno zaključavanje", "22:30–06:00 · svakog dana",
-                        () -> open(store.addNightSchedule().id)), Ui.fill(this, 10));
+                        () -> open(store.modes.addNightSchedule().id)), Ui.fill(this, 10));
             }
         }
         content.addView(Ui.text(this, "Po vremenu telefona; pomeranje sata ne skraćuje režim. Period može da prelazi ponoć. Ako je aplikacija ili sajt u više uključenih režima, blokada važi kad god je bilo koji od njih aktivan.",
@@ -104,7 +104,7 @@ public class ScheduleActivity extends SubActivity {
     /** Kartica režima: naziv i stanje u prvom redu, period i dani ispod, pa broj aplikacija i sajtova. */
     private View ruleCard(DailySchedule.Rule r) {
         List<DailySchedule.Rule> effective = effectiveRules(r.id);
-        DailySchedule.Rule desired = store.schedule(r.id);
+        DailySchedule.Rule desired = store.modes.schedule(r.id);
         boolean pending = differs(effective, desired);
         boolean enabledNow = false;
         for (DailySchedule.Rule current : effective) enabledNow |= current.enabled;
@@ -118,7 +118,7 @@ public class ScheduleActivity extends SubActivity {
         name.setSingleLine(true);
         name.setEllipsize(android.text.TextUtils.TruncateAt.END);
         top.addView(name, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        if (store.scheduleActive(r.id)) top.addView(Ui.badge(this, "Traje sada", Ui.ACCENT), Ui.wrap(this, 8));
+        if (store.modes.scheduleActive(r.id)) top.addView(Ui.badge(this, "Traje sada", Ui.ACCENT), Ui.wrap(this, 8));
         top.addView(enabledNow ? Ui.badge(this, "Uključen", Charts.good()) : Ui.badge(this, "Isključen", Ui.MUTED),
                 Ui.wrap(this, 8));
         card.addView(top);
@@ -139,7 +139,7 @@ public class ScheduleActivity extends SubActivity {
 
     private List<DailySchedule.Rule> effectiveRules(String ruleId) {
         List<DailySchedule.Rule> out = new ArrayList<>();
-        for (DailySchedule.Rule r : store.schedulesNow()) if (r.id.equals(ruleId)) out.add(r);
+        for (DailySchedule.Rule r : store.modes.schedulesNow()) if (r.id.equals(ruleId)) out.add(r);
         return out;
     }
 
@@ -183,7 +183,7 @@ public class ScheduleActivity extends SubActivity {
     }
 
     private void renderRule() {
-        DailySchedule.Rule rule = store.schedule(id);
+        DailySchedule.Rule rule = store.modes.schedule(id);
         if (rule == null) {
             finish();
             return;
@@ -198,7 +198,7 @@ public class ScheduleActivity extends SubActivity {
                     + "Pooštravanje važi odmah.", 14, Ui.ACCENT, false), Ui.fill(this, 6));
             content.addView(current, Ui.fill(this, 12));
         }
-        boolean active = store.scheduleActive(id);
+        boolean active = store.modes.scheduleActive(id);
         if (active) {
             content.addView(Ui.text(this, "Režim je sada aktivan. Dok traje ne može da se isključi, obriše, skrati ni da mu se promene dani, a aplikacije i sajtovi"
                     + " mogu samo da se dodaju.", 14, Ui.ACCENT, true), Ui.fill(this, 12));
@@ -206,8 +206,8 @@ public class ScheduleActivity extends SubActivity {
         CheckRow enabled = new CheckRow(this, null, "Režim je uključen", "Blokira u izabranom periodu i danima");
         enabled.setChecked(rule.enabled);
         enabled.setListener(checked -> {
-            DailySchedule.Rule now = store.schedule(id);
-            if (now != null && !store.setSchedule(id, now.name, checked, now.start, now.end)) refused();
+            DailySchedule.Rule now = store.modes.schedule(id);
+            if (now != null && !store.modes.setSchedule(id, now.name, checked, now.start, now.end)) refused();
             else render();
         });
         content.addView(enabled, Ui.fill(this, 12));
@@ -219,7 +219,7 @@ public class ScheduleActivity extends SubActivity {
                 "Aplikacije i sajtovi ovog režima su i van perioda zaključani i otvaraju se samo dnevnom šifrom, od 17:00 do 22:00. Šifra se vidi na početnom ekranu Čuvara.");
         code.setChecked(rule.code);
         code.setListener(checked -> {
-            if (!store.setScheduleCode(id, checked)) refused();
+            if (!store.modes.setScheduleCode(id, checked)) refused();
             else render();
         });
         content.addView(code, Ui.fill(this, 12));
@@ -231,7 +231,7 @@ public class ScheduleActivity extends SubActivity {
             try { label = Translit.keep(getPackageManager().getApplicationLabel(getPackageManager().getApplicationInfo(pkg, 0)).toString()); }
             catch (Exception ignored) { }
             action(label + " · ukloni", () -> {
-                if (!store.setScheduleApp(id, pkg, false)) refused();
+                if (!store.modes.setScheduleApp(id, pkg, false)) refused();
                 render();
             });
         }
@@ -241,7 +241,7 @@ public class ScheduleActivity extends SubActivity {
         List<String> sites = new ArrayList<>(rule.sites);
         sites.sort(String::compareTo);
         for (String domain : sites) action(domain + " · ukloni", () -> {
-            if (!store.setScheduleSite(id, domain, false)) refused();
+            if (!store.modes.setScheduleSite(id, domain, false)) refused();
             render();
         });
         empty("Blokada sajta obuhvata i poddomene. Radi u podržanim pregledačima; za ostale dodaj ceo pregledač u režim.");
@@ -250,7 +250,7 @@ public class ScheduleActivity extends SubActivity {
                 .message("Period i izbor aplikacija i sajtova ovog režima biće obrisani.")
                 .secondary("Otkaži", null)
                 .primary("Obriši", () -> {
-                    if (store.removeSchedule(id)) finish(); else refused();
+                    if (store.modes.removeSchedule(id)) finish(); else refused();
                     return true;
                 })
                 .show());
@@ -280,7 +280,7 @@ public class ScheduleActivity extends SubActivity {
                         Toast.makeText(this, Ui.cyr("Izaberi bar jedan dan"), Toast.LENGTH_LONG).show();
                         return false;
                     }
-                    if (!store.setScheduleDays(id, days[0])) refused(); else render();
+                    if (!store.modes.setScheduleDays(id, days[0])) refused(); else render();
                     return true;
                 }).show();
     }
@@ -308,8 +308,8 @@ public class ScheduleActivity extends SubActivity {
                         name.setError("Unesi naziv, npr. Spavanje");
                         return false;
                     }
-                    DailySchedule.Rule now = store.schedule(id);
-                    if (now != null) store.setSchedule(id, value, now.enabled, now.start, now.end);
+                    DailySchedule.Rule now = store.modes.schedule(id);
+                    if (now != null) store.modes.setSchedule(id, value, now.enabled, now.start, now.end);
                     render();
                     return true;
                 }).show();
@@ -335,8 +335,8 @@ public class ScheduleActivity extends SubActivity {
                         Toast.makeText(this, Ui.cyr("Početak i kraj moraju biti različiti"), Toast.LENGTH_LONG).show();
                         return false;
                     }
-                    DailySchedule.Rule now = store.schedule(id);
-                    if (now != null && !store.setSchedule(id, now.name, now.enabled, values[0], values[1])) refused();
+                    DailySchedule.Rule now = store.modes.schedule(id);
+                    if (now != null && !store.modes.setSchedule(id, now.name, now.enabled, values[0], values[1])) refused();
                     else render();
                     return true;
                 }).show();
@@ -426,11 +426,11 @@ public class ScheduleActivity extends SubActivity {
                 .secondary("Otkaži", null)
                 .primary("Sačuvaj", () -> {
                     boolean ok = true;
-                    DailySchedule.Rule current = store.schedule(id);
+                    DailySchedule.Rule current = store.modes.schedule(id);
                     if (current != null) {
                         for (AppItem it : items) {
                             boolean want = selected.contains(it.pkg);
-                            if (want != current.apps.contains(it.pkg)) ok &= store.setScheduleApp(id, it.pkg, want);
+                            if (want != current.apps.contains(it.pkg)) ok &= store.modes.setScheduleApp(id, it.pkg, want);
                         }
                     }
                     if (!ok) refused(); else render();
@@ -450,7 +450,7 @@ public class ScheduleActivity extends SubActivity {
                         address.setError("Unesi adresu sajta, npr. youtube.com");
                         return false;
                     }
-                    store.setScheduleSite(id, host, true);
+                    store.modes.setScheduleSite(id, host, true);
                     render();
                     return true;
                 }).show();
