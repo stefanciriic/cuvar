@@ -40,6 +40,24 @@ public final class BlockScreen {
     private android.graphics.Rect overlayBounds; // prozor koji blokada pokriva u podeljenom ekranu, ili null
     /** Blokada pokriva jednu polovinu podeljenog ekrana: dugme vodi na početni ekran (izlaz iz podeljenog ekrana). */
     public boolean splitExit;
+    // Dok blokada pokriva jedan prozor, prati njegove granice (pomerena granica ekrana, tastatura gura prozor gore).
+    private static final long FOLLOW_MS = 400L;
+    private final Runnable followBounds = new Runnable() {
+        @Override
+        public void run() {
+            if (overlay == null || overlayBounds == null || overlayKey == null) return;
+            com.cuvar.app.ui.Safe.run("followBounds", () -> {
+                // Posle vraćanja nazad pregledač više ne prikazuje blokiran sajt, pa se prozor traži po pregledaču.
+                String browser = noticeKey != null && noticeKey.equals(overlayKey) ? noticeBrowser : null;
+                android.graphics.Rect b = browser != null ? svc.windows.boundsOf(browser::equals) : svc.blockBounds(overlayKey);
+                if (b != null && !b.equals(overlayBounds)) {
+                    svc.overlayWindow.move(overlay, b);
+                    overlayBounds = b;
+                }
+            });
+            svc.h.postDelayed(this, FOLLOW_MS);
+        }
+    };
 
     public static String cooldownText(long left) {
         long min = (left + 59999L) / 60000L;
@@ -233,6 +251,8 @@ public final class BlockScreen {
             svc.overlayWindow.show(v, catchBack, svc.rawPkg, bounds);
             overlay = v;
             overlayBounds = bounds;
+            svc.h.removeCallbacks(followBounds);
+            if (bounds != null) svc.h.postDelayed(followBounds, FOLLOW_MS);
             overlayKey = key;
             overlayKind = kind;
             svc.overlayRule = rule;

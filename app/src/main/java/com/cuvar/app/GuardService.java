@@ -214,6 +214,13 @@ public class GuardService extends AccessibilityService {
         }
     };
 
+    private final Runnable recheckLast = new Runnable() {
+        @Override
+        public void run() {
+            safeCheck();
+        }
+    };
+
     /** Keep the just-dismissed site block from flashing back while the browser navigates to the neutral page. */
     public final Runnable finishSiteExit = new Runnable() {
         @Override
@@ -461,7 +468,7 @@ public class GuardService extends AccessibilityService {
             }
         }
         if ((type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED || type == AccessibilityEvent.TYPE_WINDOWS_CHANGED)
-                && currentQuiet && screen.overlay == null) {
+                && currentQuiet && screen.overlay == null && !windowsRearranged(event)) {
             // Napred je aplikacija bez pravila. Mape i slične aplikacije šalju ovakve događaje u nizu (pomeranje mape,
             // donji paneli), pa se ništa ne čita dok događaj dolazi iz iste aplikacije; promena aplikacije se proveri odmah.
             CharSequence p = event.getPackageName();
@@ -485,6 +492,9 @@ public class GuardService extends AccessibilityService {
             h.postDelayed(recheckSoon, 350);
             h.removeCallbacks(recheckLater);
             h.postDelayed(recheckLater, 1200);
+            // Kod podeljenog ekrana Android tek posle 1–2 s prijavljuje oba prozora: još jedna provera tada.
+            h.removeCallbacks(recheckLast);
+            h.postDelayed(recheckLast, 2500);
         } else if (type == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
             // Sadržaj se menja vrlo često; zanima nas samo u pregledaču (promena adrese).
             CharSequence p = event.getPackageName();
@@ -503,6 +513,17 @@ public class GuardService extends AccessibilityService {
                 }
             }
         }
+    }
+
+    /**
+     * Prozor je dodat, uklonjen ili mu je promenjena veličina (podeljen ekran, plutajući prozor): proverava se odmah,
+     * i kad je napred aplikacija bez pravila, jer se u drugom prozoru mogla pojaviti blokirana aplikacija.
+     */
+    private static boolean windowsRearranged(AccessibilityEvent e) {
+        if (e.getEventType() != AccessibilityEvent.TYPE_WINDOWS_CHANGED || Build.VERSION.SDK_INT < 28) return false;
+        int changes = e.getWindowChanges();
+        return (changes & (AccessibilityEvent.WINDOWS_CHANGE_ADDED | AccessibilityEvent.WINDOWS_CHANGE_REMOVED
+                | AccessibilityEvent.WINDOWS_CHANGE_BOUNDS)) != 0;
     }
 
     @Override
@@ -884,7 +905,7 @@ public class GuardService extends AccessibilityService {
     }
 
     /** Prozor blokirane aplikacije ili pregledača sa blokiranim sajtom, kad je na ekranu više aplikacija; inače null (ceo ekran). */
-    private android.graphics.Rect blockBounds(String key) {
+    public android.graphics.Rect blockBounds(String key) {
         if (ItemKey.isApp(key)) {
             String app = ItemKey.name(key);
             return windows.boundsOf(p -> app.equals(p) || app.equals(kinds.cloneOf(p)));
