@@ -3,6 +3,7 @@ app/src/main/java/com/cuvar/app/DailyCode.java
 app/src/main/java/com/cuvar/app/DayLimit.java
 app/src/main/java/com/cuvar/app/Quiz.java
 app/src/main/java/com/cuvar/app/NumberGame.java
+app/src/main/java/com/cuvar/app/UnlockCost.java
 app/src/main/java/com/cuvar/app/QuizBank.java
 app/src/main/java/com/cuvar/app/DomainRules.java
 app/src/main/java/com/cuvar/app/UsageCalendar.java

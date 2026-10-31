@@ -711,3 +711,9 @@ notifikacije	notifications
 Notifikacije, 7 dana	Notifications, 7 days
 Još nijedna notifikacija nije izbrojana.	No notifications counted yet.
 Najviše šalju (7 dana)	Sent the most (7 days)
+Van režima bez dnevne šifre	Outside the mode without the daily code
+“ van svog vremena traži dnevnu šifru. Uključeno: ova aplikacija je tada slobodna (važi od sutra u 06:00)	” asks for the daily code outside its time. On: this app is free then (applies from 06:00 tomorrow)
+: van režima bez dnevne šifre	: no daily code outside the mode
+Danas si već otključao 	Today you have already unlocked 
+ puta. Sledeće otključavanje je moguće sutra od 	 times. The next unlock is possible tomorrow from 
+. otključavanje danas: brojevi do 	 unlock today: numbers up to 

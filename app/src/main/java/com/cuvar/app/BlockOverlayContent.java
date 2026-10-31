@@ -182,6 +182,12 @@ final class BlockOverlayContent {
                     + DailyCode.LOCK_HOUR + ":00, uz igricu ili pitanja i dnevnu šifru.", 14, Ui.NIGHT_MUTED, false);
             later.setGravity(Gravity.CENTER);
             box.addView(later, Ui.fill(c, 22));
+        } else if (code && !GuardService.hard(kind) && UnlockCost.next(host.store.unlocksToday()) == null) {
+            // Svako otključavanje u danu je skuplje, a posle poslednjeg nema više do sutra.
+            TextView spent = Ui.text(c, "Danas si već otključao " + UnlockCost.MAX
+                    + " puta. Sledeće otključavanje je moguće sutra od " + DailyCode.CHANGE_HOUR + ":00.", 14, Ui.NIGHT_MUTED, false);
+            spent.setGravity(Gravity.CENTER);
+            box.addView(spent, Ui.fill(c, 22));
         } else if (code && !GuardService.hard(kind)) {
             final LinearLayout unlock = Ui.column(c);
             unlock.setGravity(Gravity.CENTER_HORIZONTAL);
@@ -262,10 +268,15 @@ final class BlockOverlayContent {
     /** Pitanje pre šifre. Tačan odgovor vodi dalje, a pogrešan traži više tačnih zaredom. */
     private void showQuiz(final LinearLayout area, final Runnable onPass, String notice) {
         final Context c = host;
+        int done = host.store.unlocksToday();
+        UnlockCost cost = UnlockCost.emergency(done);
+        if (notice == null) Quiz.LADDER.atLeast(cost.answers);
         String ch = Ui.unlockChallenge(c);
         // Nasumično se bira na početku otključavanja (notice == null), posle odgovora ostaju pitanja.
         if (Ui.CHALLENGE_NUMBERS.equals(ch) || Ui.CHALLENGE_MIX.equals(ch) && notice == null && RANDOM.nextBoolean()) {
-            NumberGameView.show(host, host.h, area, onPass, null);
+            String price = done == 0 ? null : (done + 1) + ". otključavanje danas: brojevi do " + cost.side * cost.side
+                    + " za " + cost.timeMs / 1000 + " s";
+            NumberGameView.show(host, host.h, area, onPass, price, cost.side, cost.timeMs);
             return;
         }
         area.removeAllViews();

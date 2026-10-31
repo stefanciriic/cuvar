@@ -57,6 +57,7 @@ final class Store {
     private boolean eProtect;
     /** Aplikacije koje noćna blokada ne zaključava, kako sada važi. */
     private final Set<String> eNightFree = new HashSet<>();
+    private final Set<String> eCodeFree = new HashSet<>();
     private boolean dirty;
     private long lastSave;
     private final CodeAttempts codeTries = new CodeAttempts();
@@ -304,6 +305,12 @@ final class Store {
     /** Dan od kog se notifikacije broje, ili null ako još nijedna nije izbrojana. */
     synchronized String notifSince() {
         return sp.getString("notifSince", null);
+    }
+
+    /** Koliko je puta danas otključano (šifrom ili hitno). */
+    synchronized int unlocksToday() {
+        Integer n = unlockDays().get(day());
+        return n == null ? 0 : n;
     }
 
     /** Broj otključavanja po danu ("yyyyMMdd"). */
@@ -885,12 +892,19 @@ final class Store {
 
     /** Režim sa dnevnom šifrom koji sadrži aplikaciju, ili null. */
     synchronized DailySchedule.Rule codeRuleForApp(String pkg) {
+        if (codeFreeNow().contains(pkg)) return null;
         DailySchedule.Rule r = DailySchedule.codeApp(enforced(), pkg);
         return r == null ? null : copy(r);
     }
 
     /** Režim sa dnevnom šifrom koji sadrži host (i poddomene), ili null. */
     synchronized DailySchedule.Rule codeRuleForSite(String host) {
+        // Sajt aplikacije koja je van režima slobodna je slobodan i sam.
+        for (String pkg : codeFreeNow()) {
+            for (String d : Links.domainsOf(eLinks.isEmpty() ? linkPairs() : eLinks, pkg)) {
+                if (Links.covers(d, host)) return null;
+            }
+        }
         DailySchedule.Rule r = DailySchedule.codeSite(enforced(), host);
         return r == null ? null : copy(r);
     }
@@ -1023,6 +1037,24 @@ final class Store {
         if (free) next.add(pkg); else next.remove(pkg);
         sp.edit().putStringSet("nightFree", next).apply();
         enforce();
+    }
+
+    /** Aplikacije koje van režima ne traže dnevnu šifru, iako je režim traži. */
+    synchronized Set<String> codeFree() {
+        return new HashSet<>(sp.getStringSet("codeFree", Collections.emptySet()));
+    }
+
+    /** Oslobađanje važi tek od sutra u 06:00, a vraćanje šifre odmah. */
+    synchronized void setCodeFree(String pkg, boolean free) {
+        Set<String> next = codeFree();
+        if (free) next.add(pkg); else next.remove(pkg);
+        sp.edit().putStringSet("codeFree", next).apply();
+        enforce();
+    }
+
+    private Set<String> codeFreeNow() {
+        roll();
+        return eApps == null ? codeFree() : eCodeFree;
     }
 
     /** Da li noćna blokada sada zaključava ovu aplikaciju. */
@@ -1488,6 +1520,8 @@ final class Store {
         eProtect = sp.getBoolean("eProtect", false);
         eNightFree.clear();
         eNightFree.addAll(sp.getStringSet("eNightFree", Collections.emptySet()));
+        eCodeFree.clear();
+        eCodeFree.addAll(sp.getStringSet("eCodeFree", Collections.emptySet()));
         parseSchedules(sp.getString("eSchedules", "[]"), eSchedules);
         eLinks.clear();
         JSONArray el = parseArray(sp.getString("eLinks", null));
@@ -1505,6 +1539,8 @@ final class Store {
         eProtect = protectSelf();
         eNightFree.clear();
         eNightFree.addAll(nightFree());
+        eCodeFree.clear();
+        eCodeFree.addAll(codeFree());
         eLinks.clear();
         eLinks.addAll(linkPairs());
         eDay = rulesDay();
@@ -1516,6 +1552,7 @@ final class Store {
                 .putString("eSchedules", schedulesJson(eSchedules)).putString("eDay", eDay)
                 .putBoolean("eNight", eNight).putBoolean("eProtect", eProtect)
                 .putStringSet("eNightFree", new HashSet<>(eNightFree))
+                .putStringSet("eCodeFree", new HashSet<>(eCodeFree))
                 .putString("eLinks", new JSONArray(eLinks).toString()).apply();
         clearRuleCache();
     }
@@ -1552,6 +1589,9 @@ final class Store {
         Set<String> free = RuleMerge.stricterExempt(eNightFree, nightFree());
         eNightFree.clear();
         eNightFree.addAll(free);
+        Set<String> codeFree = RuleMerge.stricterExempt(eCodeFree, codeFree());
+        eCodeFree.clear();
+        eCodeFree.addAll(codeFree);
         eLinks.addAll(linkPairs());
         JSONObject na = new JSONObject();
         Set<String> keys = new HashSet<>(keysOf(eApps));
@@ -1840,6 +1880,12 @@ final class Store {
             try { name = Translit.keep(pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()); } catch (Exception ignored) { }
             out.add(name + ": bez noćne blokade");
         }
+        for (String pkg : codeFree()) {
+            if (eCodeFree.contains(pkg)) continue;
+            String name = pkg;
+            try { name = Translit.keep(pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()); } catch (Exception ignored) { }
+            out.add(name + ": van režima bez dnevne šifre");
+        }
         List<String> want = linkPairs();
         for (String p : eLinks) {
             if (want.contains(p)) continue;
@@ -1925,6 +1971,7 @@ final class Store {
         sp.edit().putString("apps", apps.toString()).putString("sites", sites.toString()).putString("links", links.toString())
                 .putString("schedules", schedulesJson()).putBoolean("night", eNight).putBoolean("protect", eProtect)
                 .putStringSet("nightFree", new HashSet<>(eNightFree))
+                .putStringSet("codeFree", new HashSet<>(eCodeFree))
                 .apply();
         copyToEnforced();
     }

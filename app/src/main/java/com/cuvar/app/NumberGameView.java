@@ -71,10 +71,16 @@ final class NumberGameView {
 
     /** Igrica „Brojevi redom“ umesto pitanja: pobeda vodi dalje, greška ili isteklo vreme daje novu partiju. */
     static void show(final Context c, final Handler h, final LinearLayout area, final Runnable onPass, String notice) {
-        area.removeAllViews();
-        final NumberGame game = new NumberGame(RANDOM, SystemClock.elapsedRealtime());
+        show(c, h, area, onPass, notice, NumberGame.SIDE, NumberGame.TIME_MS);
+    }
 
-        TextView head = Ui.text(c, "Tapni brojeve od 1 do " + NumberGame.SIZE + " redom", 20, 0xFFFFFFFF, true);
+    /** Igrica sa zadatom veličinom mreže i vremenom (teža za svako sledeće otključavanje u danu). */
+    static void show(final Context c, final Handler h, final LinearLayout area, final Runnable onPass, String notice,
+                     final int side, final long timeMs) {
+        area.removeAllViews();
+        final NumberGame game = new NumberGame(RANDOM, SystemClock.elapsedRealtime(), side, timeMs);
+
+        TextView head = Ui.text(c, "Tapni brojeve od 1 do " + game.size + " redom", 20, 0xFFFFFFFF, true);
         head.setGravity(Gravity.CENTER);
         area.addView(head, Ui.fill(c, 0));
         if (notice != null) {
@@ -88,10 +94,10 @@ final class NumberGameView {
 
         LinearLayout grid = Ui.column(c);
         int gap = Ui.dp(c, 3);
-        for (int r = 0; r < NumberGame.SIDE; r++) {
+        for (int r = 0; r < side; r++) {
             LinearLayout row = Ui.row(c);
-            for (int col = 0; col < NumberGame.SIDE; col++) {
-                final int number = game.cells[r * NumberGame.SIDE + col];
+            for (int col = 0; col < side; col++) {
+                final int number = game.cells[r * side + col];
                 final TextView cell = Ui.text(c, String.valueOf(number), 18, 0xFFFFFFFF, true);
                 cell.setGravity(Gravity.CENTER);
                 cell.setBackground(Ui.pressable(Ui.NIGHT_KEY, Ui.NIGHT_KEY_DOWN, Ui.dp(c, 10)));
@@ -104,12 +110,12 @@ final class NumberGameView {
                     } else if (t == NumberGame.Tap.DONE) {
                         onPass.run();
                     } else if (t == NumberGame.Tap.WRONG) {
-                        show(c, h, area, onPass, "Pogrešan broj. Kreni ispočetka.");
+                        show(c, h, area, onPass, "Pogrešan broj. Kreni ispočetka.", side, timeMs);
                     } else if (t == NumberGame.Tap.LATE) {
-                        show(c, h, area, onPass, "Vreme je isteklo. Kreni ispočetka.");
+                        show(c, h, area, onPass, "Vreme je isteklo. Kreni ispočetka.", side, timeMs);
                     }
                 });
-                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, Ui.dp(c, 54), 1f);
+                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, Ui.dp(c, side > 5 ? 46 : 54), 1f);
                 lp.setMargins(gap, gap, gap, gap);
                 row.addView(cell, lp);
             }
@@ -126,7 +132,7 @@ final class NumberGameView {
                 if (game.over() || grid.getParent() != area) return;
                 if (game.leftMs(SystemClock.elapsedRealtime()) == 0) {
                     // Zatvoren ekran blokade: samo stani.
-                    if (area.isAttachedToWindow()) show(c, h, area, onPass, "Vreme je isteklo. Kreni ispočetka.");
+                    if (area.isAttachedToWindow()) show(c, h, area, onPass, "Vreme je isteklo. Kreni ispočetka.", side, timeMs);
                     return;
                 }
                 status.setText(numbersStatus(game));

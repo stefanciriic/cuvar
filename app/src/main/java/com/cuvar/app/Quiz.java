@@ -352,6 +352,13 @@ final class Quiz {
             required = Math.min(MAX, required + 1);
         }
 
+        /** Na početku otključavanja: traži bar min tačnih zaredom (ne smanjuje kaznu za greške). */
+        synchronized void atLeast(int min) {
+            int r = Math.max(required, Math.min(MAX, min));
+            if (r != required) streak = 0;
+            required = r;
+        }
+
         synchronized int required() {
             return required;
         }

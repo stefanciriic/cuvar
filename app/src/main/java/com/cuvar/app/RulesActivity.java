@@ -417,6 +417,16 @@ public class RulesActivity extends SubActivity {
         CheckRow lock = new CheckRow(this, null, "Zaključaj", "Otvara se samo dnevnom šifrom, od 17:00 do 22:00");
         lock.setChecked(store.appLockLinked(pkg));
         box.addView(lock, Ui.fill(this, 6));
+        // Režim sa šifrom zaključava aplikaciju i van perioda; ovde može da se oslobodi samo ona.
+        String codeRegime = null;
+        for (DailySchedule.Rule r : rules) if (r.enabled && r.code && in.contains(r.id)) { codeRegime = r.name; break; }
+        final boolean wasCodeFree = store.codeFree().contains(pkg);
+        final CheckRow codeFree = codeRegime == null ? null : new CheckRow(this, null, "Van režima bez dnevne šifre",
+                "Režim „" + codeRegime + "“ van svog vremena traži dnevnu šifru. Uključeno: ova aplikacija je tada slobodna (važi od sutra u 06:00)");
+        if (codeFree != null) {
+            codeFree.setChecked(wasCodeFree);
+            box.addView(codeFree, Ui.fill(this, 10));
+        }
         box.addView(Sheet.label(this, "Dnevni limit u minutima (0 = bez limita)"), Ui.fill(this, 14));
         EditText limit = Sheet.input(this, "0", true);
         limit.setText(String.valueOf(store.appLimitLinked(pkg)));
@@ -463,6 +473,7 @@ public class RulesActivity extends SubActivity {
                     for (CheckRow r : rows) adding |= r.isChecked();
                     if (calls.isChecked() != store.callsPass(pkg)) store.setCallsPass(pkg, calls.isChecked());
                     if (night.isChecked() != wasFree) store.setNightFree(pkg, night.isChecked());
+                    if (codeFree != null && codeFree.isChecked() != wasCodeFree) store.setCodeFree(pkg, codeFree.isChecked());
                     saveGuarding(pkg, label, adding, () -> {
                         if (!java.util.Objects.equals(wantSite, dom)) store.setLink(pkg, wantSite);
                         saveRules(rules, rows, pkg, false);

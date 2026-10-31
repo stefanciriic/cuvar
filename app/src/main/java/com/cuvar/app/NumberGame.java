@@ -18,16 +18,27 @@ final class NumberGame {
     enum Tap { OK, WRONG, DONE, LATE, IGNORED }
 
     /** Broj u svakom polju mreže, red po red. */
-    final int[] cells = new int[SIZE];
+    final int side;
+    final int size;
+    final int[] cells;
     private final long started;
+    private final long timeMs;
     private int next = 1;
     private boolean over;
 
     NumberGame(Random r, long nowMs) {
+        this(r, nowMs, SIDE, TIME_MS);
+    }
+
+    NumberGame(Random r, long nowMs, int side, long timeMs) {
+        this.side = side;
+        this.size = side * side;
+        this.timeMs = timeMs;
+        cells = new int[size];
         List<Integer> n = new ArrayList<>();
-        for (int i = 1; i <= SIZE; i++) n.add(i);
+        for (int i = 1; i <= size; i++) n.add(i);
         Collections.shuffle(n, r);
-        for (int i = 0; i < SIZE; i++) cells[i] = n.get(i);
+        for (int i = 0; i < size; i++) cells[i] = n.get(i);
         started = nowMs;
     }
 
@@ -41,7 +52,7 @@ final class NumberGame {
     }
 
     long leftMs(long nowMs) {
-        return Math.max(0L, TIME_MS - (nowMs - started));
+        return Math.max(0L, timeMs - (nowMs - started));
     }
 
     /** Tap na broj; posle kraja partije tapovi se ne broje. */
@@ -57,7 +68,7 @@ final class NumberGame {
             return Tap.WRONG;
         }
         next++;
-        if (next > SIZE) {
+        if (next > size) {
             over = true;
             return Tap.DONE;
         }
