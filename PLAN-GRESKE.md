@@ -92,7 +92,11 @@ servis nije pao, otkucaj je nastavio, blokada se prikazivala, dialer je radio. N
 - `screenReceiver` i `shutdown`: zaštita, `store.flush()` u `finally`.
 - Provera: emulator (blokada radi, dialer prolazi), logcat bez padova.
 
-### Faza 2: dnevnik grešaka koji ostaje na telefonu (R5, R13)
+### Faza 2: dnevnik grešaka koji ostaje na telefonu (R5, R13) — urađeno 31.10.2026
+
+Urađeno: `guard/ErrorLog` (+ `ErrorLogTest`), `GuardDiagnostics` čuva u `cuvar_errors`, `CuvarApp` beleži
+padove, prikaz i brisanje u "Opterećenje telefona". Na emulatoru: namerni pad je zapisan, servis se sam
+vratio (nije "Crashed services"), brisanje radi. Nije probano na telefonu.
 
 - `GuardDiagnostics` broji greške po mestu i čuva ih u `SharedPreferences`: mesto, vrsta izuzetka, prvi
   red steka iz `com.cuvar.app` (klasa:red), broj i poslednje vreme (`store.now()`). Najviše ~30 stavki.

@@ -231,6 +231,7 @@ public class GuardService extends AccessibilityService {
                     guarded("screenOffFlush", store::flush);
                     guarded("screenOffBeat", () -> store.guardLog.guardBeat(true));
                 }
+                GuardDiagnostics.flush();
             } else {
                 h.removeCallbacks(recheckSoon);
                 h.postDelayed(recheckSoon, 300);
@@ -290,6 +291,8 @@ public class GuardService extends AccessibilityService {
         guarded("script", () -> Ui.loadScript(this));
         try {
             store = Store.get(this);
+            Store s = store;
+            GuardDiagnostics.useClock(s::now);
         } catch (Throwable error) {
             GuardDiagnostics.report("store", error);
         }
@@ -533,6 +536,7 @@ public class GuardService extends AccessibilityService {
         if (store != null) {
             guarded("stopFlush", store::flush);
         }
+        GuardDiagnostics.flush();
     }
 
     /**

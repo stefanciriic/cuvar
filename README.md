@@ -115,13 +115,14 @@ iz koda, bez XML rasporeda. Zašto baš ovako i gde ide nova klasa:
 | Paket / fajl | Šta radi |
 |------|----------|
 | `GuardService.java` | Servis za Pristupačnost: šta je napred, merenje, odluka o blokadi, zaštita od isključivanja |
+| `CuvarApp.java` | Pokretanje procesa: dnevnik grešaka i beleženje padova (vidi „Opterećenje telefona“) |
 | `MainActivity.java` | Početni ekran sa karticama Danas / Pravila / Statistika |
 | `RulesActivity.java` | "Aplikacije i sajtovi": lista pravila i prozor za izmenu jedne stavke |
 | `ScheduleActivity.java`, `FocusActivity.java` | Vremenski režimi, ručni fokus |
 | `StatsActivity.java` | Statistika |
 | `data/` | `Store` (sva podešavanja, "popuštanje od sutra") i njegovi delovi: `Clock` (pouzdan sat), `Unlocks`, `Modes` (režimi), `DayLimits`, `UsageLog`, `Sessions`, `Focus`, `GuardLog`, `AppLabels` (naziv aplikacije) |
 | `rules/` | Čista pravila bez Android-a, sa testovima: `BlockKind` (vrste blokade), `UnlockTimer`, `UnlockCost`, `CodeAttempts`, `TrustedClock`, `SessionLimit`, `RuleMerge`, `LimitWarnings`, `DailySchedule` (režimi), `DailyCode` (dnevna šifra), `DayLimit`, `DomainRules`, `UsageTracker`, `UsageCalendar`, `UnlockStreak` |
-| `guard/` | Delovi servisa: `BlockScreen` (prikaz blokade), `AppKinds` (vrsta aplikacije napred), `UsageAccounting` (upis vremena), `BlockOverlayContent` (ekran blokade i otključavanje), `PauseOverlayContent` (pauza 6 s), `GuardOverlayWindow` (prozor preko svega, muzika), `ForegroundApp`, `SystemScreens`, `Clones`, `MusicOwner`, `LoadMeter`, `GuardDiagnostics` |
+| `guard/` | Delovi servisa: `BlockScreen` (prikaz blokade), `AppKinds` (vrsta aplikacije napred), `UsageAccounting` (upis vremena), `BlockOverlayContent` (ekran blokade i otključavanje), `PauseOverlayContent` (pauza 6 s), `GuardOverlayWindow` (prozor preko svega, muzika), `ForegroundApp`, `SystemScreens`, `Clones`, `MusicOwner`, `LoadMeter`, `GuardDiagnostics` i `ErrorLog` (uhvaćene greške, bez ličnih podataka) |
 | `web/` | Pregledači: `BrowserMonitor`, `BrowserWindows`, `BrowserAddressState`, `WebAddress` (pravi sajt), `Hosts`, `Links` (aplikacija ↔ sajt) |
 | `unlock/` | `Quiz`, `QuizBank`, `Jokes`, `NumberGame`, `NumberGameView`, `PinPad` |
 | `ui/` | `Ui`, `Sheet`, `CheckRow`, `AppPicker` (spisak aplikacija sa pretragom), `Charts`, `SettingsSheets` (prozori podešavanja) |

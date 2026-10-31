@@ -35,10 +35,10 @@ com.cuvar.app            Komponente iz AndroidManifest-a (aktivnosti, servisi)
 
 | Paket | Klase |
 |---|---|
-| `com.cuvar.app` | `MainActivity`, `RulesActivity`, `ScheduleActivity`, `FocusActivity`, `StatsActivity`, `SubActivity`, `GuardService` |
+| `com.cuvar.app` | `CuvarApp` (pokretanje procesa, beleženje padova), `MainActivity`, `RulesActivity`, `ScheduleActivity`, `FocusActivity`, `StatsActivity`, `SubActivity`, `GuardService` |
 | `data` | `Store` (ulaz: `Store.get(c)`, pravila aplikacija i sajtova, popuštanje od sutra) i njegovi delovi: `Clock` (pouzdano vreme), `Unlocks` (šifra, otključavanje, hitno), `Modes` (vremenski režimi), `DayLimits` (ukupni dnevni limit), `UsageLog` (izmereno vreme, otvaranja), `Sessions` (korišćenje u komadu), `Focus`, `GuardLog` (kad Čuvar nije radio), `AppLabels` (naziv aplikacije) |
 | `rules` | `AppRule` (pravilo aplikacije, spajanje „strože od dva“), `BlockKind`, `BlockRules` (koja blokada sada važi), `CodeAttempts`, `DailyCode`, `DailySchedule`, `DayLimit`, `DomainRules`, `ItemKey` (ključevi "app:" i "site:"), `LimitWarnings`, `RuleMerge`, `SessionLimit`, `TrustedClock`, `UnlockCost`, `UnlockStreak`, `UnlockTimer`, `UsageCalendar`, `UsageTracker` |
-| `guard` | delovi servisa: `BlockScreen` (prikaz i sakrivanje blokade, „nazad“), `AppKinds` (vrsta aplikacije napred: bez pravila, kopija, WebAPK, izuzeta, podešavanja), `UsageAccounting` (upis vremena, upozorenja pred limit), `GuardFacts` (pravila iz `Store`-a za `BlockRules`); ostalo: `BlockOverlayContent`, `Clones`, `ForegroundApp`, `GuardDiagnostics`, `GuardOverlayWindow`, `LoadMeter`, `MusicOwner`, `PauseOverlayContent`, `SystemScreens` |
+| `guard` | delovi servisa: `BlockScreen` (prikaz i sakrivanje blokade, „nazad“), `AppKinds` (vrsta aplikacije napred: bez pravila, kopija, WebAPK, izuzeta, podešavanja), `UsageAccounting` (upis vremena, upozorenja pred limit), `GuardFacts` (pravila iz `Store`-a za `BlockRules`); ostalo: `BlockOverlayContent`, `Clones`, `ErrorLog` (dnevnik grešaka, čist i testiran), `ForegroundApp`, `GuardDiagnostics` (prijava greške u logcat i dnevnik na telefonu), `GuardOverlayWindow`, `LoadMeter`, `MusicOwner`, `PauseOverlayContent`, `SystemScreens` |
 | `web` | `BrowserWindows` (prozori na ekranu, glavni prozor pregledača), `BrowserAddressState`, `BrowserMonitor`, `Hosts`, `Links`, `WebAddress` |
 | `unlock` | `Jokes`, `NumberGame`, `NumberGameView`, `PinPad`, `Quiz`, `QuizBank` |
 | `ui` | `AppPicker`, `Charts`, `CheckRow`, `SettingsSheets`, `Sheet`, `Ui` |

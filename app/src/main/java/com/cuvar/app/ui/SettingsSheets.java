@@ -3,8 +3,11 @@ package com.cuvar.app.ui;
 import com.cuvar.app.BuildConfig;
 import com.cuvar.app.GuardService;
 import com.cuvar.app.data.Store;
+import com.cuvar.app.guard.ErrorLog;
+import com.cuvar.app.guard.GuardDiagnostics;
 import com.cuvar.app.guard.LoadMeter;
 import com.cuvar.app.i18n.Lang;
+import com.cuvar.app.i18n.Translit;
 import com.cuvar.app.rules.DailyCode;
 import com.cuvar.app.rules.DayLimit;
 import com.cuvar.app.unlock.NumberGame;
@@ -15,6 +18,8 @@ import android.view.Gravity;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import java.util.Calendar;
+import java.util.List;
 import java.util.Locale;
 
 /** Prozori sa početnog ekrana: podešavanja (tema, jezik, privatnost) i pravila za ceo telefon (dnevni limit, noć, zaštita). */
@@ -316,15 +321,50 @@ public final class SettingsSheets {
         } else {
             sb.append("Servis Čuvara sada ne radi.\n\n");
         }
-        sb.append("Ispod 1 % procesora Čuvar skoro ne troši bateriju. Brojevi kreću od nule kad se Čuvar ponovo pokrene.");
-        new Sheet(a, "Opterećenje telefona")
+        sb.append("Ispod 1 % procesora Čuvar skoro ne troši bateriju. Brojevi kreću od nule kad se Čuvar ponovo pokrene.").append("\n\n");
+        List<ErrorLog.Entry> errors = GuardDiagnostics.entries();
+        appendErrors(sb, errors);
+        Sheet sheet = new Sheet(a, "Opterećenje telefona")
                 .message(sb.toString())
                 .secondary("Zatvori", null)
                 .primary("Osveži", () -> {
                     showLoad();
                     return true;
-                })
-                .show();
+                });
+        if (!errors.isEmpty()) {
+            sheet.danger("Obriši greške", () -> {
+                GuardDiagnostics.clear();
+                showLoad();
+                return true;
+            });
+        }
+        sheet.show();
+    }
+
+    /** Uhvaćene greške: mesto, vrsta, naša klasa i red, koliko puta i kada poslednji put (bez ličnih podataka). */
+    private static void appendErrors(StringBuilder sb, List<ErrorLog.Entry> errors) {
+        if (errors.isEmpty()) {
+            sb.append("Uhvaćenih grešaka nema.");
+            return;
+        }
+        int total = 0;
+        for (ErrorLog.Entry e : errors) total += e.count;
+        sb.append("Zabeležene greške: ").append(total).append('\n');
+        Calendar cal = Calendar.getInstance();
+        int shown = 0;
+        boolean crash = false;
+        for (ErrorLog.Entry e : errors) {
+            if (e.where.equals("crash")) crash = true;
+            if (shown++ >= 8) continue;
+            cal.setTimeInMillis(e.last);
+            sb.append(Translit.keep(e.where)).append(", ").append(Translit.keep(e.type)).append(", ")
+                    .append(Translit.keep(e.frame)).append(" ×").append(e.count)
+                    .append(String.format(Locale.US, ", %02d.%02d. %02d:%02d", cal.get(Calendar.DAY_OF_MONTH),
+                            cal.get(Calendar.MONTH) + 1, cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE)))
+                    .append('\n');
+        }
+        sb.append('\n').append(crash ? "„crash“ znači da je Čuvar pao i sam se ponovo pokrenuo. Ostale greške je uhvatio i nastavio da radi."
+                : "Čuvar je ove greške uhvatio i nastavio da radi.");
     }
 
     private static String one(double v) {

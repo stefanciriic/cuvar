@@ -709,3 +709,8 @@ Van režima bez dnevne šifre	Outside the mode without the daily code
 Danas si već otključao 	Today you have already unlocked 
  puta. Sledeće otključavanje je moguće sutra od 	 times. The next unlock is possible tomorrow from 
 . otključavanje danas: brojevi do 	 unlock today: numbers up to 
+Uhvaćenih grešaka nema.	No errors caught.
+Obriši greške	Clear errors
+Zabeležene greške: 	Recorded errors: 
+„crash“ znači da je Čuvar pao i sam se ponovo pokrenuo. Ostale greške je uhvatio i nastavio da radi.	"crash" means Čuvar stopped and restarted on its own. It caught the other errors and kept running.
+Čuvar je ove greške uhvatio i nastavio da radi.	Čuvar caught these errors and kept running.
