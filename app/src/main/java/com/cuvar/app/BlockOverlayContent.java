@@ -166,7 +166,7 @@ final class BlockOverlayContent {
             host.cooldownLabel = Ui.text(c, GuardService.cooldownText(host.store.cooldownLeft(key)), 15, 0xFFFFFFFF, true);
             host.cooldownLabel.setGravity(Gravity.CENTER);
             box.addView(host.cooldownLabel, Ui.fill(c, 22));
-            if (host.store.emergencyAvailable()) {
+            if (host.store.emergencyAvailable() && host.store.dailyCodeVisible()) {
                 final LinearLayout urgent = Ui.column(c);
                 urgent.setGravity(Gravity.CENTER_HORIZONTAL);
                 box.addView(urgent, Ui.fill(c, 16));
@@ -176,6 +176,12 @@ final class BlockOverlayContent {
                 ask.setOnClickListener(v -> showQuiz(urgent, () -> showEmergencyPad(urgent, key, code), null));
                 urgent.addView(ask);
             }
+        } else if (code && !GuardService.hard(kind) && !host.store.dailyCodeVisible()) {
+            // Šifra van 17–22 ne radi, pa nema smisla igrati igricu ili odgovarati na pitanja.
+            TextView later = Ui.text(c, "Otključavanje je moguće samo od " + DailyCode.CHANGE_HOUR + ":00 do "
+                    + DailyCode.LOCK_HOUR + ":00, uz igricu ili pitanja i dnevnu šifru.", 14, Ui.NIGHT_MUTED, false);
+            later.setGravity(Gravity.CENTER);
+            box.addView(later, Ui.fill(c, 22));
         } else if (code && !GuardService.hard(kind)) {
             final LinearLayout unlock = Ui.column(c);
             unlock.setGravity(Gravity.CENTER_HORIZONTAL);
