@@ -2,7 +2,7 @@ name: APK
 on:
   push:
     branches: [main]
-    paths-ignore: ['**.md']
+    paths-ignore: ['**.md', '.claude/**', 'tools/**']
   workflow_dispatch:
 permissions:
   contents: write
@@ -23,6 +23,16 @@ jobs:
           git checkout -q "${GITHUB_SHA}" # tačno onaj commit koji je pokrenuo build
           if [ -n "${JAVA_HOME_17_X64:-}" ]; then echo "JAVA_HOME=${JAVA_HOME_17_X64}" >> "$GITHUB_ENV"; fi
           echo "RUN_NO=$(( ${{ github.run_number }} + 100 ))" >> "$GITHUB_ENV"
+
+      # Gradle zavisnosti i build keš između build-ova (brži build, isti rezultat).
+      - name: Gradle keš
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle', 'gradle/wrapper/gradle-wrapper.properties', 'gradle.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
 
       - name: Proveri pravila, vreme i pitanja
         run: |

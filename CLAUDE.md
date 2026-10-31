@@ -10,22 +10,18 @@ Pregled funkcija i mapa fajlova: [README.md](README.md).
 ## Pravila rada
 
 - Odgovori i komentari u kodu su na srpskom.
-- Pre izmena uradi `git pull`. Na repou rade i Claude sesije iz oblaka, pa
-  uradi `git pull --rebase` i neposredno pre push-a.
-- Kad je zadatak završen, commituj i pushuj direktno na `main` — bez pravljenja
-  pull request-a. Commit poruke pišu se na engleskom, kratko, šta se promenilo.
-- Build radi GitHub Actions (`.github/workflows/apk.yml`) na svaki push na `main`
-  i pravi novu verziju aplikacije (APK + release sa tagom `v<run_number+100>`).
-  Svaki push je novo izdanje, zato ne pushuj polovične izmene. Push u kome su
-  promenjeni samo `.md` fajlovi ne pokreće build.
-- Posle push-a proveri da je build prošao (GitHub Actions); ako padne, popravi.
-- Lokalni `javac` prihvata skrivene (hidden/internal) Android API-je koje CI
-  (Gradle sa SDK stub-ovima) odbija. Pre nego što prijaviš da je nešto gotovo,
-  proveri da build prolazi onako kako ga pravi CI (`gradlew assembleRelease` ili
-  bar `assembleDebug`), ne samo lokalnim `javac` testom. Za novije sistemske
-  intent-e koristi string (npr. `"android.settings.ACCESSIBILITY_DETAILS_SETTINGS"`)
-  umesto konstante koja možda nije javna.
-- Pokreni testove: `powershell ./tests/run.ps1` (isto radi CI pre build-a).
+- Pre izmena uradi `git pull --rebase` (na repou rade i sesije iz oblaka).
+- Provera: `tools/check.sh` (Windows: `powershell ./tools/check.ps1`) pokreće
+  testove kao CI i `assembleDebug`, a ispisuje samo greške. Ne pokreći Gradle
+  ručno bez filtera. Lokalni `javac` prihvata skrivene Android API-je koje CI
+  odbija; za novije sistemske intent-e koristi string umesto konstante.
+- Gotov zadatak: commit (engleski, kratko) i push direktno na `main`, bez PR-a,
+  pa proveri CI. Postupak je u skill-u `izdanje`. Svaki push na `main` je novo
+  izdanje (APK + release `v<run_number+100>`), zato ne pushuj polovične izmene;
+  push samo `.md`, `.claude/**` ili `tools/**` ne pokreće build.
+- Veliki fajlovi (`data/Store.java`, `GuardService.java`, `unlock/QuizBank.java`,
+  `assets/en.tsv`): ne čitaj ih cele. Nađi mesto sa `grep -n`, pa čitaj samo taj
+  opseg redova. Mapa paketa: [ARCHITECTURE.md](ARCHITECTURE.md).
 - Ne briši i ne menjaj `app/cuvar.keystore` ni podešavanje potpisivanja u CI bez
   pitanja: pogrešan ključ znači da nova verzija ne može da se instalira preko stare.
 - Kad kažeš da je nešto gotovo, reci i da li je provereno na telefonu. Većina
@@ -65,11 +61,8 @@ Pregled funkcija i mapa fajlova: [README.md](README.md).
 
 - Tekst se u kodu piše na srpskom latinicom. Prikaz ga sam prevodi na ćirilicu
   (`Translit`) ili engleski (`Lang`).
-- Svaki novi tekst u interfejsu mora da dobije red u
-  `app/src/main/assets/en.tsv` (engleski prevod). Format: srpski tekst, TAB,
-  engleski tekst — jedan red po tekstu ili delu rečenice. Kad se rečenica sklapa
-  od delova i vrednosti, svaki deo je poseban red (pazi na razmake na krajevima).
-  `LangTest` ispisuje tekstove bez prevoda.
+- Svaki novi tekst u interfejsu mora da dobije red u `app/src/main/assets/en.tsv`
+  (srpski TAB engleski; kako, bez čitanja celog fajla: skill `novi-tekst`).
 - Tekst koji ne ide kroz `Ui.Label` (Toast, hint, tekst na grafikonu) obavij sa
   `Ui.cyr(...)`. Naziv aplikacije prijavi sa `Translit.keep(...)` da ostane kako jeste.
 
@@ -94,6 +87,6 @@ Pregled funkcija i mapa fajlova: [README.md](README.md).
   Novu logiku (računanje vremena, pravila, prepoznavanje) piši kao malu klasu bez
   Android-a (kao `UnlockTimer`, `SessionLimit`, `RuleMerge`, `BlockKind`) sa testom,
   a u `Store`/`GuardService` ostavi samo čitanje, čuvanje i poziv te klase.
-- `tests/README.md` sadrži detaljne scenarije za ručnu proveru na
-  telefonu/emulatoru (dnevni limiti, noćni blok, pitalice, vremenski režimi...).
+- Provera u emulatoru preko adb-a: skill `test-emulator`. Detaljni scenariji su u
+  `tests/README.md` (čitaj samo potreban odeljak).
 - Komentari u kodu su kratki.
