@@ -192,3 +192,7 @@ Pre toga promeniti pravilo "bez Kotlina" u CLAUDE.md.
   Ostaje za nepotvrđenu adresu i ponovljeni pokušaj (stari izlaz preko početne stranice).
 - Plutajuće dugme sa katancem je Android-ova prečica za Pristupačnost, ne Čuvarovo dugme. Proveriti da li
   tap na nju isključuje Čuvara (zaobilaženje) i da li zaštita treba to da spreči.
+- Podeljen ekran (01.11.2026): blokirana aplikacija u drugoj polovini je bila dostupna ~10 s jer se provera
+  prekidala kad se aktivna polovina ne čita (nepoznat ekran, aplikacija bez pravila, navigacija, poziv), a
+  blokada je pokrivala ceo ekran. Sada se druga polovina proverava uvek, a blokada pokriva samo njen prozor,
+  sa dugmetom „Izađi iz podeljenog ekrana“. Provereno na emulatoru; pomeranje granice nije probano.

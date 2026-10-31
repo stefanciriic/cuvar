@@ -94,6 +94,31 @@ public final class BrowserWindows {
         return out;
     }
 
+    /**
+     * Granice prozora aplikacije čiji paket odgovara, kad je na ekranu više aplikacija (podeljen ekran,
+     * plutajući prozor); inače null, pa blokada pokriva ceo ekran. Kad se prozor ne nađe, takođe null.
+     */
+    public android.graphics.Rect boundsOf(java.util.function.Predicate<String> matches) {
+        try {
+            List<AccessibilityWindowInfo> apps = new ArrayList<>();
+            for (AccessibilityWindowInfo w : svc.getWindows()) {
+                if (w != null && w.getType() == AccessibilityWindowInfo.TYPE_APPLICATION) apps.add(w);
+            }
+            if (apps.size() < 2) return null;
+            for (AccessibilityWindowInfo w : apps) {
+                AccessibilityNodeInfo r = w.getRoot();
+                if (r == null || r.getPackageName() == null) continue;
+                if (!matches.test(r.getPackageName().toString())) continue;
+                android.graphics.Rect b = new android.graphics.Rect();
+                w.getBoundsInScreen(b);
+                return b.isEmpty() ? null : b;
+            }
+        } catch (Throwable error) {
+            GuardDiagnostics.report("windowBounds", error);
+        }
+        return null;
+    }
+
     /** Broj prozora aplikacija na ekranu (podeljen ekran, plutajući prozor); ne čita sadržaj aplikacija. */
     public int appWindowCount() {
         int n = 0;

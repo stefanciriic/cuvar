@@ -42,7 +42,8 @@ public final class GuardOverlayWindow {
         musicSeen = true;
     }
 
-    public void show(View view, boolean catchBack, String front) {
+    /** bounds: samo taj deo ekrana (prozor jedne aplikacije u podeljenom ekranu), ili null za ceo ekran. */
+    public void show(View view, boolean catchBack, String front, android.graphics.Rect bounds) {
         WindowManager.LayoutParams params = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT,
@@ -50,8 +51,30 @@ public final class GuardOverlayWindow {
                 catchBack ? 0 : WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
                 PixelFormat.TRANSLUCENT);
         params.gravity = Gravity.TOP | Gravity.START;
+        place(params, bounds);
         windows.addView(view, params);
         if (!MusicOwner.belongsToOther(musicPlaying, musicOwner, front)) silenceMedia();
+    }
+
+    /** Pomera blokadu na nove granice prozora (pomerena granica podeljenog ekrana). */
+    public void move(View view, android.graphics.Rect bounds) {
+        try {
+            WindowManager.LayoutParams params = (WindowManager.LayoutParams) view.getLayoutParams();
+            place(params, bounds);
+            windows.updateViewLayout(view, params);
+        } catch (Throwable error) {
+            GuardDiagnostics.report("moveOverlay", error);
+        }
+    }
+
+    private static void place(WindowManager.LayoutParams params, android.graphics.Rect bounds) {
+        if (bounds == null) return;
+        // Granice prozora su u koordinatama celog ekrana, pa se blokada tako i postavlja.
+        params.flags |= WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS;
+        params.x = bounds.left;
+        params.y = bounds.top;
+        params.width = bounds.width();
+        params.height = bounds.height();
     }
 
     public void hide(View view) {

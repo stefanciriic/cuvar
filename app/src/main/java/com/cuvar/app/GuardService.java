@@ -110,6 +110,7 @@ public class GuardService extends AccessibilityService {
     public DailySchedule.Rule overlayRule; // režim prikazan na ekranu za blokadu
     public final UsageTracker usageTracker = new UsageTracker(3 * TICK_MS);
     public final Set<String> visibleHosts = new HashSet<>();
+    private final java.util.Map<String, String> windowHosts = new java.util.HashMap<>(); // paket prozora -> sajt koji se u njemu vidi
     private final Set<String> secondaryContentPackages = new HashSet<>();
     public BrowserMonitor browserMonitor;
     public PauseOverlayContent pauseOverlayContent;
@@ -641,14 +642,15 @@ public class GuardService extends AccessibilityService {
             String fg = foreground.current();
             if (fg != null && kinds.quiet(fg)) pkg = fg;
         }
-        if (pkg == null) {
-            return;
-        }
-        if (TRANSPARENT.contains(pkg)) {
+        if (pkg == null || TRANSPARENT.contains(pkg)) {
+            blockOtherWindows();
             return;
         }
         boolean quiet = screen.overlay == null && kinds.quiet(pkg) && (kinds.handsOff(pkg) || windows.appWindowCount() < 2);
-        if (!quiet && root == null) return;
+        if (!quiet && root == null) {
+            blockOtherWindows();
+            return;
+        }
         // Ceo vrh ekrana (sa delom sadržaja) treba samo za pregledač unutar aplikacije, gde se adresa traži po ekranu.
         // U pregledačima se adresa čita direktno po polju za adresu, bez čitanja stranice.
         if (!quiet && Build.VERSION.SDK_INT >= 33 && kinds.inAppBrowser(pkg)) {
@@ -657,6 +659,7 @@ public class GuardService extends AccessibilityService {
         }
         currentQuiet = quiet;
         observationValid = true;
+        windowHosts.clear();
         visibleHosts.clear();
         secondaryContentPackages.clear();
         String raw = pkg;
@@ -710,7 +713,7 @@ public class GuardService extends AccessibilityService {
             currentHost = null;
             currentAddress = null;
             setContentEvents(false);
-            screen.hideOverlay();
+            if (!blockOtherWindows()) screen.hideOverlay();
             return;
         }
 
@@ -736,7 +739,7 @@ public class GuardService extends AccessibilityService {
             currentAddress = null;
             pendingOpen = null;
             setContentEvents(false);
-            screen.hideOverlay();
+            if (!blockOtherWindows()) screen.hideOverlay();
             return;
         }
 
@@ -781,25 +784,8 @@ public class GuardService extends AccessibilityService {
                 inApp || apkHost != null, pkg.equals(opensBlocked), unresolved));
 
         // Svaki prozor na ekranu se proverava i kad druga blokada pobeđuje, da se izmeri vreme svih vidljivih sajtova.
-        List<BlockRules.Window> others = new ArrayList<>();
-        for (BrowserWindows.AppWindow other : windows.otherAppWindows()) {
-            if (BrowserWindows.isSameBrowserWindow(other, raw, urlBarId, addressRoot)) continue;
-            String id = BrowserMonitor.addressViewId(other.pkg);
-            boolean embedded = id == null && kinds.inAppBrowser(other.rawPkg);
-            if (id != null || embedded) secondaryContentPackages.add(other.rawPkg);
-            String host = null;
-            boolean addressUnknown = false;
-            if (id != null) {
-                BrowserAddressState address = browserMonitor.readAddress(other.root, id, activityOf.get(other.rawPkg));
-                host = address.host();
-                addressUnknown = address.unresolved(SystemClock.elapsedRealtime());
-            } else if (embedded) {
-                host = browserMonitor.inAppHost(other.root);
-            }
-            if (host != null) visibleHosts.add(host);
-            others.add(new BlockRules.Window(other.pkg, host, addressUnknown, embedded && host == null));
-        }
-        blocks.addAll(BlockRules.windows(facts, others, this::unlockedNow));
+        windowHosts.put(raw, currentHost);
+        blocks.addAll(BlockRules.windows(facts, otherWindows(raw, urlBarId, addressRoot), this::unlockedNow));
         setContentEvents(wantsContent(pkg) || inApp || !secondaryContentPackages.isEmpty());
 
         // Back dismisses the current blocked URL while the browser opens a neutral page. Ignore that site
@@ -843,7 +829,7 @@ public class GuardService extends AccessibilityService {
         }
 
         if (show != null) {
-            screen.showOverlay(show.key, show.kind, show.rule, coolLeft > 0, show.code);
+            screen.showOverlay(show.key, show.kind, show.rule, coolLeft > 0, show.code, blockBounds(show.key));
             if (screen.cooldownLabel != null && coolLeft > 0) {
                 screen.cooldownLabel.setText(BlockScreen.cooldownText(coolLeft));
             }
@@ -854,6 +840,63 @@ public class GuardService extends AccessibilityService {
             screen.overlayFailures = 0;
             screen.overlayRetryAt = 0L;
         }
+    }
+
+    /** Ostali prozori na ekranu (podeljen ekran, plutajući prozor): aplikacija i sajt koji se u njima vidi. */
+    private List<BlockRules.Window> otherWindows(String raw, String urlBarId, AccessibilityNodeInfo addressRoot) {
+        List<BlockRules.Window> others = new ArrayList<>();
+        for (BrowserWindows.AppWindow other : windows.otherAppWindows()) {
+            if (BrowserWindows.isSameBrowserWindow(other, raw, urlBarId, addressRoot)) continue;
+            String id = BrowserMonitor.addressViewId(other.pkg);
+            boolean embedded = id == null && kinds.inAppBrowser(other.rawPkg);
+            if (id != null || embedded) secondaryContentPackages.add(other.rawPkg);
+            String host = null;
+            boolean addressUnknown = false;
+            if (id != null) {
+                BrowserAddressState address = browserMonitor.readAddress(other.root, id, activityOf.get(other.rawPkg));
+                host = address.host();
+                addressUnknown = address.unresolved(SystemClock.elapsedRealtime());
+            } else if (embedded) {
+                host = browserMonitor.inAppHost(other.root);
+            }
+            if (host != null) visibleHosts.add(host);
+            windowHosts.put(other.rawPkg, host);
+            others.add(new BlockRules.Window(other.pkg, host, addressUnknown, embedded && host == null));
+        }
+        return others;
+    }
+
+    /**
+     * Prozor napred se ne čita (nepoznat, sistemski, aplikacija bez pravila, poziv), ali u podeljenom ekranu
+     * druga polovina se ipak proverava: inače bi se blokirana aplikacija tu koristila bez blokade.
+     * Vraća true kad je prikazana blokada.
+     */
+    private boolean blockOtherWindows() {
+        if (windows.appWindowCount() < 2) return false;
+        visibleHosts.clear();
+        secondaryContentPackages.clear();
+        windowHosts.clear();
+        Block show = BlockKind.pick(BlockRules.windows(facts, otherWindows(null, null, null), this::unlockedNow), this::unlockedNow);
+        if (show == null) return false;
+        long coolLeft = hard(show.kind) ? 0 : store.unlock.cooldownLeft(show.key);
+        screen.showOverlay(show.key, show.kind, show.rule, coolLeft > 0, show.code, blockBounds(show.key));
+        return true;
+    }
+
+    /** Prozor blokirane aplikacije ili pregledača sa blokiranim sajtom, kad je na ekranu više aplikacija; inače null (ceo ekran). */
+    private android.graphics.Rect blockBounds(String key) {
+        if (ItemKey.isApp(key)) {
+            String app = ItemKey.name(key);
+            return windows.boundsOf(p -> app.equals(p) || app.equals(kinds.cloneOf(p)));
+        }
+        if (ItemKey.isSite(key)) {
+            String domain = ItemKey.name(key);
+            return windows.boundsOf(p -> {
+                String host = windowHosts.get(p);
+                return host != null && (host.equals(domain) || host.endsWith("." + domain));
+            });
+        }
+        return null;
     }
 
     /**

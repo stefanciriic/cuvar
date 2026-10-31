@@ -37,6 +37,9 @@ public final class BlockScreen {
     private static final long BACK_RETRY_MS = 10000L;
     // Kad nazad izađe iz pregledača (sajt otvoren iz druge aplikacije), poruka ipak ostaje bar ovoliko.
     private static final long NOTICE_MIN_MS = 3000L;
+    private android.graphics.Rect overlayBounds; // prozor koji blokada pokriva u podeljenom ekranu, ili null
+    /** Blokada pokriva jednu polovinu podeljenog ekrana: dugme vodi na početni ekran (izlaz iz podeljenog ekrana). */
+    public boolean splitExit;
 
     public static String cooldownText(long left) {
         long min = (left + 59999L) / 60000L;
@@ -189,15 +192,24 @@ public final class BlockScreen {
         return wrap;
     }
 
-    public void showOverlay(String key, int kind, DailySchedule.Rule rule, boolean cooling, boolean code) {
+    /**
+     * bounds: prozor blokirane aplikacije kad je ekran podeljen (blokada pokriva samo njega, druga polovina radi),
+     * ili null za ceo ekran.
+     */
+    public void showOverlay(String key, int kind, DailySchedule.Rule rule, boolean cooling, boolean code,
+                            android.graphics.Rect bounds) {
         if (overlay != null && key.equals(overlayKey) && kind == overlayKind && sameRule(rule, svc.overlayRule)
-                && cooling == overlayCooling && code == overlayCode) {
+                && cooling == overlayCooling && code == overlayCode && (bounds == null) == (overlayBounds == null)) {
+            if (bounds != null && !bounds.equals(overlayBounds)) {
+                // Granica podeljenog ekrana je pomerena: blokada prati prozor.
+                svc.overlayWindow.move(overlay, bounds);
+                overlayBounds = bounds;
+            }
             return;
         }
         if (overlay == null && overlayRetryAt > SystemClock.elapsedRealtime()) return;
         hideOverlay();
         try {
-            View v = svc.blockOverlayContent.build(key, kind, rule, cooling, code);
             boolean notice = false;
             String browser = browserForCurrentBlock();
             long now = SystemClock.elapsedRealtime();
@@ -210,13 +222,17 @@ public final class BlockScreen {
                 // Posle NOTICE_MIN_MS nova provera skida poruku ako pregledač više nije napred.
                 svc.h.postDelayed(svc::safeCheck, NOTICE_MIN_MS + 100L);
             }
+            // U podeljenom ekranu „Zatvori“ vodi na početni ekran, pa se tako i zove.
+            splitExit = bounds != null && !notice;
+            View v = svc.blockOverlayContent.build(key, kind, rule, cooling, code);
             // Kod sajta u pregledaču naš ekran hvata i sistemsko „nazad“: inače bi ga dobio pregledač,
             // zatvorio karticu bez istorije i izašao iz aplikacije umesto da te vrati na početnu stranu.
-            // Poruka posle vraćanja nazad ne uzima fokus: „nazad“ i početni ekran rade normalno.
-            boolean catchBack = inBrowserPage(key, kind) && !notice;
+            // Poruka posle vraćanja nazad i blokada jedne polovine ekrana ne uzimaju fokus.
+            boolean catchBack = inBrowserPage(key, kind) && !notice && bounds == null;
             if (catchBack) v = backCatcher(v, key, kind);
-            svc.overlayWindow.show(v, catchBack, svc.rawPkg);
+            svc.overlayWindow.show(v, catchBack, svc.rawPkg, bounds);
             overlay = v;
+            overlayBounds = bounds;
             overlayKey = key;
             overlayKind = kind;
             svc.overlayRule = rule;
@@ -244,6 +260,7 @@ public final class BlockScreen {
             svc.overlayWindow.hide(overlay);
             overlay = null;
             noticeKey = null;
+            overlayBounds = null;
             noticeBrowser = null;
             overlayKey = null;
             overlayKind = 0;

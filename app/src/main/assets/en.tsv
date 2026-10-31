@@ -715,3 +715,4 @@ Zabeležene greške: 	Recorded errors:
 „crash“ znači da je Čuvar pao i sam se ponovo pokrenuo. Ostale greške je uhvatio i nastavio da radi.	"crash" means Čuvar stopped and restarted on its own. It caught the other errors and kept running.
 Čuvar je ove greške uhvatio i nastavio da radi.	Čuvar caught these errors and kept running.
 Ekran nije mogao da se otvori. Greška je zabeležena.	The screen could not be opened. The error was recorded.
+Izađi iz podeljenog ekrana	Exit split screen

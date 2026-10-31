@@ -168,7 +168,7 @@ public final class BlockOverlayContent {
         box.addView(j, Ui.fill(c, 16));
 
         // Najveće dugme na ekranu je izlaz: najlakši izbor je da odustaneš.
-        TextView close = overlayButton(c, "Zatvori");
+        TextView close = overlayButton(c, host.screen.splitExit ? "Izađi iz podeljenog ekrana" : "Zatvori");
         close.setTextSize(17);
         close.setBackground(Ui.pressable(Ui.ACCENT, Ui.ACCENT_DOWN, Ui.dp(c, 14)));
         final int k = kind;

@@ -124,7 +124,12 @@ Provera na telefonu:
 
 # Rupe: podeljen ekran i Čuvar ugašen
 
-1. Otvori zaključanu aplikaciju u podeljenom ekranu ili kao plutajući prozor, dok je druga aplikacija u fokusu: ekran blokade se pojavljuje.
+1. Otvori zaključanu aplikaciju u podeljenom ekranu ili kao plutajući prozor, dok je druga aplikacija u fokusu
+   (i kad je to aplikacija bez pravila, navigacija ili ekran koji se ne čita, npr. Google prijava): blokada se
+   pojavi za oko sekundu i pokriva **samo** prozor zaključane aplikacije, sa dugmetom „Izađi iz podeljenog ekrana“.
+   Druga polovina radi normalno. Dugme vodi na početni ekran. Pomeri granicu ekrana: blokada prati prozor.
+   (Emulator 01.11.2026: Kalendar/Google prijava gore, YouTube dole, noćna blokada. Pre popravke ~10 s bez
+   blokade i blokada preko celog ekrana.)
 2. Isključi Čuvara u Pristupačnosti na par minuta pa ga uključi: na kartici „Sada“ piše „Čuvar nije radio“ sa vremenom i razlogom.
 3. Pokreni telefon u Safe Mode, pa normalno: piše da je telefon paljen bez Čuvara.
 
