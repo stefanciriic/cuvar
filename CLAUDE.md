@@ -54,6 +54,10 @@ Pregled funkcija i mapa fajlova: [README.md](README.md).
 - Privatnost: aplikacija nema dozvolu za internet. Ne dodaj je. U pregledaču se
   čita samo adresna traka po ID-u polja, nikad sadržaj stranice. `GuardDiagnostics`
   ne sme da beleži adrese, nazive aplikacija ni tekst sa ekrana.
+- Greške ne smeju da obore proces (ekrani i zaštita su u istom procesu). Svaki ulaz iz Androida
+  (događaj, klik, `Runnable`, prijemnik, crtanje ekrana) ide kroz `Safe.click/run/screen` ili
+  `GuardService.guarded`; ponovno zakazivanje ide u `finally`. Prazan `catch` samo uz komentar zašto.
+  Greške se vide u "Opterećenje telefona" (plan i stanje: [PLAN-GRESKE.md](PLAN-GRESKE.md)).
 - Pazi na bateriju: `GuardService` radi stalno. Ne čitaj ceo prozor aplikacije
   bez potrebe; aplikacije bez pravila ("quiet") se ne čitaju.
 
