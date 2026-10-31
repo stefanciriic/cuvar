@@ -49,6 +49,7 @@ public final class GuardLog {
             o.put("stopped", stopped);
             store.sp.edit().putString("beat", o.toString()).apply();
         } catch (JSONException ignored) {
+            // put sa ispravnim ključem i vrednošću ne baca grešku; podaci ostaju kakvi su bili
         }
         beatSaved = el;
     }
@@ -94,6 +95,7 @@ public final class GuardLog {
         try {
             a.put(new JSONObject().put("from", from).put("to", to).put("what", what));
         } catch (JSONException ignored) {
+            // put sa ispravnim ključem i vrednošću ne baca grešku; podaci ostaju kakvi su bili
         }
         while (a.length() > 20) a.remove(0);
         store.sp.edit().putString("gaps", a.toString()).apply();

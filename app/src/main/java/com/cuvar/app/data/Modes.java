@@ -93,6 +93,7 @@ public final class Modes {
                 o.put("sites", new JSONArray(r.sites));
                 arr.put(o);
             } catch (JSONException ignored) {
+                // put sa ispravnim ključem i vrednošću ne baca grešku; podaci ostaju kakvi su bili
             }
         }
         return arr.toString();
@@ -107,6 +108,7 @@ public final class Modes {
         return Long.toString(System.currentTimeMillis(), 36) + Integer.toString((int) (Math.random() * 1296), 36);
     }
 
+    /** Režim sa tim id-jem, ili null. */
     DailySchedule.Rule rule(String id) {
         for (DailySchedule.Rule r : schedules) if (r.id.equals(id)) return r;
         return null;

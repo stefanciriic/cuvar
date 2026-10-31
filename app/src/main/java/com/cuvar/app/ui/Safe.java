@@ -1,5 +1,6 @@
 package com.cuvar.app.ui;
 
+import android.app.Activity;
 import android.view.View;
 
 import com.cuvar.app.guard.GuardDiagnostics;
@@ -40,6 +41,20 @@ public final class Safe {
             if (work != null) work.run();
         } catch (Throwable error) {
             GuardDiagnostics.report(where, error);
+        }
+    }
+
+    /**
+     * Crtanje ekrana: ekrani rade u istom procesu kao zaštita, pa bi pad ovde ugasio i nju.
+     * Kod greške se ekran zatvori uz kratku poruku, a greška se upiše u dnevnik.
+     */
+    public static void screen(Activity a, String where, Runnable build) {
+        try {
+            build.run();
+        } catch (Throwable error) {
+            GuardDiagnostics.report(where, error);
+            run(where + "Toast", () -> Ui.toast(a, "Ekran nije mogao da se otvori. Greška je zabeležena."));
+            a.finish();
         }
     }
 

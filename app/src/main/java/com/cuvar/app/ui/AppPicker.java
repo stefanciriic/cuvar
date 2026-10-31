@@ -1,5 +1,6 @@
 package com.cuvar.app.ui;
 
+import com.cuvar.app.guard.GuardDiagnostics;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
@@ -52,14 +53,16 @@ public final class AppPicker {
                     String pkg = info.activityInfo.packageName;
                     if (pkg == null || pkg.equals(a.getPackageName()) || !seen.add(pkg)) continue;
                     Drawable icon = null;
-                    try { icon = info.loadIcon(pm); } catch (Throwable ignored) { }
+                    try { icon = info.loadIcon(pm); } catch (Throwable ignored) { /* ikona nije obavezna */ }
                     out.add(new App(pkg, Translit.keep(String.valueOf(info.loadLabel(pm))), icon));
                 }
-            } catch (Throwable ignored) { }
+            } catch (Throwable error) {
+                GuardDiagnostics.report("appList", error); // prazan spisak umesto pada
+            }
             out.sort((x, y) -> x.label.compareToIgnoreCase(y.label));
             a.runOnUiThread(() -> {
                 if (a.isFinishing() || a.isDestroyed()) return;
-                done.accept(out);
+                Safe.run("appListShow", () -> done.accept(out));
             });
         }).start();
     }

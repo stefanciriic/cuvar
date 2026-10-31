@@ -14,6 +14,7 @@ import com.cuvar.app.rules.DayLimit;
 import com.cuvar.app.ui.Charts;
 import com.cuvar.app.ui.SettingsSheets;
 import com.cuvar.app.ui.Sheet;
+import com.cuvar.app.ui.Safe;
 import com.cuvar.app.ui.Ui;
 
 import android.app.Activity;
@@ -72,8 +73,10 @@ public class MainActivity extends Activity {
         Ui.theme(this);
         dark = Ui.dark;
         super.onCreate(savedInstanceState);
-        store = Store.get(this);
-        sheets = new SettingsSheets(this, store, this::showDashboard);
+        Safe.screen(this, "mainCreate", () -> {
+            store = Store.get(this);
+            sheets = new SettingsSheets(this, store, this::showDashboard);
+        });
         Ui.styleWindow(this);
     }
 
@@ -84,7 +87,7 @@ public class MainActivity extends Activity {
             recreate();
             return;
         }
-        showDashboard();
+        Safe.screen(this, "dashboard", this::showDashboard);
     }
 
     @Override
@@ -563,6 +566,7 @@ public class MainActivity extends Activity {
                 return r.activityInfo.packageName;
             }
         } catch (Throwable ignored) {
+            // nema podrazumevane aplikacije: vraća se null
         }
         return "";
     }
@@ -606,6 +610,7 @@ public class MainActivity extends Activity {
                                 new android.content.ComponentName(this, GuardService.class).flattenToString()));
                 return;
             } catch (Throwable ignored) {
+                // ovaj Android nema direktan ekran za servis: ispod se otvara opšti ekran Pristupačnosti
             }
         }
         try {
@@ -630,6 +635,7 @@ public class MainActivity extends Activity {
                         startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                                 Uri.parse("package:" + getPackageName())));
                     } catch (Throwable ignored) {
+                        // nema ni ekrana sa podacima o aplikaciji: korisnik ostaje na Čuvaru
                     }
                     return true;
                 })

@@ -59,6 +59,7 @@ public final class Clock {
             o.put("zone", zone.getID());
             store.sp.edit().putString("clock", o.toString()).apply();
         } catch (JSONException ignored) {
+            // put sa ispravnim ključem i vrednošću ne baca grešku; podaci ostaju kakvi su bili
         }
         clockSaved = el;
     }

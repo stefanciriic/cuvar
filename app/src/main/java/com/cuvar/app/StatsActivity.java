@@ -8,6 +8,7 @@ import com.cuvar.app.data.UsageLog;
 import com.cuvar.app.rules.DailySchedule;
 import com.cuvar.app.rules.UnlockStreak;
 import com.cuvar.app.ui.Charts;
+import com.cuvar.app.ui.Safe;
 import com.cuvar.app.ui.Ui;
 
 import android.content.Intent;
@@ -56,6 +57,10 @@ public class StatsActivity extends SubActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        Safe.screen(this, "stats", this::build);
+    }
+
+    private void build() {
 
         LinearLayout root = Ui.column(this);
         root.setBackgroundColor(Ui.BG);
@@ -641,6 +646,7 @@ public class StatsActivity extends SubActivity {
                 return r.activityInfo.packageName;
             }
         } catch (Throwable ignored) {
+            // nema podrazumevane aplikacije: vraća se null
         }
         return "";
     }

@@ -8,6 +8,7 @@ import com.cuvar.app.rules.DailySchedule;
 import com.cuvar.app.ui.AppPicker;
 import com.cuvar.app.ui.CheckRow;
 import com.cuvar.app.ui.Sheet;
+import com.cuvar.app.ui.Safe;
 import com.cuvar.app.ui.Ui;
 import com.cuvar.app.web.Hosts;
 import com.cuvar.app.web.Links;
@@ -42,7 +43,7 @@ public class RulesActivity extends SubActivity {
     protected void onResume() {
         super.onResume();
         if (isFinishing()) return;
-        render();
+        Safe.screen(this, "rules", this::render);
     }
 
     private void render() {
@@ -134,7 +135,7 @@ public class RulesActivity extends SubActivity {
         sorted.sort((x, y) -> x[1].compareToIgnoreCase(y[1]));
         for (String[] x : sorted) {
             Drawable icon = null;
-            try { icon = pm.getApplicationIcon(x[0]); } catch (Exception ignored) { }
+            try { icon = pm.getApplicationIcon(x[0]); } catch (Exception ignored) { /* ikona nije obavezna */ }
             String dom = store.linkedSite(x[0]);
             Has has = r -> r.apps.contains(x[0]) || covers(dom, r.sites);
             List<String> cur = appChips(x[0], true, hasCode(rules, has));
@@ -257,6 +258,7 @@ public class RulesActivity extends SubActivity {
                 pm.getApplicationInfo(pkg, 0);
                 return pkg;
             } catch (Exception ignored) {
+                // aplikacija nije instalirana
             }
         }
         return null;

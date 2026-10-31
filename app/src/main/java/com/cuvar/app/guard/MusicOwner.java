@@ -13,7 +13,7 @@ public final class MusicOwner {
 
     /**
      * Novi vlasnik posle provere. Kad muzika krene, vlasnik je aplikacija napred; dok svira, vlasnik ostaje;
-     * kad stane, nema vlasnika. first: ovo je prva provera, pa se ne zna da li je muzika tek krenula.
+     * kad stane, nema vlasnika (null). first: ovo je prva provera, pa se ne zna da li je muzika tek krenula.
      */
     public static String next(boolean first, boolean wasPlaying, boolean playing, String owner, String front) {
         if (!playing) return null;

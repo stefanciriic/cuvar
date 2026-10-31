@@ -209,6 +209,7 @@ public final class Store {
             try {
                 apps.put(pkg, toJson(r));
             } catch (JSONException ignored) {
+                // put sa ispravnim ključem i vrednošću ne baca grešku; podaci ostaju kakvi su bili
             }
         }
         sp.edit().putString("apps", apps.toString()).apply();
@@ -376,6 +377,7 @@ public final class Store {
             o.put("limit", Math.max(0, limitMin));
             sites.put(domain, o);
         } catch (JSONException ignored) {
+            // put sa ispravnim ključem i vrednošću ne baca grešku; podaci ostaju kakvi su bili
         }
         sp.edit().putString("sites", sites.toString()).apply();
         enforce();
@@ -492,6 +494,7 @@ public final class Store {
         clearRuleCache();
     }
 
+    /** Sačuvan niz, ili null kad ga nema ili je oštećen. */
     static JSONArray parseArray(String s) {
         if (s == null) return null;
         try {
@@ -539,6 +542,7 @@ public final class Store {
             try {
                 na.put(pkg, toJson(r));
             } catch (JSONException ignored) {
+                // put sa ispravnim ključem i vrednošću ne baca grešku; podaci ostaju kakvi su bili
             }
         }
         JSONObject ns = new JSONObject();
@@ -552,6 +556,7 @@ public final class Store {
             try {
                 ns.put(dom, new JSONObject().put("limit", limit));
             } catch (JSONException ignored) {
+                // put sa ispravnim ključem i vrednošću ne baca grešku; podaci ostaju kakvi su bili
             }
         }
         List<DailySchedule.Rule> nr = DailySchedule.tighten(eSchedules, modes.schedules);
@@ -780,6 +785,7 @@ public final class Store {
         try {
             links.put(pkg, domain == null ? "" : domain);
         } catch (JSONException ignored) {
+            // put sa ispravnim ključem i vrednošću ne baca grešku; podaci ostaju kakvi su bili
         }
         sp.edit().putString("links", links.toString()).apply();
         enforce();
@@ -862,6 +868,7 @@ public final class Store {
             for (String k : keysOf(sites)) sites.remove(k);
             for (String k : keysOf(s)) sites.put(k, s.get(k));
         } catch (JSONException ignored) {
+            // kopija ispravnog JSON-a ne baca grešku; inače ostaje podešavanje kakvo je bilo
         }
         modes.schedules.clear();
         Set<String> ids = new HashSet<>();
@@ -874,6 +881,7 @@ public final class Store {
         try {
             for (String p : eLinks) if (!want.contains(p)) links.put(Links.pkgOf(p), Links.domainOf(p));
         } catch (JSONException ignored) {
+            // put sa ispravnim ključem i vrednošću ne baca grešku; podaci ostaju kakvi su bili
         }
         sp.edit().putString("apps", apps.toString()).putString("sites", sites.toString()).putString("links", links.toString())
                 .putString("schedules", modes.schedulesJson()).putBoolean("night", eNight).putBoolean("protect", eProtect)

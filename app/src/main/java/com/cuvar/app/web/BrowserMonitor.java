@@ -91,7 +91,8 @@ public final class BrowserMonitor {
                         .queryIntentActivities(intent, PackageManager.MATCH_ALL)) {
                     if (resolve.activityInfo != null) out.add(resolve.activityInfo.packageName);
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable error) {
+                GuardDiagnostics.report("webApps", error);
             }
             out.remove("android"); // izbor aplikacije, nije pregledač
             webApps = out;
@@ -161,7 +162,7 @@ public final class BrowserMonitor {
         }
     }
 
-    /** Reads only a small visible toolbar area, never the WebView page content. */
+    /** Reads only a small visible toolbar area, never the WebView page content. Null kad se adresa ne vidi. */
     public String inAppHost(AccessibilityNodeInfo root) {
         if (root == null) return null;
         try {

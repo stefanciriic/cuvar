@@ -524,6 +524,7 @@ public class GuardService extends AccessibilityService {
             try {
                 unregisterReceiver(screenReceiver);
             } catch (Throwable ignored) {
+                // prijemnik je već odjavljen
             }
             receiverOn = false;
         }
@@ -531,6 +532,7 @@ public class GuardService extends AccessibilityService {
             try {
                 unregisterReceiver(packageReceiver);
             } catch (Throwable ignored) {
+                // prijemnik je već odjavljen
             }
             packageReceiverOn = false;
         }

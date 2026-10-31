@@ -14,6 +14,7 @@ import android.provider.Telephony;
 import android.telecom.TelecomManager;
 import android.view.accessibility.AccessibilityNodeInfo;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -79,6 +80,7 @@ public final class AppKinds {
                 }
             }
         } catch (Throwable ignored) {
+            // nema podataka o aplikaciji: nije WebAPK
         }
         if (host == null && (p.startsWith("org.chromium.webapk.") || p.contains(".webapk."))) host = "";
         webApkHosts.put(p, host);
@@ -161,7 +163,8 @@ public final class AppKinds {
                 for (android.content.pm.ResolveInfo r : svc.getPackageManager().queryIntentActivities(i, PackageManager.MATCH_ALL)) {
                     if (r.activityInfo != null) out.add(r.activityInfo.packageName);
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable error) {
+                GuardDiagnostics.report("launcherApps", error);
             }
             launcherApps = out;
             launcherAppsAt = now;
@@ -189,6 +192,7 @@ public final class AppKinds {
                 if (n != null && !n.isEmpty()) return true;
             }
         } catch (Throwable ignored) {
+            // prozor se promenio dok se čitao: smatra se da teksta nema
         }
         return false;
     }
@@ -216,26 +220,45 @@ public final class AppKinds {
         return exempt;
     }
 
+    /** Poznate aplikacije za telefon i SMS, kad Android ne kaže koja je podrazumevana: hitni pozivi moraju da rade. */
+    private static final String[] FALLBACK_DIALERS = {"com.google.android.dialer", "com.android.dialer",
+            "com.samsung.android.dialer", "com.android.incallui", "com.samsung.android.incallui", "com.android.server.telecom"};
+    private static final String[] FALLBACK_SMS = {"com.google.android.apps.messaging", "com.android.mms",
+            "com.samsung.android.messaging", "com.android.messaging"};
+
     public static Set<String> exemptApps(Context c) {
         Set<String> out = new HashSet<>();
         out.add(c.getPackageName());
+        boolean dialerKnown = false, smsKnown = false;
         try {
             Intent i = new Intent(Intent.ACTION_MAIN);
             i.addCategory(Intent.CATEGORY_HOME);
             android.content.pm.ResolveInfo r = c.getPackageManager().resolveActivity(i, PackageManager.MATCH_DEFAULT_ONLY);
             if (r != null && r.activityInfo != null) out.add(r.activityInfo.packageName);
-        } catch (Throwable ignored) {
+        } catch (Throwable error) {
+            GuardDiagnostics.report("exemptHome", error);
         }
         try {
             TelecomManager tm = (TelecomManager) c.getSystemService(Context.TELECOM_SERVICE);
-            if (tm != null && tm.getDefaultDialerPackage() != null) out.add(tm.getDefaultDialerPackage());
-        } catch (Throwable ignored) {
+            String dialer = tm == null ? null : tm.getDefaultDialerPackage();
+            if (dialer != null) {
+                out.add(dialer);
+                dialerKnown = true;
+            }
+        } catch (Throwable error) {
+            GuardDiagnostics.report("exemptDialer", error);
         }
         try {
             String sms = Telephony.Sms.getDefaultSmsPackage(c);
-            if (sms != null) out.add(sms);
-        } catch (Throwable ignored) {
+            if (sms != null) {
+                out.add(sms);
+                smsKnown = true;
+            }
+        } catch (Throwable error) {
+            GuardDiagnostics.report("exemptSms", error);
         }
+        if (!dialerKnown) Collections.addAll(out, FALLBACK_DIALERS);
+        if (!smsKnown) Collections.addAll(out, FALLBACK_SMS);
         return out;
     }
 }

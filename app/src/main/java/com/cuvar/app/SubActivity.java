@@ -2,6 +2,7 @@ package com.cuvar.app;
 
 import com.cuvar.app.data.Store;
 import com.cuvar.app.ui.Sheet;
+import com.cuvar.app.ui.Safe;
 import com.cuvar.app.ui.Ui;
 
 import android.app.Activity;
@@ -21,7 +22,7 @@ public abstract class SubActivity extends Activity {
         Ui.theme(this);
         dark = Ui.dark;
         super.onCreate(savedInstanceState);
-        store = Store.get(this);
+        Safe.screen(this, "subCreate", () -> store = Store.get(this));
         Ui.styleWindow(this);
     }
 

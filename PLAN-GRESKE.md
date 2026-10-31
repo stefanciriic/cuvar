@@ -136,7 +136,15 @@ JSON nije dodat: `org.json` je deo Androida i nije dostupan čistim testovima.
 - Test za oštećen JSON: pomoćne funkcije parsiranja iz `Store`-a izvući u čistu klasu i testirati
   `"{"`, `"null"`, `"[]"` umesto objekta i slično.
 
-### Faza 5: ekrani i čišćenje (R14, R15)
+### Faza 5: ekrani i čišćenje (R14, R15) — urađeno 31.10.2026
+
+Urađeno: `Safe.screen` za crtanje svih ekrana (kod greške: poruka, ekran se zatvori, proces živi); svih 35
+praznih `catch` blokova ima prijavu ili komentar; `AppKinds.exemptApps` prijavljuje grešku i, kad Android ne kaže
+koji je podrazumevani telefon ili SMS, izuzima poznate aplikacije za telefon i SMS (hitni pozivi); oznaka
+"ili null" na metodama koje vraćaju null; `StrictMode` u debug build-u (samo zapis u logu).
+Na emulatoru: namerna greška u ekranu "Pravila" ga je zatvorila bez pada; ekrani Pravila, Fokus i Statistika
+rade. `StrictMode` je našao samo prvo čitanje podešavanja na glavnoj niti pri pokretanju (~0,9 s na
+emulatoru): moguće buduće ubrzanje, nije greška. Nije probano na telefonu.
 
 - `SubActivity`/aktivnosti: zaštita pri crtanju. Kad pukne, kratka poruka i povratak, ne pad procesa.
 - Prolaz kroz svih 86 `catch` blokova: prijava ili komentar.

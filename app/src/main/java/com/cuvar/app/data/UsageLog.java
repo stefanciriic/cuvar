@@ -71,6 +71,7 @@ public final class UsageLog {
                     }
                     d.put(key, d.optLong(key, 0L) + part.getValue());
                 } catch (JSONException ignored) {
+                    // put sa ispravnim ključem i vrednošću ne baca grešku; podaci ostaju kakvi su bili
                 }
             }
             prune();
@@ -168,6 +169,7 @@ public final class UsageLog {
                 }
                 d.put(key, d.optInt(key, 0) + 1);
             } catch (JSONException ignored) {
+                // put sa ispravnim ključem i vrednošću ne baca grešku; podaci ostaju kakvi su bili
             }
             store.sp.edit().putString("opens", opens.toString()).apply();
             return d.optInt(key, 0);

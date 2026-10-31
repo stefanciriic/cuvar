@@ -9,7 +9,7 @@ public final class Hosts {
     private Hosts() {
     }
 
-    /** Iz adrese vadi čist domen: "https://www.Facebook.com/x" -> "facebook.com". */
+    /** Iz adrese vadi čist domen: "https://www.Facebook.com/x" -> "facebook.com"; null kad to nije adresa. */
     public static String hostOf(String url) {
         if (url == null) {
             return null;

@@ -31,7 +31,7 @@ public final class UsageTracker {
         return transition(elapsedMs, epochMs, keys);
     }
 
-    /** Epoch time labels the interval; elapsed time alone determines its duration. */
+    /** Epoch time labels the interval; elapsed time alone determines its duration. Null kad nema šta da se upiše. */
     public Interval transition(long elapsedMs, long epochMs, Collection<String> nextKeys) {
         long duration = lastElapsed < 0 ? 0 : elapsedMs - lastElapsed;
         Set<String> previous = keys;

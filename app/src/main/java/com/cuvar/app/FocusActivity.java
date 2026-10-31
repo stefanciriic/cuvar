@@ -3,6 +3,7 @@ package com.cuvar.app;
 import com.cuvar.app.ui.AppPicker;
 import com.cuvar.app.ui.CheckRow;
 import com.cuvar.app.ui.Sheet;
+import com.cuvar.app.ui.Safe;
 import com.cuvar.app.ui.Ui;
 import com.cuvar.app.web.Hosts;
 
@@ -31,16 +32,18 @@ public class FocusActivity extends SubActivity {
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
-        selectedApps.addAll(store.focus.focusApps());
-        selectedSites.addAll(store.focus.focusSites());
-        render();
-        loadApps();
+        Safe.screen(this, "focus", () -> {
+            selectedApps.addAll(store.focus.focusApps());
+            selectedSites.addAll(store.focus.focusSites());
+            render();
+            loadApps();
+        });
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        if (status != null && store.focus.focusActive()) render();
+        if (status != null && store.focus.focusActive()) Safe.screen(this, "focus", this::render);
     }
 
     private void render() {

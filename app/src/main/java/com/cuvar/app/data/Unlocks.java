@@ -50,6 +50,7 @@ public final class Unlocks {
             o.put("boot", store.boot);
             store.sp.edit().putString("codeLockout", o.toString()).apply();
         } catch (JSONException ignored) {
+            // put sa ispravnim ključem i vrednošću ne baca grešku; podaci ostaju kakvi su bili
         }
     }
 
@@ -330,6 +331,7 @@ public final class Unlocks {
                 t.put("boot", store.boot);
                 stampMoved = true;
             } catch (JSONException ignored) {
+                // put sa ispravnim ključem i vrednošću ne baca grešku; podaci ostaju kakvi su bili
             }
         }
         return Math.max(0L, since);
@@ -343,6 +345,7 @@ public final class Unlocks {
             o.put("boot", store.boot);
             unlocks.put(key, o);
         } catch (JSONException ignored) {
+            // put sa ispravnim ključem i vrednošću ne baca grešku; podaci ostaju kakvi su bili
         }
         store.sp.edit().putString("unlocks", unlocks.toString()).apply();
     }

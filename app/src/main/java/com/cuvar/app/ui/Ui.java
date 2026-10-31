@@ -412,7 +412,7 @@ public final class Ui {
         return (ms / 1000L) + " s";
     }
 
-    /** Ne pretvara grešku u nulu: nula menja značenje pravila. */
+    /** Uneti broj, ili null kad unos nije ispravan (greška se ne pretvara u nulu: nula menja značenje pravila). */
     public static Integer nonNegativeNumber(EditText field) {
         try {
             int value = Integer.parseInt(field.getText().toString().trim());

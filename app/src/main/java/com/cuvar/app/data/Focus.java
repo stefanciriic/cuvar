@@ -45,6 +45,7 @@ public final class Focus {
             o.put("sites", new JSONArray(focusSites));
             store.sp.edit().putString("focus", o.toString()).apply();
         } catch (JSONException ignored) {
+            // put sa ispravnim ključem i vrednošću ne baca grešku; podaci ostaju kakvi su bili
         }
     }
 

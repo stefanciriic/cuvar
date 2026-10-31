@@ -6,6 +6,7 @@ import com.cuvar.app.ui.Charts;
 import com.cuvar.app.ui.AppPicker;
 import com.cuvar.app.ui.CheckRow;
 import com.cuvar.app.ui.Sheet;
+import com.cuvar.app.ui.Safe;
 import com.cuvar.app.ui.Ui;
 import com.cuvar.app.web.Hosts;
 
@@ -41,7 +42,7 @@ public class ScheduleActivity extends SubActivity {
     @Override protected void onResume() {
         super.onResume();
         if (isFinishing()) return;
-        render();
+        Safe.screen(this, "schedule", this::render);
     }
 
     private void render() {

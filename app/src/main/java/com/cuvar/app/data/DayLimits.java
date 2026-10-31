@@ -49,6 +49,7 @@ public final class DayLimits {
                 d.put(GUARDED_KEY, DayLimit.guardedEstimate(store.usageLog.dayMap(today), guarded, store.siteKeysNow()));
                 store.dirty = true;
             } catch (JSONException ignored) {
+                // put sa ispravnim ključem i vrednošću ne baca grešku; podaci ostaju kakvi su bili
             }
         }
         SharedPreferences.Editor e = store.sp.edit().putBoolean("dayLimitGuarded", true);
