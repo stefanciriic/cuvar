@@ -313,6 +313,11 @@ public final class BlockScreen {
                 && UnlockCost.next(svc.store.unlock.unlocksToday()) != null;
     }
 
+    /** Skida ekran za blokadu ako je prikazan baš za ovu stavku (npr. upravo otključanu). */
+    public void hideIfShowing(String key) {
+        if (overlay != null && key.equals(overlayKey)) hideOverlay();
+    }
+
     public void hideOverlay() {
         if (overlay != null) {
             svc.overlayWindow.hide(overlay);

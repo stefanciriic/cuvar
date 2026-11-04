@@ -345,7 +345,10 @@ public final class BlockOverlayContent {
             String err = host.store.unlock.tryCode(pin);
             if (err == null) {
                 host.store.unlock.startUnlock(key);
-                host.safeCheck(); // another matching domain or rule may still require a block
+                // Skini ekran odmah: provera ispod može da izađe ranije (prozor se trenutno ne čita),
+                // pa bi ekran ostao iako je šifra prihvaćena. Ako i dalje važi neko drugo pravilo, provera ga vraća.
+                host.screen.hideIfShowing(key);
+                host.safeCheck();
             } else {
                 pad.clear();
                 pad.setMessage(err);
@@ -379,6 +382,7 @@ public final class BlockOverlayContent {
             String err = host.store.unlock.tryCode(pin);
             if (err == null) {
                 host.store.unlock.startEmergency(key);
+                host.screen.hideIfShowing(key);
                 host.safeCheck();
             } else {
                 pad.clear();
