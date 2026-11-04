@@ -124,9 +124,6 @@ public class GuardService extends AccessibilityService {
     // Najkraći razmak provera dok se sadržaj stalno menja (skrolovanje): adresa se čita najviše ~2,5 puta u sekundi.
     private static final long CONTENT_CHECK_MS = 400L;
     private long ruledSeenAt;     // kad je poslednji put viđena aplikacija sa pravilom ili pregledač napred (System.currentTimeMillis)
-    public String leavingSiteKey;
-    public String leavingSiteBrowser;
-    public long leavingSiteUntil;
     private String pendingOpen;      // aplikacija upravo otvorena; broji se kad se zaista prikaže, bez blokade
     private String opensBlocked;     // aplikacija otvorena posle potrošenih otvaranja; blokirana dok se ne izađe
     public final Map<String, String> activityOf = new LinkedHashMap<String, String>() {
@@ -223,16 +220,6 @@ public class GuardService extends AccessibilityService {
         }
     };
 
-    /** Keep the just-dismissed site block from flashing back while the browser navigates to the neutral page. */
-    public final Runnable finishSiteExit = new Runnable() {
-        @Override
-        public void run() {
-            leavingSiteKey = null;
-            leavingSiteBrowser = null;
-            leavingSiteUntil = 0L;
-            safeCheck();
-        }
-    };
 
     private final BroadcastReceiver screenReceiver = new BroadcastReceiver() {
         @Override
@@ -818,26 +805,6 @@ public class GuardService extends AccessibilityService {
         blocks.addAll(BlockRules.windows(facts, otherWindows(raw, urlBarId, addressRoot), this::unlockedNow));
         setContentEvents(wantsContent(pkg) || inApp || !secondaryContentPackages.isEmpty());
 
-        // Back dismisses the current blocked URL while the browser opens a neutral page. Ignore that site
-        // and its temporary unknown-address state briefly; app rules still take effect immediately.
-        if (leavingSiteKey != null) {
-            boolean sameBrowser = pkg.equals(leavingSiteBrowser)
-                    || (rawPkg != null && rawPkg.equals(leavingSiteBrowser));
-            if (SystemClock.elapsedRealtime() >= leavingSiteUntil || !sameBrowser) {
-                h.removeCallbacks(finishSiteExit);
-                leavingSiteKey = null;
-                leavingSiteBrowser = null;
-                leavingSiteUntil = 0L;
-            } else {
-                String exitingKey = leavingSiteKey;
-                String exitingBrowser = leavingSiteBrowser;
-                blocks.removeIf(b -> exitingKey.equals(b.key)
-                        // U adresnoj traci se kratko pojavi i „nepoznata adresa”; ne prikazuj drugi overlay
-                        // dok isti browser otvara neutralnu stranicu.
-                        || ((b.kind == KIND_ADDRESS || b.kind == KIND_UNSEEN_SITE) && (ItemKey.app(exitingBrowser)).equals(b.key)));
-            }
-        }
-
         // Otključavanje dnevnom šifrom važi 5 minuta, a zatim sat vremena nema otključavanja (vidi Store),
         // osim jednog hitnog otključavanja dnevno. Režim i potrošen limit se nikad ne otključavaju.
         Block show = BlockKind.pick(blocks, this::unlockedNow);
@@ -850,8 +817,8 @@ public class GuardService extends AccessibilityService {
         }
         long coolLeft = show == null || hard(show.kind) || show.kind == KIND_PAUSE ? 0 : store.unlock.cooldownLeft(show.key);
 
-        // Posle „Zatvori“ isti sajt je i dalje otvoren: pregledač ide na početnu stranu, bez novog ekrana i pokušaja.
-        if (show != null && show.kind != KIND_PAUSE && screen.exitAfterClosedNotice(show.key, show.kind)) return;
+        // Posle „Zatvori“ isti sajt je i dalje otvoren: još jednom nazad, bez novog ekrana i pokušaja.
+        if (show != null && show.kind != KIND_PAUSE && screen.exitBlocked(show.key, show.kind)) return;
         if (show != null && show.kind != KIND_PAUSE && (screen.overlay == null || !show.key.equals(screen.overlayKey) || screen.overlayKind == KIND_PAUSE)) {
             store.usageLog.countOpen("try:" + show.key); // novi pokušaj da se otvori nešto blokirano
         }

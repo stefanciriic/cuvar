@@ -199,8 +199,11 @@ Provera na telefonu:
    „Zatvori“ samo skloni ekran: ispod je prethodna stranica, broj kartica se ne menja.
 3. HOME dok je ekran blokade gore: ekran nestaje, vidi se početni ekran.
 4. Blokiran sajt otvoren iz druge aplikacije (nova kartica bez istorije): nazad zatvara karticu, poruka ostaje oko
-   3 s. Ako se sajt posle „Zatvori“ ipak i dalje vidi, sledeći „Zatvori“ otvara početnu stranicu (google.com).
-5. Otključavanje šifrom (17–22) radi preko istog ekrana; posle toga sajt treba ponovo otvoriti.
+   3 s. Ako se sajt posle „Zatvori“ ipak i dalje vidi (preusmeravanje), Čuvar sam pritisne nazad još do dva puta,
+   pa početni ekran. Ne otvara se nova kartica, nema novog ekrana blokade i broj pokušaja ne raste.
+5. Sajt koji sada može da se otključi (zaključan šifrom, 17–22, van režima i limita): nema vraćanja nazad, sajt
+   ostaje ispod ekrana sa igricom/pitanjem. „Zatvori“ (ili sistemsko nazad) vraća nazad u istoj kartici.
+   Posle otključavanja sajt je odmah dostupan.
 6. Zaključana aplikacija (nije sajt): „Zatvori“ i dalje vodi na početni ekran telefona.
 
 ## Aplikacija bez pravila se uopšte ne čita (Mape)

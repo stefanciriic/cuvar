@@ -1,11 +1,11 @@
 package com.cuvar.app.guard;
 
 import com.cuvar.app.rules.ItemKey;
+import com.cuvar.app.rules.UnlockCost;
 import com.cuvar.app.GuardService;
 import com.cuvar.app.rules.DailySchedule;
 import com.cuvar.app.web.BrowserMonitor;
 
-import android.content.Intent;
 import android.os.Build;
 import android.os.SystemClock;
 import android.view.KeyEvent;
@@ -34,10 +34,13 @@ public final class BlockScreen {
     private String noticeBrowser;   // pregledač u kome je vraćeno nazad
     private String backedKey;       // sajt za koji je poslednji put pritisnuto nazad
     private long backedAt;
-    // „Zatvori“ na toj poruci: ako se sajt i dalje vidi, sledeća provera vodi na početnu stranu.
-    private String closedNoticeKey;
-    private long closedNoticeAt;
-    private static final long CLOSED_NOTICE_MS = 3000L;
+    // Izlaz posle „Zatvori“: nazad u pregledaču, ponovo ako se isti sajt i dalje vidi (vidi exitBlocked).
+    private String exitKey;
+    private String exitBrowser;
+    private int exitBacks;
+    private long exitAt;
+    private static final long EXIT_MS = 3000L;
+    private static final int EXIT_MAX_BACKS = 3;
     private static final long BACK_RETRY_MS = 10000L;
     // Kad nazad izađe iz pregledača (sajt otvoren iz druge aplikacije), poruka ipak ostaje bar ovoliko.
     private static final long NOTICE_MIN_MS = 3000L;
@@ -93,8 +96,8 @@ public final class BlockScreen {
     }
 
     /**
-     * Izlaz sa ekrana za blokadu. Blokiran sajt u pregledaču: ostani u pregledaču, samo skloni karticu
-     * sa te stranice (otvori početnu Google stranu). Sve ostalo: početni ekran telefona.
+     * Izlaz sa ekrana za blokadu. Blokiran sajt u pregledaču: ostani u pregledaču, samo se vrati nazad
+     * u istoj kartici. Sve ostalo: početni ekran telefona.
      */
     public void leaveBlock(String key, int kind) {
         try {
@@ -120,80 +123,77 @@ public final class BlockScreen {
     private void leave(String key, int kind) {
         if (key.equals(noticeKey)) {
             // Pregledač je već vraćen na prethodnu stranicu: samo se skloni ekran. Ako se sajt ipak i dalje vidi
-            // (nazad nije imalo kuda), sledeća provera ga sklanja početnom stranom (exitAfterClosedNotice).
+            // (nazad nije imalo kuda), sledeća provera ponovo vraća nazad (exitBlocked).
+            String browser = noticeBrowser;
             hideOverlay();
-            closedNoticeKey = key;
-            closedNoticeAt = SystemClock.elapsedRealtime();
+            startExit(key, browser, 1);
             svc.h.removeCallbacks(svc.recheckSoon);
             svc.h.postDelayed(svc.recheckSoon, 300);
             return;
         }
-        boolean sitePage = inBrowserPage(key, kind);
-        String browser = sitePage ? browserForCurrentBlock() : null;
-        if (sitePage) holdSiteExit(key, browser);
-        // Remove the accessibility window before starting browser navigation so Back feels immediate and
-        // the browser can receive focus while we set its neutral URL.
-        hideOverlay();
-        if (sitePage) {
-            openStartPage(browser);
-        } else {
-            svc.performGlobalAction(GuardService.GLOBAL_ACTION_HOME);
+        if (inBrowserPage(key, kind)) {
+            // Stranica u pregledaču: nazad u istoj kartici, bez nove kartice.
+            String browser = browserForCurrentBlock();
+            hideOverlay();
+            startExit(key, browser, 1);
+            // Kratko čekanje da pregledač ponovo dobije fokus kad naš prozor nestane.
+            svc.h.postDelayed(this::pressBack, 150L);
+            return;
         }
+        hideOverlay();
+        svc.performGlobalAction(GuardService.GLOBAL_ACTION_HOME);
         svc.h.removeCallbacks(svc.recheckSoon);
         svc.h.postDelayed(svc.recheckSoon, 600);
     }
 
-    /** Dok pregledač otvara početnu stranu, blokada istog sajta se ne prikazuje ponovo (vidi GuardService.check). */
-    private void holdSiteExit(String key, String browser) {
-        svc.leavingSiteKey = key;
-        svc.leavingSiteBrowser = browser;
-        svc.leavingSiteUntil = SystemClock.elapsedRealtime() + 2500L;
-        svc.h.removeCallbacks(svc.finishSiteExit);
-        svc.h.postDelayed(svc.finishSiteExit, 2500L);
+    private void startExit(String key, String browser, int backs) {
+        exitKey = key;
+        exitBrowser = browser;
+        exitBacks = backs;
+        exitAt = SystemClock.elapsedRealtime();
+    }
+
+    private void pressBack() {
+        com.cuvar.app.ui.Safe.run("exitBack", () -> {
+            try {
+                svc.performGlobalAction(GuardService.GLOBAL_ACTION_BACK);
+            } finally {
+                svc.h.removeCallbacks(svc.recheckSoon);
+                svc.h.postDelayed(svc.recheckSoon, 700);
+            }
+        });
     }
 
     /**
-     * Upravo je pritisnuto „Zatvori“ na poruci posle vraćanja nazad, a pregledač i dalje prikazuje isti sajt
-     * (nazad nije imalo kuda): umesto novog ekrana i novog pokušaja, pregledač ide na početnu stranu.
+     * Posle „Zatvori“ na stranici u pregledaču: ako se isti sajt i dalje vidi (preusmeravanje, nazad nije imalo
+     * kuda), vraća se nazad još jednom ili dva puta, pa na početni ekran. Dok pregledač menja stranicu, kratko
+     * „nepoznata adresa“ ne pravi novi ekran. Vraća true kada je blokada tako obrađena (bez ekrana i pokušaja).
      */
-    public boolean exitAfterClosedNotice(String key, int kind) {
-        if (closedNoticeKey == null) return false;
-        if (SystemClock.elapsedRealtime() - closedNoticeAt >= CLOSED_NOTICE_MS) {
-            closedNoticeKey = null;
+    public boolean exitBlocked(String key, int kind) {
+        if (exitKey == null) return false;
+        if (SystemClock.elapsedRealtime() - exitAt >= EXIT_MS) {
+            exitKey = null;
             return false;
         }
-        // Druga blokada (npr. kratko nepoznata adresa) ne briše oznaku: sajt može da se prepozna odmah posle.
-        if (!key.equals(closedNoticeKey) || !sitePage(key, kind)) return false;
-        closedNoticeKey = null;
-        String browser = browserForCurrentBlock();
-        holdSiteExit(key, browser);
-        hideOverlay();
-        openStartPage(browser);
-        return true;
-    }
-
-    private static final String START_PAGE = "https://www.google.com";
-
-    /** Otvara neutralnu stranicu direktnim browser intent-om; ne menja fokus dok je accessibility overlay aktivan. */
-    private void openStartPage(String browser) {
-        startPageIntent(browser);
-        svc.h.removeCallbacks(svc.recheckSoon);
-        svc.h.postDelayed(svc.recheckSoon, 600);
-    }
-
-    private void startPageIntent(String browser) {
-        try {
-            Intent i = new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(START_PAGE))
-                    .setPackage(browser)
-                    .putExtra("com.android.browser.application_id", svc.getPackageName())
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            svc.startActivity(i);
-        } catch (Throwable t) {
-            svc.performGlobalAction(GuardService.GLOBAL_ACTION_HOME);
+        String front = browserForCurrentBlock();
+        if (front == null || !front.equals(exitBrowser)) return false;
+        if (key.equals(exitKey) && inBrowserPage(key, kind)) {
+            hideOverlay();
+            if (exitBacks < EXIT_MAX_BACKS) {
+                exitBacks++;
+                exitAt = SystemClock.elapsedRealtime();
+                pressBack();
+            } else {
+                exitKey = null;
+                svc.performGlobalAction(GuardService.GLOBAL_ACTION_HOME);
+            }
+            return true;
         }
+        return (kind == GuardService.KIND_ADDRESS || kind == GuardService.KIND_UNSEEN_SITE)
+                && key.equals(ItemKey.app(exitBrowser));
     }
 
-    /** Omotač koji sistemsko „nazad“ (taster ili pokret) pretvara u izlaz na početnu stranu pregledača. */
+    /** Omotač koji sistemsko „nazad“ (taster ili pokret) pretvara u izlaz sa stranice (kao „Zatvori“). */
     private View backCatcher(View inner, final String key, final int kind) {
         FrameLayout wrap = new FrameLayout(svc) {
             @Override
@@ -260,7 +260,10 @@ public final class BlockScreen {
             boolean notice = false;
             String browser = browserForCurrentBlock();
             long now = SystemClock.elapsedRealtime();
-            if (sitePage(key, kind) && !(key.equals(backedKey) && now - backedAt < BACK_RETRY_MS)) {
+            // Kad sajt sada može da se otključa (igrica/pitanje pa šifra), ostaje ispod ekrana; „Zatvori“ ga sklanja.
+            // Režim, potrošen limit i noć: pregledač se odmah vraća nazad.
+            if (sitePage(key, kind) && !canUnlock(kind, cooling, code)
+                    && !(key.equals(backedKey) && now - backedAt < BACK_RETRY_MS)) {
                 // Pregledač se odmah vraća na prethodnu stranicu u istoj kartici, bez nove kartice.
                 svc.performGlobalAction(GuardService.GLOBAL_ACTION_BACK);
                 backedKey = key;
@@ -302,6 +305,12 @@ public final class BlockScreen {
             svc.h.removeCallbacks(svc.recheckSoon);
             svc.h.postDelayed(svc.recheckSoon, delay);
         }
+    }
+
+    /** Ekran za blokadu nudi otključavanje (isti uslovi kao u BlockOverlayContent). */
+    private boolean canUnlock(int kind, boolean cooling, boolean code) {
+        return code && !cooling && !GuardService.hard(kind) && svc.store.unlock.dailyCodeVisible()
+                && UnlockCost.next(svc.store.unlock.unlocksToday()) != null;
     }
 
     public void hideOverlay() {
