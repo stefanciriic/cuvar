@@ -147,6 +147,8 @@ public class GuardService extends AccessibilityService {
     private boolean currentInApp;    // napred je pregledač unutar aplikacije
     public String rawPkg;           // stvarni paket na ekranu (pre prepoznavanja kopije)
     private String pausePkg;         // aplikacija upravo otvorena koja pre prikaza čeka pauzu
+    private String pauseDonePkg;     // aplikacija za koju je pauza upravo odrađena („Nastavi”)
+    private long pauseDoneAt;
     private String lastLeftPkg;      // aplikacija iz koje se upravo izašlo
     private long lastLeftAt;
     private boolean leftBlocked, leftPending, leftPause;
@@ -332,7 +334,12 @@ public class GuardService extends AccessibilityService {
                 h.postDelayed(recheckSoon, 600L);
             }
             @Override public void continueToApp() {
+                pauseDonePkg = pausePkg != null ? pausePkg : currentPkg;
+                pauseDoneAt = SystemClock.elapsedRealtime();
                 pausePkg = null;
+                // Pauza je odrađena: skini je odmah. Provera ispod može da izađe ranije (prozor se
+                // trenutno ne čita) i tada bi ekran ostao do sledećeg otkucaja, a dugme „ne radi”.
+                if (screen.overlayKind == KIND_PAUSE) screen.hideOverlay();
                 safeCheck();
             }
         });
@@ -723,7 +730,9 @@ public class GuardService extends AccessibilityService {
                 int max = store.appOpensNow(pkg);
                 opensBlocked = max > 0 && store.usageLog.opensToday(ItemKey.app(pkg)) >= max ? pkg : null;
                 pendingOpen = opensBlocked == null && max > 0 ? pkg : null;
-                pausePkg = store.appGuarded(pkg) && !kinds.exempt().contains(pkg) ? pkg : null;
+                // Posle „Nastavi” kratko pogrešno očitavanje prozora ne vraća pauzu iznova.
+                boolean justPaused = pkg.equals(pauseDonePkg) && nowEl - pauseDoneAt < OPEN_GRACE_MS;
+                pausePkg = store.appGuarded(pkg) && !kinds.exempt().contains(pkg) && !justPaused ? pkg : null;
             }
         }
 
