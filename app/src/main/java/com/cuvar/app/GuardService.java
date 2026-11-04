@@ -850,6 +850,8 @@ public class GuardService extends AccessibilityService {
         }
         long coolLeft = show == null || hard(show.kind) || show.kind == KIND_PAUSE ? 0 : store.unlock.cooldownLeft(show.key);
 
+        // Posle „Zatvori“ isti sajt je i dalje otvoren: pregledač ide na početnu stranu, bez novog ekrana i pokušaja.
+        if (show != null && show.kind != KIND_PAUSE && screen.exitAfterClosedNotice(show.key, show.kind)) return;
         if (show != null && show.kind != KIND_PAUSE && (screen.overlay == null || !show.key.equals(screen.overlayKey) || screen.overlayKind == KIND_PAUSE)) {
             store.usageLog.countOpen("try:" + show.key); // novi pokušaj da se otvori nešto blokirano
         }
