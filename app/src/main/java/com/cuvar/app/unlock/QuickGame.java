@@ -166,9 +166,14 @@ public final class QuickGame {
     static Round make(Kind kind, int level, Random r) {
         if (kind == Kind.ARROW) return arrow(level, r);
         if (kind == Kind.COLOR) return color(level, r);
-        if (kind == Kind.MEMORY) return cells(level == 0 ? 3 : 4, level + 3, false, r);
+        if (kind == Kind.MEMORY) return cells(level == 2 ? 5 : 4, memoryTiles(level), false, r);
         if (kind == Kind.SEQUENCE) return cells(3, level + 3, true, r);
         return odd(level, r);
+    }
+
+    /** Pamćenje: koliko polja zasvetli (mreža 4x4, na najtežem 5x5). */
+    public static int memoryTiles(int level) {
+        return 5 + Math.max(0, Math.min(2, level));
     }
 
     private static boolean contains(int[] a, int v) {

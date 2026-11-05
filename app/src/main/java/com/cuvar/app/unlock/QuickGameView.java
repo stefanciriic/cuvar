@@ -134,7 +134,7 @@ public final class QuickGameView {
                 if (!still.still()) return;
                 for (int t : r.targets) light(c, cells[t], false);
                 showing[0] = false;
-            }), 1300L + 250L * n);
+            }), 800L + 150L * n);
             return;
         }
         final long on = 550L, gap = 200L;
