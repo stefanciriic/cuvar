@@ -203,12 +203,15 @@ public final class Ui {
     public static final String CHALLENGE_ARROWS = "arrows";
     public static final String CHALLENGE_COLOR = "color";
     public static final String CHALLENGE_ODD = "odd";
+    public static final String CHALLENGE_MEMORY = "memory";
+    public static final String CHALLENGE_SEQUENCE = "sequence";
     public static final String CHALLENGE_GAMES = "games";
     public static final String CHALLENGE_MIX = "mix";
     public static final String[] CHALLENGES = {CHALLENGE_QUIZ, CHALLENGE_NUMBERS, CHALLENGE_ARROWS, CHALLENGE_COLOR,
-            CHALLENGE_ODD, CHALLENGE_GAMES, CHALLENGE_MIX};
+            CHALLENGE_ODD, CHALLENGE_MEMORY, CHALLENGE_SEQUENCE, CHALLENGE_GAMES, CHALLENGE_MIX};
     /** Sve igrice (za nasumičan izbor). */
-    public static final String[] GAMES = {CHALLENGE_NUMBERS, CHALLENGE_ARROWS, CHALLENGE_COLOR, CHALLENGE_ODD};
+    public static final String[] GAMES = {CHALLENGE_NUMBERS, CHALLENGE_ARROWS, CHALLENGE_COLOR, CHALLENGE_ODD, CHALLENGE_MEMORY,
+            CHALLENGE_SEQUENCE};
 
     public static String unlockChallenge(Context c) {
         String ch = prefs(c).getString("challenge", null);

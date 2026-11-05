@@ -21,19 +21,36 @@ public final class QuickGameTest {
                     if (k == QuickGame.Kind.ARROW) arrow(r);
                     if (k == QuickGame.Kind.COLOR) color(r);
                     if (k == QuickGame.Kind.ODD) odd(r);
+                    if (QuickGame.shows(k)) cells(r, k, level);
                 }
                 // Cela partija tačnim odgovorima.
                 QuickGame g = new QuickGame(k, level, new Random(7), 0);
-                for (int i = 1; i < g.rounds; i++) check(g.tap(g.round().answer, 100) == NumberGame.Tap.OK, "Tačno " + k);
-                check(g.tap(g.round().answer, 200) == NumberGame.Tap.DONE, "Pobeda " + k);
+                for (int i = 0; i < g.rounds; i++) {
+                    int[] t = g.round().targets != null ? g.round().targets : new int[]{g.round().answer};
+                    for (int j = 0; j < t.length; j++) {
+                        boolean last = i == g.rounds - 1 && j == t.length - 1;
+                        check(g.tap(t[j], 100) == (last ? NumberGame.Tap.DONE : NumberGame.Tap.OK), "Tačno " + k);
+                    }
+                }
                 check(g.over() && g.tap(0, 300) == NumberGame.Tap.IGNORED, "Posle kraja ništa");
             }
         }
-        check(QuickGame.rounds(0) < QuickGame.rounds(2), "Teže posle više otključavanja");
+        check(QuickGame.rounds(QuickGame.Kind.ODD, 0) < QuickGame.rounds(QuickGame.Kind.ODD, 2), "Teže posle više otključavanja");
 
         QuickGame w = new QuickGame(QuickGame.Kind.ARROW, 0, new Random(3), 0);
         int wrong = (w.round().answer + 1) % w.round().count();
         check(w.tap(wrong, 10) == NumberGame.Tap.WRONG && w.over(), "Pogrešan odgovor završava partiju");
+
+        QuickGame m = new QuickGame(QuickGame.Kind.MEMORY, 0, new Random(5), 0);
+        int[] mt = m.round().targets;
+        check(m.tap(mt[2], 10) == NumberGame.Tap.OK && m.hit(mt[2]), "Pamćenje: bilo kojim redom");
+        check(m.tap(mt[2], 10) == NumberGame.Tap.IGNORED, "Već tapnuto polje se ne broji");
+        int off = 0;
+        while (contains(mt, off)) off++;
+        check(m.tap(off, 20) == NumberGame.Tap.WRONG, "Pamćenje: pogrešno polje");
+
+        QuickGame q = new QuickGame(QuickGame.Kind.SEQUENCE, 1, new Random(6), 0);
+        check(q.tap(q.round().targets[1], 10) == NumberGame.Tap.WRONG, "Niz: pogrešan redosled");
 
         QuickGame t = new QuickGame(QuickGame.Kind.ODD, 1, new Random(4), 100);
         check(t.tap(t.round().answer, 100 + t.timeMs) == NumberGame.Tap.LATE && t.over(), "Isteklo vreme");
@@ -59,6 +76,17 @@ public final class QuickGameTest {
             wordShown |= c == QuickGame.COLORS[word];
         }
         check(wordShown, "Boja iz reči je ponuđena (zamka)");
+    }
+
+    private static boolean contains(int[] a, int v) {
+        for (int x : a) if (x == v) return true;
+        return false;
+    }
+
+    private static void cells(QuickGame.Round r, QuickGame.Kind k, int level) {
+        check(r.targets.length == level + 3 && r.ordered == (k == QuickGame.Kind.SEQUENCE), "Broj polja za pamćenje");
+        Set<Integer> s = new HashSet<>();
+        for (int t : r.targets) check(t >= 0 && t < r.count() && s.add(t), "Različita polja u mreži");
     }
 
     private static void odd(QuickGame.Round r) {

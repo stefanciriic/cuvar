@@ -40,7 +40,7 @@ com.cuvar.app            Komponente iz AndroidManifest-a (aktivnosti, servisi)
 | `rules` | `AppRule` (pravilo aplikacije, spajanje „strože od dva“), `EnforcedRules` (sva pravila: pooštravanje odmah, popuštanje od 06:00), `BlockKind`, `BlockRules` (koja blokada sada važi), `CodeAttempts`, `DailyCode`, `DailySchedule`, `DayLimit`, `DomainRules`, `ItemKey` (ključevi "app:" i "site:"), `LimitWarnings`, `RuleMerge`, `SessionLimit`, `TrustedClock`, `UnlockCost`, `UnlockStreak`, `UnlockTimer`, `UsageCalendar`, `UsageTracker` |
 | `guard` | delovi servisa: `BlockScreen` (prikaz i sakrivanje blokade, „nazad“), `AppKinds` (vrsta aplikacije napred: bez pravila, kopija, WebAPK, izuzeta, podešavanja), `UsageAccounting` (upis vremena, upozorenja pred limit), `GuardFacts` (pravila iz `Store`-a za `BlockRules`); ostalo: `BlockOverlayContent`, `Clones`, `ErrorLog` (dnevnik grešaka, čist i testiran), `ForegroundApp`, `GuardDiagnostics` (prijava greške u logcat i dnevnik na telefonu), `GuardOverlayWindow`, `LoadMeter`, `MusicOwner`, `PauseOverlayContent`, `SystemScreens` |
 | `web` | `BrowserWindows` (prozori na ekranu, glavni prozor pregledača), `BrowserAddressState`, `BrowserMonitor`, `Browsers` (poznati pregledači, adresa iz teksta; čisto), `Hosts`, `Links`, `WebAddress` |
-| `unlock` | `Jokes`, `NumberGame`, `NumberGameView`, `PinPad`, `QuickGame` (strelice, boje, uljez; čisto), `QuickGameView`, `Quiz`, `QuizBank` |
+| `unlock` | `Jokes`, `NumberGame`, `NumberGameView`, `PinPad`, `QuickGame` (strelice, boje, uljez, pamćenje, niz; čisto), `QuickGameView`, `Quiz`, `QuizBank` |
 | `ui` | `AppPicker`, `Charts`, `CheckRow`, `Safe` (klik i posao koji ne smeju da obore proces), `SettingsSheets`, `Sheet`, `Ui` |
 | `i18n` | `Lang`, `Translit` |
 

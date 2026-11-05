@@ -307,8 +307,8 @@ public final class BlockOverlayContent {
             // Nivo prati broj otključavanja danas (cost.answers je 1, 2 ili 3).
             int level = cost.answers - 1;
             String price = done == 0 ? null : (done + 1) + ". otključavanje danas: "
-                    + Ui.count(QuickGame.rounds(level), "zadatak", "zadatka", "zadataka")
-                    + " za " + QuickGame.timeMs(level) / 1000 + " s";
+                    + Ui.count(QuickGame.rounds(quick, level), "zadatak", "zadatka", "zadataka")
+                    + " za " + QuickGame.timeMs(quick, level) / 1000 + " s";
             QuickGameView.show(host, host.h, area, onPass, price, quick, level);
             return;
         }

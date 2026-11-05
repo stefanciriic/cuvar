@@ -734,7 +734,11 @@ zadatka	tasks
 zadataka	tasks
 . otključavanje danas: 	 unlock today: 
 Svako sledeće otključavanje u danu je teže, za sve aplikacije zajedno. Greške ne povećavaju težinu.	Each next unlock of the day is harder, for all apps together. Mistakes do not make it harder.
-Strelice, boje i uljez: nekoliko brzih zadataka redom. Greška ili isteklo vreme vraća na početak.	Arrows, colors and odd one out: a few quick tasks in a row. A mistake or running out of time starts over.
+Strelice, boje, uljez, pamćenje i niz: nekoliko brzih zadataka redom. Greška ili isteklo vreme vraća na početak.	Arrows, colors, odd one out, memory and sequence: a few quick tasks in a row. A mistake or running out of time starts over.
 
 Igrica: strelice	Game: arrows
 Na koju stranu pokazuje srednja strelica?	Which way does the middle arrow point?
+Igrica: pamćenje	Game: memory
+Igrica: niz	Game: sequence
+Zapamti osvetljena polja, pa ih tapni	Remember the lit tiles, then tap them
+Zapamti redosled, pa tapni polja istim redom	Remember the order, then tap the tiles in the same order

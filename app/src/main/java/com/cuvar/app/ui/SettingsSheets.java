@@ -158,7 +158,7 @@ public final class SettingsSheets {
         box.addView(Ui.text(a, "Brojevi redom: tapni brojeve od 1 do " + NumberGame.SIZE + " redom za "
                 + NumberGame.TIME_MS / 1000 + " s. Pogrešan broj ili isteklo vreme vraća na početak.",
                 13, Ui.MUTED, false), Ui.fill(a, 12));
-        box.addView(Ui.text(a, "Strelice, boje i uljez: nekoliko brzih zadataka redom. Greška ili isteklo vreme vraća na početak.",
+        box.addView(Ui.text(a, "Strelice, boje, uljez, pamćenje i niz: nekoliko brzih zadataka redom. Greška ili isteklo vreme vraća na početak.",
                 13, Ui.MUTED, false), Ui.fill(a, 8));
         box.addView(Ui.text(a, "Svako sledeće otključavanje u danu je teže, za sve aplikacije zajedno. Greške ne povećavaju težinu.",
                 13, Ui.MUTED, false), Ui.fill(a, 8));

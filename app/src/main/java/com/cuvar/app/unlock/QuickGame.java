@@ -11,8 +11,8 @@ import java.util.Random;
  * u danu. Bez Android klasa (tests/QuickGameTest).
  */
 public final class QuickGame {
-    /** Srednja strelica, boja slova (Stroop) i znak koji se razlikuje. */
-    public enum Kind { ARROW, COLOR, ODD }
+    /** Srednja strelica, boja slova (Stroop), znak koji se razlikuje, zapamćena polja i redosled polja. */
+    public enum Kind { ARROW, COLOR, ODD, MEMORY, SEQUENCE }
 
     /** Strelice za igricu „Strelice“: prve dve na lakšim nivoima, sve četiri na najtežem. */
     public static final String[] ARROWS = {"←", "→", "↑", "↓"};
@@ -27,6 +27,9 @@ public final class QuickGame {
 
     private static final int[] ROUNDS = {4, 5, 6};
     private static final long[] TIME_MS = {20_000L, 20_000L, 25_000L};
+    /** Pamćenje i Niz: manje zadataka jer svaki prvo treba pogledati. */
+    private static final int[] SHOW_ROUNDS = {2, 2, 3};
+    private static final long[] SHOW_TIME_MS = {20_000L, 25_000L, 30_000L};
 
     /** Jedan zadatak: šta piše, ponuđeni odgovori i koji je tačan. */
     public static final class Round {
@@ -39,16 +42,25 @@ public final class QuickGame {
         /** COLOR: ponuđene boje. */
         public final int[] colors;
         public final int answer;
-        /** ODD: broj polja u redu mreže. */
+        /** ODD, MEMORY, SEQUENCE: broj polja u redu mreže. */
         public final int side;
+        /** MEMORY: polja koja treba naći (bilo kojim redom); SEQUENCE: polja redom. Inače null. */
+        public final int[] targets;
+        public final boolean ordered;
 
         Round(String prompt, int ink, String[] options, int[] colors, int answer, int side) {
+            this(prompt, ink, options, colors, answer, side, null, false);
+        }
+
+        Round(String prompt, int ink, String[] options, int[] colors, int answer, int side, int[] targets, boolean ordered) {
             this.prompt = prompt;
             this.ink = ink;
             this.options = options;
             this.colors = colors;
             this.answer = answer;
             this.side = side;
+            this.targets = targets;
+            this.ordered = ordered;
         }
 
         public int count() {
@@ -65,24 +77,39 @@ public final class QuickGame {
     private int done;
     private boolean over;
     private Round round;
+    /** Koliko je polja ovog zadatka već tapnuto (MEMORY, SEQUENCE). */
+    private int step;
+    private boolean[] hit;
 
     public QuickGame(Kind kind, int level, Random random, long nowMs) {
         this.kind = kind;
         this.level = level = Math.max(0, Math.min(2, level));
-        this.rounds = ROUNDS[level];
-        this.timeMs = TIME_MS[level];
+        this.rounds = rounds(kind, level);
+        this.timeMs = timeMs(kind, level);
         this.random = random;
         this.started = nowMs;
         round = make(kind, level, random);
     }
 
-    /** Koliko zadataka ima partija za dati nivo. */
-    public static int rounds(int level) {
-        return ROUNDS[Math.max(0, Math.min(2, level))];
+    /** Koliko zadataka ima partija za datu igricu i nivo. */
+    public static int rounds(Kind kind, int level) {
+        level = Math.max(0, Math.min(2, level));
+        return shows(kind) ? SHOW_ROUNDS[level] : ROUNDS[level];
     }
 
-    public static long timeMs(int level) {
-        return TIME_MS[Math.max(0, Math.min(2, level))];
+    public static long timeMs(Kind kind, int level) {
+        level = Math.max(0, Math.min(2, level));
+        return shows(kind) ? SHOW_TIME_MS[level] : TIME_MS[level];
+    }
+
+    /** Igrica koja prvo pokazuje polja, pa ih sakrije. */
+    public static boolean shows(Kind kind) {
+        return kind == Kind.MEMORY || kind == Kind.SEQUENCE;
+    }
+
+    /** Da li je polje ovog zadatka već tapnuto (MEMORY, SEQUENCE). */
+    public boolean hit(int option) {
+        return hit != null && option >= 0 && option < hit.length && hit[option];
     }
 
     public Round round() {
@@ -109,10 +136,24 @@ public final class QuickGame {
             over = true;
             return NumberGame.Tap.LATE;
         }
-        if (option != round.answer) {
+        if (round.targets != null) {
+            if (hit == null) hit = new boolean[round.count()];
+            if (option < 0 || option >= hit.length) return NumberGame.Tap.IGNORED;
+            if (hit[option]) return NumberGame.Tap.IGNORED;
+            boolean ok = round.ordered ? round.targets[step] == option : contains(round.targets, option);
+            if (!ok) {
+                over = true;
+                return NumberGame.Tap.WRONG;
+            }
+            hit[option] = true;
+            step++;
+            if (step < round.targets.length) return NumberGame.Tap.OK;
+        } else if (option != round.answer) {
             over = true;
             return NumberGame.Tap.WRONG;
         }
+        step = 0;
+        hit = null;
         done++;
         if (done >= rounds) {
             over = true;
@@ -125,7 +166,26 @@ public final class QuickGame {
     static Round make(Kind kind, int level, Random r) {
         if (kind == Kind.ARROW) return arrow(level, r);
         if (kind == Kind.COLOR) return color(level, r);
+        if (kind == Kind.MEMORY) return cells(level == 0 ? 3 : 4, level + 3, false, r);
+        if (kind == Kind.SEQUENCE) return cells(3, level + 3, true, r);
         return odd(level, r);
+    }
+
+    private static boolean contains(int[] a, int v) {
+        for (int x : a) if (x == v) return true;
+        return false;
+    }
+
+    /** Prazna mreža sa n različitih polja za pamćenje (redom ili ne). */
+    private static Round cells(int side, int n, boolean ordered, Random r) {
+        List<Integer> all = new ArrayList<>();
+        for (int i = 0; i < side * side; i++) all.add(i);
+        Collections.shuffle(all, r);
+        int[] targets = new int[n];
+        for (int i = 0; i < n; i++) targets[i] = all.get(i);
+        String[] blank = new String[side * side];
+        java.util.Arrays.fill(blank, "");
+        return new Round(null, 0, blank, null, targets[0], side, targets, ordered);
     }
 
     private static Round arrow(int level, Random r) {
