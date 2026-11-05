@@ -3,11 +3,13 @@ package com.cuvar.app.guard;
 import android.content.Context;
 import android.graphics.PixelFormat;
 import android.media.AudioAttributes;
+import android.os.Build;
 import android.media.AudioFocusRequest;
 import android.media.AudioManager;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
+import android.view.WindowInsets;
 import android.view.WindowManager;
 
 /** Owns the accessibility overlay window and pauses media while it is visible. */
@@ -52,8 +54,30 @@ public final class GuardOverlayWindow {
                 PixelFormat.TRANSLUCENT);
         params.gravity = Gravity.TOP | Gravity.START;
         place(params, bounds);
+        keepClearOfBars(view);
         windows.addView(view, params);
         if (!MusicOwner.belongsToOther(musicPlaying, musicOwner, front)) silenceMedia();
+    }
+
+    /** Pozadina ide ispod statusne trake i kamere, a sadržaj (dugmad, tekst) ostaje ispod njih. */
+    private static void keepClearOfBars(View view) {
+        final int left = view.getPaddingLeft(), top = view.getPaddingTop();
+        final int right = view.getPaddingRight(), bottom = view.getPaddingBottom();
+        view.setOnApplyWindowInsetsListener((v, insets) -> {
+            try {
+                if (Build.VERSION.SDK_INT >= 30) {
+                    android.graphics.Insets bars = insets.getInsets(
+                            WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
+                    v.setPadding(left + bars.left, top + bars.top, right + bars.right, bottom + bars.bottom);
+                } else {
+                    v.setPadding(left + insets.getSystemWindowInsetLeft(), top + insets.getSystemWindowInsetTop(),
+                            right + insets.getSystemWindowInsetRight(), bottom + insets.getSystemWindowInsetBottom());
+                }
+            } catch (Throwable error) {
+                GuardDiagnostics.report("overlayInsets", error);
+            }
+            return insets;
+        });
     }
 
     /** Pomera blokadu na nove granice prozora (pomerena granica podeljenog ekrana). */
@@ -68,9 +92,20 @@ public final class GuardOverlayWindow {
     }
 
     private static void place(WindowManager.LayoutParams params, android.graphics.Rect bounds) {
+        // Blokada ide preko celog ekrana, i preko statusne trake i izreza kamere (inače se tu vidi aplikacija).
+        params.flags |= WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS;
+        if (Build.VERSION.SDK_INT >= 28) {
+            params.layoutInDisplayCutoutMode = Build.VERSION.SDK_INT >= 30
+                    ? WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+                    : WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+        }
+        if (Build.VERSION.SDK_INT >= 30) {
+            // Podrazumevano sistem skraćuje prozor za statusnu i donju traku.
+            params.setFitInsetsTypes(0);
+            params.setFitInsetsSides(0);
+        }
         if (bounds == null) return;
         // Granice prozora su u koordinatama celog ekrana, pa se blokada tako i postavlja.
-        params.flags |= WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS;
         params.x = bounds.left;
         params.y = bounds.top;
         params.width = bounds.width();
