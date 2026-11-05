@@ -6,6 +6,7 @@ import com.cuvar.app.guard.UsageAccounting;
 
 import com.cuvar.app.data.Store;
 import com.cuvar.app.data.Unlocks;
+import com.cuvar.app.guard.AndroidUsage;
 import com.cuvar.app.guard.ForegroundApp;
 import com.cuvar.app.i18n.Lang;
 import com.cuvar.app.rules.DailyCode;
@@ -480,18 +481,32 @@ public class MainActivity extends Activity {
         return card;
     }
 
+    /**
+     * Današnje vreme po aplikaciji iz Androidovih zapisa (isto što pokazuje Digital Wellbeing), ili null dok se
+     * računa. Čuvarovo merenje je za limite i ne broji sve (pauze u merenju), pa je pokazivalo manje.
+     */
+    private Map<String, Long> todayFromAndroid() {
+        String today = store.usageLog.lastDays(1).get(0);
+        return AndroidUsage.day(this, today, today, () -> h.post(Safe.task("todayUsage", () -> {
+            if (todaySlot == null || isFinishing()) return;
+            todaySlot.removeAllViews();
+            todaySlot.addView(todayCard(GuardService.isEnabled(this)));
+        })));
+    }
+
     private View todayCard(boolean enabled) {
         LinearLayout card = Ui.card(this);
         card.addView(Ui.text(this, "Vreme na telefonu", 14, Ui.MUTED, false));
 
         PackageManager pm = getPackageManager();
         String home = homePackage();
-        String me = getPackageName();
         List<Row> rows = new ArrayList<>();
         long total = 0;
-        for (Map.Entry<String, Long> e : store.usageLog.todayMap().entrySet()) {
+        Map<String, Long> android = todayFromAndroid();
+        boolean fromAndroid = android != null && !android.isEmpty();
+        for (Map.Entry<String, Long> e : (fromAndroid ? android : store.usageLog.todayMap()).entrySet()) {
             String key = e.getKey();
-            if (ItemKey.isSite(key) || key.startsWith("web:") || key.equals(home) || key.equals(me)
+            if (ItemKey.isSite(key) || key.startsWith("web:") || key.equals(home)
                     || !UsageAccounting.tracked(this, key)) {
                 continue;
             }
@@ -508,6 +523,7 @@ public class MainActivity extends Activity {
         Collections.sort(rows, (a, b) -> Long.compare(b.ms, a.ms));
 
         card.addView(Ui.text(this, Ui.fmt(total), 38, Ui.INK, true), Ui.fill(this, 2));
+        if (fromAndroid) card.addView(Ui.text(this, "Po zapisima Androida, kao Digital Wellbeing.", 12, Ui.MUTED, false));
         int limit = store.dayLimits.dayLimit();
         if (limit > 0) {
             // Limit troši samo vreme pod pravilima, pa je manje od ukupnog vremena iznad.

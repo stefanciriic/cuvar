@@ -2,6 +2,7 @@ package com.cuvar.app;
 
 import com.cuvar.app.rules.ItemKey;
 import com.cuvar.app.data.AppLabels;
+import com.cuvar.app.guard.AndroidUsage;
 import com.cuvar.app.guard.UsageAccounting;
 
 import com.cuvar.app.data.UsageLog;
@@ -148,7 +149,6 @@ public class StatsActivity extends SubActivity {
         PackageManager pm = getPackageManager();
         skip.clear();
         skip.add(homePackage());
-        skip.add(getPackageName());
 
         Map<String, Long> perApp = new HashMap<>();
         Map<Integer, Long> perCategory = new HashMap<>();
@@ -159,7 +159,7 @@ public class StatsActivity extends SubActivity {
         List<String> dayKeys = days == 1 ? Collections.singletonList(selectedDay()) : store.usageLog.lastDays(days);
         for (String dk : dayKeys) {
             Map<String, Long> apps = new HashMap<>();
-            Map<String, Long> day = store.usageLog.dayMap(dk);
+            Map<String, Long> day = dayUsage(dk);
             for (Map.Entry<String, Long> e : day.entrySet()) {
                 String key = e.getKey();
                 long ms = e.getValue();
@@ -248,13 +248,24 @@ public class StatsActivity extends SubActivity {
         }
     }
 
+    /**
+     * Vreme po aplikaciji za dan: iz Androidovih zapisa kao Digital Wellbeing (čuvaju se oko nedelju dana),
+     * a za starije dane i dok se računa, Čuvarovo merenje.
+     */
+    private Map<String, Long> dayUsage(String dayKey) {
+        Map<String, Long> android = AndroidUsage.day(this, dayKey, today(), () -> runOnUiThread(Safe.task("statsUsage", () -> {
+            if (!isFinishing() && body != null) render();
+        })));
+        return android != null && !android.isEmpty() ? android : store.usageLog.dayMap(dayKey);
+    }
+
     private static final int TOP = 5;
     private final Set<String> skip = new HashSet<>();
 
-    /** Ukupno vreme aplikacija za dan (bez početnog ekrana i Čuvara), i da li dan uopšte ima podatke. */
+    /** Ukupno vreme aplikacija za dan (bez početnog ekrana), i da li dan uopšte ima podatke. */
     private long totalOf(String dayKey) {
         long t = 0;
-        for (Map.Entry<String, Long> e : store.usageLog.dayMap(dayKey).entrySet()) {
+        for (Map.Entry<String, Long> e : dayUsage(dayKey).entrySet()) {
             String k = e.getKey();
             if (k.startsWith("web:") || ItemKey.isSite(k) || skip.contains(k) || !UsageAccounting.tracked(this, k)) continue;
             t += e.getValue();
