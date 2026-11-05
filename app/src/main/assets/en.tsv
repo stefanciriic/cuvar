@@ -716,3 +716,25 @@ Zabeležene greške: 	Recorded errors:
 Čuvar je ove greške uhvatio i nastavio da radi.	Čuvar caught these errors and kept running.
 Ekran nije mogao da se otvori. Greška je zabeležena.	The screen could not be opened. The error was recorded.
 Izađi iz podeljenog ekrana	Exit split screen
+Nasumična igrica	Random game
+Igrica: računanje	Game: math
+Igrica: boje	Game: colors
+Igrica: uljez	Game: odd one out
+Izračunaj i tapni rezultat	Solve it and tap the result
+Tapni boju kojom je reč napisana	Tap the color the word is written in
+Tapni znak koji se razlikuje	Tap the one that is different
+Pogrešno. Kreni ispočetka.	Wrong. Start over.
+Zadatak 	Task 
+CRVENA	RED
+ZELENA	GREEN
+PLAVA	BLUE
+ŽUTA	YELLOW
+LJUBIČASTA	PURPLE
+NARANDŽASTA	ORANGE
+zadatak	task
+zadatka	tasks
+zadataka	tasks
+. otključavanje danas: 	 unlock today: 
+Svako sledeće otključavanje u danu je teže, za sve aplikacije zajedno. Greške ne povećavaju težinu.	Each next unlock of the day is harder, for all apps together. Mistakes do not make it harder.
+Računanje, boje i uljez: nekoliko brzih zadataka redom. Greška ili isteklo vreme vraća na početak.	Math, colors and odd one out: a few quick tasks in a row. A mistake or running out of time starts over.
+

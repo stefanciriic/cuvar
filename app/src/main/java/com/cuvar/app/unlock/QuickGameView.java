@@ -1,0 +1,159 @@
+package com.cuvar.app.unlock;
+
+import com.cuvar.app.ui.Safe;
+import com.cuvar.app.ui.Ui;
+
+import android.app.Activity;
+import android.content.Context;
+import android.graphics.drawable.GradientDrawable;
+import android.os.Handler;
+import android.os.SystemClock;
+import android.view.Gravity;
+import android.view.View;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+
+import java.util.Random;
+
+/** Ekran kratkih igrica (Računanje, Boje, Uljez): na ekranu blokade i za probu iz Podešavanja. */
+public final class QuickGameView {
+    private static final Random RANDOM = new Random();
+
+    private QuickGameView() {
+    }
+
+    /** Kratka igrica za izbor iz podešavanja (Ui.CHALLENGE_...); null za pitalice, brojeve i nasumično. */
+    public static QuickGame.Kind kind(String challenge) {
+        if (Ui.CHALLENGE_SUM.equals(challenge)) return QuickGame.Kind.SUM;
+        if (Ui.CHALLENGE_COLOR.equals(challenge)) return QuickGame.Kind.COLOR;
+        if (Ui.CHALLENGE_ODD.equals(challenge)) return QuickGame.Kind.ODD;
+        return null;
+    }
+
+    /** Naslov igrice (za podešavanja). */
+    public static String name(QuickGame.Kind kind) {
+        if (kind == QuickGame.Kind.SUM) return "Igrica: računanje";
+        if (kind == QuickGame.Kind.COLOR) return "Igrica: boje";
+        return "Igrica: uljez";
+    }
+
+    public static void practice(Activity a, final QuickGame.Kind kind) {
+        NumberGameView.practice(a, (c, h, area, onPass) -> show(c, h, area, onPass, null, kind, 0));
+    }
+
+    /** Nova partija; greška ili isteklo vreme daje novu partiju istog nivoa. */
+    public static void show(final Context c, final Handler h, final LinearLayout area, final Runnable onPass,
+                            String notice, final QuickGame.Kind kind, final int level) {
+        final QuickGame game = new QuickGame(kind, level, RANDOM, SystemClock.elapsedRealtime());
+        final TextView status = Ui.text(c, "", 15, Ui.NIGHT_MUTED, true);
+        status.setGravity(Gravity.CENTER);
+        final LinearLayout board = Ui.column(c);
+        area.removeAllViews();
+
+        String title = kind == QuickGame.Kind.SUM ? "Izračunaj i tapni rezultat"
+                : kind == QuickGame.Kind.COLOR ? "Tapni boju kojom je reč napisana"
+                : "Tapni znak koji se razlikuje";
+        TextView head = Ui.text(c, title, 20, 0xFFFFFFFF, true);
+        head.setGravity(Gravity.CENTER);
+        area.addView(head, Ui.fill(c, 0));
+        if (notice != null) {
+            TextView n = Ui.text(c, notice, 14, Ui.NIGHT_ACCENT, false);
+            n.setGravity(Gravity.CENTER);
+            area.addView(n, Ui.fill(c, 8));
+        }
+        area.addView(status, Ui.fill(c, 10));
+        area.addView(board, Ui.fill(c, 12));
+
+        final Runnable[] draw = new Runnable[1];
+        draw[0] = () -> {
+            drawRound(c, board, game.round(), option -> {
+                NumberGame.Tap t = game.tap(option, SystemClock.elapsedRealtime());
+                if (t == NumberGame.Tap.OK) {
+                    draw[0].run();
+                } else if (t == NumberGame.Tap.DONE) {
+                    onPass.run();
+                } else if (t == NumberGame.Tap.WRONG) {
+                    show(c, h, area, onPass, "Pogrešno. Kreni ispočetka.", kind, level);
+                } else if (t == NumberGame.Tap.LATE) {
+                    show(c, h, area, onPass, "Vreme je isteklo. Kreni ispočetka.", kind, level);
+                }
+            });
+            status.setText(status(game));
+        };
+        draw[0].run();
+
+        // Odbrojavanje dok je igrica na ekranu; posle isteka nova partija.
+        h.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                Safe.run("quickTimer", this::tick);
+            }
+
+            private void tick() {
+                if (game.over() || board.getParent() != area) return;
+                if (game.leftMs(SystemClock.elapsedRealtime()) == 0) {
+                    if (area.isAttachedToWindow()) show(c, h, area, onPass, "Vreme je isteklo. Kreni ispočetka.", kind, level);
+                    return;
+                }
+                status.setText(status(game));
+                h.postDelayed(this, 250);
+            }
+        }, 250);
+    }
+
+    private interface Pick {
+        void pick(int option);
+    }
+
+    private static void drawRound(Context c, LinearLayout board, QuickGame.Round r, Pick pick) {
+        board.removeAllViews();
+        int gap = Ui.dp(c, 4);
+        int perRow;
+        int height;
+        if (r.prompt != null) {
+            TextView p = Ui.text(c, r.prompt, r.options != null ? 40 : 34, r.options != null ? 0xFFFFFFFF : r.ink, true);
+            p.setGravity(Gravity.CENTER);
+            board.addView(p, Ui.fill(c, 8));
+        }
+        if (r.options == null) {
+            perRow = 3;
+            height = 64;
+        } else if (r.side > 0) {
+            perRow = r.side;
+            height = r.side > 4 ? 52 : 60;
+        } else {
+            perRow = 2;
+            height = 64;
+        }
+        LinearLayout row = null;
+        for (int i = 0; i < r.count(); i++) {
+            if (i % perRow == 0) {
+                row = Ui.row(c);
+                board.addView(row, Ui.fill(c, i == 0 ? 16 : 0));
+            }
+            final int option = i;
+            View cell;
+            if (r.options != null) {
+                TextView t = Ui.text(c, r.options[i], r.side > 0 ? 24 : 26, 0xFFFFFFFF, true);
+                t.setGravity(Gravity.CENTER);
+                t.setBackground(Ui.pressable(Ui.NIGHT_KEY, Ui.NIGHT_KEY_DOWN, Ui.dp(c, 12)));
+                cell = t;
+            } else {
+                cell = new View(c);
+                GradientDrawable d = new GradientDrawable();
+                d.setColor(r.colors[i]);
+                d.setCornerRadius(Ui.dp(c, 14));
+                cell.setBackground(d);
+            }
+            cell.setOnClickListener(Safe.click("quickCell", v -> pick.pick(option)));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, Ui.dp(c, height), 1f);
+            lp.setMargins(gap, gap, gap, gap);
+            row.addView(cell, lp);
+        }
+    }
+
+    private static String status(QuickGame game) {
+        long s = (game.leftMs(SystemClock.elapsedRealtime()) + 999) / 1000;
+        return "Zadatak " + (game.done() + 1) + " od " + game.rounds + "   ·   " + s + " s";
+    }
+}

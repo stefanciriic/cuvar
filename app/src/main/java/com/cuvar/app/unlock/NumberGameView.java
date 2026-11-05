@@ -23,8 +23,18 @@ public final class NumberGameView {
     private NumberGameView() {
     }
 
+    /** Prikaz igrice u zadatom prostoru; posle pobede se zove onPass. */
+    public interface Game {
+        void show(Context c, Handler h, LinearLayout area, Runnable onPass);
+    }
+
     /** Proba iz Podešavanja: ista igrica preko celog ekrana, bez blokade i bez šifre. */
     public static void practice(Activity a) {
+        practice(a, (c, h, area, onPass) -> show(c, h, area, onPass, null));
+    }
+
+    /** Proba bilo koje igrice (brojevi ili kratke igrice). */
+    public static void practice(Activity a, final Game game) {
         final Dialog d = new Dialog(a, android.R.style.Theme_DeviceDefault_NoActionBar_Fullscreen);
         ScrollView scroll = new ScrollView(a);
         scroll.setBackgroundColor(Ui.NIGHT);
@@ -55,15 +65,15 @@ public final class NumberGameView {
             TextView again = button(a, "Igraj ponovo");
             again.setOnClickListener(Safe.click("numbersAgain", v -> {
                 started[0] = SystemClock.elapsedRealtime();
-                show(a, h, area, won[0], null);
+                game.show(a, h, area, won[0]);
             }));
             area.addView(again, Ui.fill(a, 16));
         };
-        show(a, h, area, won[0], null);
+        game.show(a, h, area, won[0]);
         d.show();
     }
 
-    private static TextView button(Context c, String label) {
+    static TextView button(Context c, String label) {
         TextView b = Ui.text(c, label, 15, 0xFFFFFFFF, true);
         b.setGravity(Gravity.CENTER);
         b.setBackground(Ui.pressable(Ui.NIGHT_KEY, Ui.NIGHT_KEY_DOWN, Ui.dp(c, 14)));

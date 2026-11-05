@@ -11,6 +11,8 @@ import com.cuvar.app.ui.Safe;
 import com.cuvar.app.ui.Ui;
 import com.cuvar.app.unlock.Jokes;
 import com.cuvar.app.unlock.NumberGameView;
+import com.cuvar.app.unlock.QuickGame;
+import com.cuvar.app.unlock.QuickGameView;
 import com.cuvar.app.unlock.PinPad;
 import com.cuvar.app.unlock.Quiz;
 
@@ -288,10 +290,26 @@ public final class BlockOverlayContent {
         if (notice == null) Quiz.LADDER.atLeast(cost.answers);
         String ch = Ui.unlockChallenge(c);
         // Nasumično se bira na početku otključavanja (notice == null), posle odgovora ostaju pitanja.
-        if (Ui.CHALLENGE_NUMBERS.equals(ch) || Ui.CHALLENGE_MIX.equals(ch) && notice == null && RANDOM.nextBoolean()) {
+        String game = null;
+        if (Ui.CHALLENGE_GAMES.equals(ch) || Ui.CHALLENGE_MIX.equals(ch) && notice == null && RANDOM.nextBoolean()) {
+            game = Ui.GAMES[RANDOM.nextInt(Ui.GAMES.length)];
+        } else if (!Ui.CHALLENGE_QUIZ.equals(ch) && !Ui.CHALLENGE_MIX.equals(ch)) {
+            game = ch;
+        }
+        if (Ui.CHALLENGE_NUMBERS.equals(game)) {
             String price = done == 0 ? null : (done + 1) + ". otključavanje danas: brojevi do " + cost.side * cost.side
                     + " za " + cost.timeMs / 1000 + " s";
             NumberGameView.show(host, host.h, area, onPass, price, cost.side, cost.timeMs);
+            return;
+        }
+        QuickGame.Kind quick = QuickGameView.kind(game);
+        if (quick != null) {
+            // Nivo prati broj otključavanja danas (cost.answers je 1, 2 ili 3).
+            int level = cost.answers - 1;
+            String price = done == 0 ? null : (done + 1) + ". otključavanje danas: "
+                    + Ui.count(QuickGame.rounds(level), "zadatak", "zadatka", "zadataka")
+                    + " za " + QuickGame.timeMs(level) / 1000 + " s";
+            QuickGameView.show(host, host.h, area, onPass, price, quick, level);
             return;
         }
         area.removeAllViews();

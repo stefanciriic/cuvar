@@ -12,6 +12,8 @@ import com.cuvar.app.rules.DailyCode;
 import com.cuvar.app.rules.DayLimit;
 import com.cuvar.app.unlock.NumberGame;
 import com.cuvar.app.unlock.NumberGameView;
+import com.cuvar.app.unlock.QuickGame;
+import com.cuvar.app.unlock.QuickGameView;
 
 import android.app.Activity;
 import android.view.Gravity;
@@ -120,6 +122,9 @@ public final class SettingsSheets {
 
     public static String challengeName(String challenge) {
         if (Ui.CHALLENGE_NUMBERS.equals(challenge)) return "Igrica: brojevi redom";
+        QuickGame.Kind k = QuickGameView.kind(challenge);
+        if (k != null) return QuickGameView.name(k);
+        if (Ui.CHALLENGE_GAMES.equals(challenge)) return "Nasumična igrica";
         if (Ui.CHALLENGE_MIX.equals(challenge)) return "Nasumično: igrica ili pitalice";
         return "Pitalice";
     }
@@ -129,7 +134,7 @@ public final class SettingsSheets {
         LinearLayout box = Ui.column(a);
         Sheet sheet = new Sheet(a, "Pre otključavanja").view(box).secondary("Zatvori", null);
         String current = Ui.unlockChallenge(a);
-        String[] all = {Ui.CHALLENGE_QUIZ, Ui.CHALLENGE_NUMBERS, Ui.CHALLENGE_MIX};
+        String[] all = Ui.CHALLENGES;
         for (int i = 0; i < all.length; i++) {
             final String ch = all[i];
             TextView b = Ui.button(a, challengeName(ch), ch.equals(current));
@@ -139,15 +144,24 @@ public final class SettingsSheets {
             });
             box.addView(b, Ui.fill(a, i == 0 ? 0 : 10));
         }
+        // Proba izabrane igrice; kod pitalica ili nasumičnog izbora nasumična igrica.
         TextView play = Ui.button(a, "Probaj igricu", false);
         play.setOnClickListener(v -> {
             sheet.dismiss();
-            NumberGameView.practice(a);
+            String game = current;
+            if (!java.util.Arrays.asList(Ui.GAMES).contains(game)) game = Ui.GAMES[new java.util.Random().nextInt(Ui.GAMES.length)];
+            QuickGame.Kind k = QuickGameView.kind(game);
+            if (k != null) QuickGameView.practice(a, k);
+            else NumberGameView.practice(a);
         });
         box.addView(play, Ui.fill(a, 18));
         box.addView(Ui.text(a, "Brojevi redom: tapni brojeve od 1 do " + NumberGame.SIZE + " redom za "
                 + NumberGame.TIME_MS / 1000 + " s. Pogrešan broj ili isteklo vreme vraća na početak.",
                 13, Ui.MUTED, false), Ui.fill(a, 12));
+        box.addView(Ui.text(a, "Računanje, boje i uljez: nekoliko brzih zadataka redom. Greška ili isteklo vreme vraća na početak.",
+                13, Ui.MUTED, false), Ui.fill(a, 8));
+        box.addView(Ui.text(a, "Svako sledeće otključavanje u danu je teže, za sve aplikacije zajedno. Greške ne povećavaju težinu.",
+                13, Ui.MUTED, false), Ui.fill(a, 8));
         sheet.show();
     }
 

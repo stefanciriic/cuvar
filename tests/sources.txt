@@ -32,3 +32,4 @@ app/src/main/java/com/cuvar/app/guard/Clones.java
 app/src/main/java/com/cuvar/app/guard/MusicOwner.java
 app/src/main/java/com/cuvar/app/guard/LoadMeter.java
 app/src/main/java/com/cuvar/app/guard/ErrorLog.java
+app/src/main/java/com/cuvar/app/unlock/QuickGame.java
