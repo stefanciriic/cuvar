@@ -11,8 +11,11 @@ import java.util.Random;
  * u danu. Bez Android klasa (tests/QuickGameTest).
  */
 public final class QuickGame {
-    /** Računanje, boja slova (Stroop) i znak koji se razlikuje. */
-    public enum Kind { SUM, COLOR, ODD }
+    /** Srednja strelica, boja slova (Stroop) i znak koji se razlikuje. */
+    public enum Kind { ARROW, COLOR, ODD }
+
+    /** Strelice za igricu „Strelice“: prve dve na lakšim nivoima, sve četiri na najtežem. */
+    public static final String[] ARROWS = {"←", "→", "↑", "↓"};
 
     /** Boje za igricu „Boje“: dobro se vide na tamnoj pozadini. */
     public static final int[] COLORS = {0xFFEF5350, 0xFF66BB6A, 0xFF42A5F5, 0xFFFFEE58, 0xFFBA68C8, 0xFFFFA726};
@@ -27,11 +30,11 @@ public final class QuickGame {
 
     /** Jedan zadatak: šta piše, ponuđeni odgovori i koji je tačan. */
     public static final class Round {
-        /** SUM: izraz („7 + 5“); COLOR: naziv boje; ODD: null. */
+        /** ARROW: niz strelica, tačna je srednja; COLOR: naziv boje; ODD: null. */
         public final String prompt;
         /** COLOR: boja kojom je reč napisana. */
         public final int ink;
-        /** SUM: ponuđeni brojevi; ODD: znak u svakom polju mreže; COLOR: null. */
+        /** ARROW: ponuđeni smerovi; ODD: znak u svakom polju mreže; COLOR: null. */
         public final String[] options;
         /** COLOR: ponuđene boje. */
         public final int[] colors;
@@ -120,45 +123,26 @@ public final class QuickGame {
     }
 
     static Round make(Kind kind, int level, Random r) {
-        if (kind == Kind.SUM) return sum(level, r);
+        if (kind == Kind.ARROW) return arrow(level, r);
         if (kind == Kind.COLOR) return color(level, r);
         return odd(level, r);
     }
 
-    private static Round sum(int level, Random r) {
-        int a, b;
-        boolean minus;
-        if (level == 0) {
-            a = 1 + r.nextInt(9);
-            b = 1 + r.nextInt(9);
-            minus = false;
-        } else if (level == 1) {
-            a = 10 + r.nextInt(40);
-            b = 2 + r.nextInt(8);
-            minus = r.nextBoolean();
-        } else {
-            a = 20 + r.nextInt(70);
-            b = 10 + r.nextInt(40);
-            minus = r.nextBoolean();
+    private static Round arrow(int level, Random r) {
+        int dirs = level == 2 ? 4 : 2;
+        int len = level == 0 ? 5 : 7;
+        int mid = r.nextInt(dirs);
+        // Okolne strelice su uglavnom drugačije od srednje, da zbune.
+        int around = r.nextInt(4) == 0 ? mid : (mid + 1 + r.nextInt(dirs - 1)) % dirs;
+        StringBuilder b = new StringBuilder();
+        for (int i = 0; i < len; i++) {
+            int d = i == len / 2 ? mid : level == 2 && r.nextInt(3) == 0 ? r.nextInt(dirs) : around;
+            if (i > 0) b.append(' ');
+            b.append(ARROWS[d]);
         }
-        if (minus && b > a) {
-            int t = a;
-            a = b;
-            b = t;
-        }
-        int result = minus ? a - b : a + b;
-        List<Integer> opts = new ArrayList<>();
-        opts.add(result);
-        int[] near = {1, -1, 2, -2, 10, -10, 3, -3};
-        for (int i = 0; opts.size() < 4 && i < 100; i++) {
-            int v = result + near[r.nextInt(near.length)];
-            if (v >= 0 && !opts.contains(v)) opts.add(v);
-        }
-        for (int v = result + 4; opts.size() < 4; v++) if (!opts.contains(v)) opts.add(v);
-        Collections.shuffle(opts, r);
-        String[] labels = new String[opts.size()];
-        for (int i = 0; i < labels.length; i++) labels[i] = String.valueOf(opts.get(i));
-        return new Round(a + (minus ? " − " : " + ") + b, 0, labels, null, opts.indexOf(result), 0);
+        String[] options = new String[dirs];
+        System.arraycopy(ARROWS, 0, options, 0, dirs);
+        return new Round(b.toString(), 0, options, null, mid, 0);
     }
 
     private static Round color(int level, Random r) {

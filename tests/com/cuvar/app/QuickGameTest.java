@@ -7,7 +7,7 @@ import java.util.HashSet;
 import java.util.Random;
 import java.util.Set;
 
-/** Kratke igrice: Računanje, Boje, Uljez. */
+/** Kratke igrice: Strelice, Boje, Uljez. */
 public final class QuickGameTest {
     private static int checks;
 
@@ -18,7 +18,7 @@ public final class QuickGameTest {
                     QuickGame g = new QuickGame(k, level, new Random(seed), 0);
                     QuickGame.Round r = g.round();
                     check(r.answer >= 0 && r.answer < r.count(), "Tačan odgovor je među ponuđenima " + k);
-                    if (k == QuickGame.Kind.SUM) sum(r);
+                    if (k == QuickGame.Kind.ARROW) arrow(r);
                     if (k == QuickGame.Kind.COLOR) color(r);
                     if (k == QuickGame.Kind.ODD) odd(r);
                 }
@@ -31,7 +31,7 @@ public final class QuickGameTest {
         }
         check(QuickGame.rounds(0) < QuickGame.rounds(2), "Teže posle više otključavanja");
 
-        QuickGame w = new QuickGame(QuickGame.Kind.SUM, 0, new Random(3), 0);
+        QuickGame w = new QuickGame(QuickGame.Kind.ARROW, 0, new Random(3), 0);
         int wrong = (w.round().answer + 1) % w.round().count();
         check(w.tap(wrong, 10) == NumberGame.Tap.WRONG && w.over(), "Pogrešan odgovor završava partiju");
 
@@ -40,15 +40,11 @@ public final class QuickGameTest {
         System.out.println("Prošlo: " + checks + " provera.");
     }
 
-    private static void sum(QuickGame.Round r) {
-        String[] p = r.prompt.split(" ");
-        int a = Integer.parseInt(p[0]), b = Integer.parseInt(p[2]);
-        int result = p[1].equals("+") ? a + b : a - b;
-        check(result >= 0, "Rezultat nije negativan");
-        check(Integer.parseInt(r.options[r.answer]) == result, "Tačan zbir " + r.prompt);
-        Set<String> s = new HashSet<>();
-        for (String o : r.options) check(s.add(o) && Integer.parseInt(o) >= 0, "Različiti ponuđeni brojevi");
-        check(r.options.length == 4, "Četiri ponude");
+    private static void arrow(QuickGame.Round r) {
+        String[] a = r.prompt.split(" ");
+        check(a.length % 2 == 1, "Neparan broj strelica");
+        check(a[a.length / 2].equals(r.options[r.answer]), "Tačna je srednja strelica");
+        check(r.options.length == 2 || r.options.length == 4, "Dva ili četiri smera");
     }
 
     private static void color(QuickGame.Round r) {

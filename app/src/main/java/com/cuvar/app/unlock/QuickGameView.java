@@ -15,7 +15,7 @@ import android.widget.TextView;
 
 import java.util.Random;
 
-/** Ekran kratkih igrica (Računanje, Boje, Uljez): na ekranu blokade i za probu iz Podešavanja. */
+/** Ekran kratkih igrica (Strelice, Boje, Uljez): na ekranu blokade i za probu iz Podešavanja. */
 public final class QuickGameView {
     private static final Random RANDOM = new Random();
 
@@ -24,7 +24,7 @@ public final class QuickGameView {
 
     /** Kratka igrica za izbor iz podešavanja (Ui.CHALLENGE_...); null za pitalice, brojeve i nasumično. */
     public static QuickGame.Kind kind(String challenge) {
-        if (Ui.CHALLENGE_SUM.equals(challenge)) return QuickGame.Kind.SUM;
+        if (Ui.CHALLENGE_ARROWS.equals(challenge)) return QuickGame.Kind.ARROW;
         if (Ui.CHALLENGE_COLOR.equals(challenge)) return QuickGame.Kind.COLOR;
         if (Ui.CHALLENGE_ODD.equals(challenge)) return QuickGame.Kind.ODD;
         return null;
@@ -32,7 +32,7 @@ public final class QuickGameView {
 
     /** Naslov igrice (za podešavanja). */
     public static String name(QuickGame.Kind kind) {
-        if (kind == QuickGame.Kind.SUM) return "Igrica: računanje";
+        if (kind == QuickGame.Kind.ARROW) return "Igrica: strelice";
         if (kind == QuickGame.Kind.COLOR) return "Igrica: boje";
         return "Igrica: uljez";
     }
@@ -50,7 +50,7 @@ public final class QuickGameView {
         final LinearLayout board = Ui.column(c);
         area.removeAllViews();
 
-        String title = kind == QuickGame.Kind.SUM ? "Izračunaj i tapni rezultat"
+        String title = kind == QuickGame.Kind.ARROW ? "Na koju stranu pokazuje srednja strelica?"
                 : kind == QuickGame.Kind.COLOR ? "Tapni boju kojom je reč napisana"
                 : "Tapni znak koji se razlikuje";
         TextView head = Ui.text(c, title, 20, 0xFFFFFFFF, true);
@@ -111,7 +111,7 @@ public final class QuickGameView {
         int perRow;
         int height;
         if (r.prompt != null) {
-            TextView p = Ui.text(c, r.prompt, r.options != null ? 40 : 34, r.options != null ? 0xFFFFFFFF : r.ink, true);
+            TextView p = Ui.text(c, r.prompt, r.options != null ? 34 : 34, r.options != null ? 0xFFFFFFFF : r.ink, true);
             p.setGravity(Gravity.CENTER);
             board.addView(p, Ui.fill(c, 8));
         }

@@ -200,18 +200,19 @@ public final class Ui {
     /** Šta se rešava pre šifre: pitalice, jedna od igrica, nasumična igrica ili nasumično igrica/pitalice. */
     public static final String CHALLENGE_QUIZ = "quiz";
     public static final String CHALLENGE_NUMBERS = "numbers";
-    public static final String CHALLENGE_SUM = "sum";
+    public static final String CHALLENGE_ARROWS = "arrows";
     public static final String CHALLENGE_COLOR = "color";
     public static final String CHALLENGE_ODD = "odd";
     public static final String CHALLENGE_GAMES = "games";
     public static final String CHALLENGE_MIX = "mix";
-    public static final String[] CHALLENGES = {CHALLENGE_QUIZ, CHALLENGE_NUMBERS, CHALLENGE_SUM, CHALLENGE_COLOR,
+    public static final String[] CHALLENGES = {CHALLENGE_QUIZ, CHALLENGE_NUMBERS, CHALLENGE_ARROWS, CHALLENGE_COLOR,
             CHALLENGE_ODD, CHALLENGE_GAMES, CHALLENGE_MIX};
     /** Sve igrice (za nasumičan izbor). */
-    public static final String[] GAMES = {CHALLENGE_NUMBERS, CHALLENGE_SUM, CHALLENGE_COLOR, CHALLENGE_ODD};
+    public static final String[] GAMES = {CHALLENGE_NUMBERS, CHALLENGE_ARROWS, CHALLENGE_COLOR, CHALLENGE_ODD};
 
     public static String unlockChallenge(Context c) {
         String ch = prefs(c).getString("challenge", null);
+        if ("sum".equals(ch)) return CHALLENGE_ARROWS; // računanje je zamenjeno strelicama
         for (String k : CHALLENGES) if (k.equals(ch)) return k;
         return CHALLENGE_QUIZ;
     }
