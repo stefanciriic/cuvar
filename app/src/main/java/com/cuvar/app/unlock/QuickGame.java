@@ -23,13 +23,13 @@ public final class QuickGame {
 
     /** Parovi znakova za „Uljeza“: samo cifre i simboli, da ih ćirilica ne menja. */
     private static final String[][] ODD_PAIRS = {
-            {"6", "9"}, {"8", "3"}, {"5", "6"}, {"1", "7"}, {"0", "8"}, {"69", "96"}, {"★", "☆"}, {"▲", "△"}, {"12", "21"}};
+            {"6", "9"}, {"8", "3"}, {"5", "6"}, {"8", "9"}, {"0", "8"}, {"69", "96"}, {"12", "21"}, {"88", "89"}, {"161", "191"}};
 
-    private static final int[] ROUNDS = {4, 5, 6};
-    private static final long[] TIME_MS = {20_000L, 20_000L, 25_000L};
+    private static final int[] ROUNDS = {6, 7, 8};
+    private static final long[] TIME_MS = {18_000L, 18_000L, 20_000L};
     /** Pamćenje i Niz: manje zadataka jer svaki prvo treba pogledati. */
-    private static final int[] SHOW_ROUNDS = {2, 2, 3};
-    private static final long[] SHOW_TIME_MS = {20_000L, 25_000L, 30_000L};
+    private static final int[] SHOW_ROUNDS = {3, 3, 4};
+    private static final long[] SHOW_TIME_MS = {25_000L, 30_000L, 35_000L};
 
     /** Jedan zadatak: šta piše, ponuđeni odgovori i koji je tačan. */
     public static final class Round {
@@ -167,13 +167,18 @@ public final class QuickGame {
         if (kind == Kind.ARROW) return arrow(level, r);
         if (kind == Kind.COLOR) return color(level, r);
         if (kind == Kind.MEMORY) return cells(level == 2 ? 5 : 4, memoryTiles(level), false, r);
-        if (kind == Kind.SEQUENCE) return cells(3, level + 3, true, r);
+        if (kind == Kind.SEQUENCE) return cells(level == 2 ? 4 : 3, sequenceTiles(level), true, r);
         return odd(level, r);
+    }
+
+    /** Niz: koliko polja zasvetli redom (mreža 3x3, na najtežem 4x4). */
+    public static int sequenceTiles(int level) {
+        return 5 + Math.max(0, Math.min(2, level));
     }
 
     /** Pamćenje: koliko polja zasvetli (mreža 4x4, na najtežem 5x5). */
     public static int memoryTiles(int level) {
-        return 5 + Math.max(0, Math.min(2, level));
+        return 6 + Math.max(0, Math.min(2, level));
     }
 
     private static boolean contains(int[] a, int v) {
@@ -194,14 +199,14 @@ public final class QuickGame {
     }
 
     private static Round arrow(int level, Random r) {
-        int dirs = level == 2 ? 4 : 2;
-        int len = level == 0 ? 5 : 7;
+        int dirs = level == 0 ? 2 : 4;
+        int len = 7;
         int mid = r.nextInt(dirs);
         // Okolne strelice su uglavnom drugačije od srednje, da zbune.
         int around = r.nextInt(4) == 0 ? mid : (mid + 1 + r.nextInt(dirs - 1)) % dirs;
         StringBuilder b = new StringBuilder();
         for (int i = 0; i < len; i++) {
-            int d = i == len / 2 ? mid : level == 2 && r.nextInt(3) == 0 ? r.nextInt(dirs) : around;
+            int d = i == len / 2 ? mid : level > 0 && r.nextInt(3) == 0 ? r.nextInt(dirs) : around;
             if (i > 0) b.append(' ');
             b.append(ARROWS[d]);
         }
@@ -211,7 +216,7 @@ public final class QuickGame {
     }
 
     private static Round color(int level, Random r) {
-        int n = level == 0 ? 3 : level == 1 ? 4 : 6;
+        int n = level == 0 ? 4 : 6;
         List<Integer> idx = new ArrayList<>();
         for (int i = 0; i < COLORS.length; i++) idx.add(i);
         Collections.shuffle(idx, r);
@@ -226,7 +231,7 @@ public final class QuickGame {
     }
 
     private static Round odd(int level, Random r) {
-        int side = level == 2 ? 5 : 4;
+        int side = level == 2 ? 6 : 5;
         String[] pair = ODD_PAIRS[r.nextInt(ODD_PAIRS.length)];
         boolean flip = r.nextBoolean();
         String base = flip ? pair[1] : pair[0], other = flip ? pair[0] : pair[1];

@@ -137,7 +137,7 @@ public final class QuickGameView {
             }), 800L + 150L * n);
             return;
         }
-        final long on = 550L, gap = 200L;
+        final long on = 450L, gap = 150L;
         for (int i = 0; i < n; i++) {
             final int idx = r.targets[i];
             final boolean last = i == n - 1;

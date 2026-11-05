@@ -84,7 +84,7 @@ public final class QuickGameTest {
     }
 
     private static void cells(QuickGame.Round r, QuickGame.Kind k, int level) {
-        check(r.targets.length == (k == QuickGame.Kind.MEMORY ? QuickGame.memoryTiles(level) : level + 3) && r.ordered == (k == QuickGame.Kind.SEQUENCE), "Broj polja za pamćenje");
+        check(r.targets.length == (k == QuickGame.Kind.MEMORY ? QuickGame.memoryTiles(level) : QuickGame.sequenceTiles(level)) && r.ordered == (k == QuickGame.Kind.SEQUENCE), "Broj polja za pamćenje");
         Set<Integer> s = new HashSet<>();
         for (int t : r.targets) check(t >= 0 && t < r.count() && s.add(t), "Različita polja u mreži");
     }
