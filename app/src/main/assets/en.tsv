@@ -683,7 +683,6 @@ Koristi Chrome, Samsung Internet, Firefox, Edge, Brave ili Vivaldi.	Use Chrome, 
 Bez noćne blokade	No night block
 Od 22:00 do 06:00 ostaje otvorena, ako je ne zaključava nešto drugo. Uključivanje važi od sutra u 06:00	Stays open from 22:00 to 06:00 unless something else locks it. Turning this on applies from 06:00 tomorrow
 : bez noćne blokade	: no night block
-Uklonjeno iz pravila. Važi odmah.	Removed from rules. Applies right away.
 Pre otključavanja	Before unlocking
 Pitalice	Quiz questions
 Igrica: brojevi redom	Game: numbers in order
@@ -743,3 +742,13 @@ Igrica: niz	Game: sequence
 Zapamti osvetljena polja, pa ih tapni	Remember the lit tiles, then tap them
 Zapamti redosled, pa tapni polja istim redom	Remember the order, then tap the tiles in the same order
 Po zapisima Androida, kao Digital Wellbeing.	From Android's records, like Digital Wellbeing.
+Ukloniti iz pravila?	Remove from rules?
+Da li si siguran da želiš da ukloniš? Bez potvrde do 22:00 ostaje zaključano.	Are you sure you want to remove it? Without confirmation by 22:00 it stays locked.
+Ne, ostavi	No, keep it
+Da, ukloni	Yes, remove
+Uklonjeno iz pravila.	Removed from rules.
+Uklanjanje iz pravila	Removing from rules
+Ostaje zaključano. Sutra od 08:00 do 22:00 Čuvar pita da li si siguran, i tek tada se uklanja.	Stays locked. Tomorrow from 08:00 to 22:00 Čuvar asks if you are sure, and only then removes it.
+Odgovori	Answer
+Odustani od uklanjanja	Cancel removal
+Sutra od 08:00 Čuvar pita da li si siguran. Tek tada se uklanja.	Tomorrow from 08:00 Čuvar asks if you are sure. Only then is it removed.

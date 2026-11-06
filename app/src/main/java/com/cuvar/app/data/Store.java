@@ -50,6 +50,7 @@ public final class Store {
     public final DayLimits dayLimits = new DayLimits(this);
     public final GuardLog guardLog = new GuardLog(this);
     public final Sessions sessions = new Sessions(this);
+    public final Removals removals = new Removals(this);
     final SharedPreferences sp;
     final JSONObject apps;   // paket -> {lock, limit}
     final JSONObject sites;  // domen -> {limit}
@@ -391,10 +392,7 @@ public final class Store {
         enforce();
     }
 
-    /** PRIVREMENO (31.10.2026, na zahtev): skidanje aplikacije ili sajta iz pravila i režima važi odmah, a ne od sutra u 06:00. */
-    public static final boolean REMOVE_NOW = true;
-
-    /** Skida aplikaciju i sajtove iz svih pravila i režima, i iz onoga što važi sada (i usred režima). */
+    /** Skida aplikaciju i sajtove iz svih pravila i režima, i iz onoga što važi sada (i usred režima). Poziva se samo posle potvrde (Removals). */
     public synchronized void removeNow(String pkg, java.util.Collection<String> domains) {
         if (pkg != null) {
             apps.remove(pkg);
@@ -524,7 +522,7 @@ public final class Store {
             copyToEnforced();
             return;
         }
-        setNow(EnforcedRules.tighten(nowRules(), wantedRules(), REMOVE_NOW));
+        setNow(EnforcedRules.tighten(nowRules(), wantedRules(), false));
         saveEnforced();
     }
 

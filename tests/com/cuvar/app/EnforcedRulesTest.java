@@ -144,8 +144,8 @@ public final class EnforcedRulesTest {
     // ---------- pomoćno ----------
 
     private static EnforcedRules tight(EnforcedRules now, EnforcedRules wanted) {
-        // Isto kao u aplikaciji (Store.REMOVE_NOW).
-        return EnforcedRules.tighten(now, wanted, true);
+        // Isto kao u aplikaciji: skidanje čeka (uklanjanje ide kroz potvrdu, Removals).
+        return EnforcedRules.tighten(now, wanted, false);
     }
 
     private static EnforcedRules none() {

@@ -12,6 +12,8 @@ import com.cuvar.app.i18n.Lang;
 import com.cuvar.app.rules.DailyCode;
 import com.cuvar.app.rules.DailySchedule;
 import com.cuvar.app.rules.DayLimit;
+import com.cuvar.app.rules.RemovalWindow;
+import com.cuvar.app.data.Removals;
 import com.cuvar.app.ui.Charts;
 import com.cuvar.app.ui.SettingsSheets;
 import com.cuvar.app.ui.Sheet;
@@ -89,6 +91,7 @@ public class MainActivity extends Activity {
             return;
         }
         Safe.screen(this, "dashboard", this::showDashboard);
+        Safe.run("askRemoval", this::askRemoval);
     }
 
     @Override
@@ -202,6 +205,8 @@ public class MainActivity extends Activity {
         LinearLayout col = titled("Pravila", "Pooštravanje važi odmah, a popuštanje tek sutra od 0"
                 + DailyCode.NIGHT_END_HOUR + ":00.");
 
+        View removals = removalCard(this, store, this::showDashboard);
+        if (removals != null) col.addView(removals, Ui.fill(this, 18));
         View pending = pendingCard(this, store, this::showDashboard);
         if (pending != null) col.addView(pending, Ui.fill(this, 18));
 
@@ -450,6 +455,66 @@ public class MainActivity extends Activity {
         if (ids.size() == 1) return (enabled.isEmpty() ? "Isključen · " : "Uključen · ")
                 + android.text.TextUtils.join("; ", periods);
         return ids.size() + " režima · uključeno " + enabled.size();
+    }
+
+    /** Zahtevi za koje je već pitano u ovom pokretanju, da se pitanje ne ponavlja na svakom povratku. */
+    private static final java.util.Set<String> asked = new java.util.HashSet<>();
+
+    /** Od 08:00 do 22:00 sutradan pita za svaki zahtev za uklanjanje, jednom po pokretanju aplikacije. */
+    private void askRemoval() {
+        for (Removals.Request r : store.removals.list()) {
+            if (r.state != RemovalWindow.ASK || !asked.add(r.key + "|" + store.day())) continue;
+            removalSheet(this, store, r, this::showDashboard);
+            return;
+        }
+    }
+
+    private static String removalName(Activity a, Removals.Request r) {
+        return r.pkg != null ? AppLabels.of(a.getPackageManager(), r.pkg) : r.key;
+    }
+
+    /** Pitanje „Da li si siguran?“; bez potvrde do 22:00 pravilo ostaje. */
+    static void removalSheet(Activity a, Store store, Removals.Request r, Runnable refresh) {
+        new Sheet(a, "Ukloniti iz pravila?")
+                .message(removalName(a, r) + "\n\n" + "Da li si siguran da želiš da ukloniš? Bez potvrde do 22:00 ostaje zaključano.")
+                .secondary("Ne, ostavi", () -> {
+                    store.removals.cancel(r.key);
+                    refresh.run();
+                    return true;
+                })
+                .primary("Da, ukloni", () -> {
+                    if (store.removals.confirm(r.key)) Ui.toast(a, "Uklonjeno iz pravila.");
+                    refresh.run();
+                    return true;
+                })
+                .show();
+    }
+
+    /** Zahtevi za uklanjanje iz pravila: čekaju sutra od 08:00 ili traže potvrdu; null ako ih nema. */
+    public static View removalCard(Activity a, Store store, Runnable refresh) {
+        List<Removals.Request> list = store.removals.list();
+        if (list.isEmpty()) return null;
+        LinearLayout card = Ui.card(a);
+        card.addView(Ui.text(a, "Uklanjanje iz pravila", 16, Ui.ACCENT, true));
+        for (Removals.Request r : list) {
+            boolean ask = r.state == RemovalWindow.ASK;
+            card.addView(Ui.text(a, removalName(a, r), 15, Ui.INK, true), Ui.fill(a, 10));
+            card.addView(Ui.text(a, ask
+                            ? "Da li si siguran da želiš da ukloniš? Bez potvrde do 22:00 ostaje zaključano."
+                            : "Ostaje zaključano. Sutra od 08:00 do 22:00 Čuvar pita da li si siguran, i tek tada se uklanja.",
+                    13, Ui.MUTED, false), Ui.fill(a, 2));
+            TextView b = Ui.button(a, ask ? "Odgovori" : "Odustani od uklanjanja", false);
+            b.setOnClickListener(Safe.click("removalCard", v -> {
+                if (ask) {
+                    removalSheet(a, store, r, refresh);
+                } else {
+                    store.removals.cancel(r.key);
+                    refresh.run();
+                }
+            }));
+            card.addView(b, Ui.fill(a, 8));
+        }
+        return card;
     }
 
     /** Popuštanja pravila koja čekaju sutra, sa dugmetom da se od njih odustane; null ako ih nema. */

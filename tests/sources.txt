@@ -34,3 +34,4 @@ app/src/main/java/com/cuvar/app/guard/LoadMeter.java
 app/src/main/java/com/cuvar/app/guard/ErrorLog.java
 app/src/main/java/com/cuvar/app/unlock/QuickGame.java
 app/src/main/java/com/cuvar/app/rules/ForegroundTime.java
+app/src/main/java/com/cuvar/app/rules/RemovalWindow.java

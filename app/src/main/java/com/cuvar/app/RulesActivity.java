@@ -70,6 +70,9 @@ public class RulesActivity extends SubActivity {
                 .secondary("Zatvori", null).show());
         content.addView(how, Ui.fill(this, 4));
 
+        View removals = MainActivity.removalCard(this, store, this::render);
+        if (removals != null) content.addView(removals, Ui.fill(this, 14));
+
         TextView add = Ui.button(this, "+ Dodaj aplikaciju ili sajt", true);
         add.setOnClickListener(v -> addItem());
         content.addView(add, Ui.fill(this, 14));
@@ -379,8 +382,8 @@ public class RulesActivity extends SubActivity {
         }
     }
 
-    private void removedToast() {
-        Ui.toast(this, "Uklonjeno iz pravila. Važi odmah.");
+    private void requestedToast() {
+        Ui.toast(this, "Sutra od 08:00 Čuvar pita da li si siguran. Tek tada se uklanja.");
     }
 
     private boolean saveRules(List<DailySchedule.Rule> rules, List<CheckRow> rows, String key, boolean site) {
@@ -505,21 +508,10 @@ public class RulesActivity extends SubActivity {
                 });
         if (store.hasAppRule(pkg) || !in.isEmpty() || !siteRules.isEmpty()) {
             sheet.danger("Ukloni iz pravila", () -> {
-                if (Store.REMOVE_NOW) {
-                    Set<String> doms = new HashSet<>(siteRules);
-                    for (DailySchedule.Rule r : rules) for (String x : r.sites) if (dom != null && Links.covers(dom, x)) doms.add(x);
-                    store.removeNow(pkg, doms);
-                    removedToast();
-                    render();
-                    return true;
-                }
-                for (DailySchedule.Rule r : rules) {
-                    if (r.apps.contains(pkg) && !store.modes.setScheduleApp(r.id, pkg, false)) busy();
-                    for (String x : r.sites) if (dom != null && Links.covers(dom, x) && !store.modes.setScheduleSite(r.id, x, false)) busy();
-                }
-                store.setApp(pkg, false, 0, 0, 0);
-                for (String x : siteRules) store.removeSite(x);
-                pendingToast();
+                Set<String> doms = new HashSet<>(siteRules);
+                for (DailySchedule.Rule r : rules) for (String x : r.sites) if (dom != null && Links.covers(dom, x)) doms.add(x);
+                store.removals.request(pkg, doms);
+                requestedToast();
                 render();
                 return true;
             });
@@ -576,15 +568,8 @@ public class RulesActivity extends SubActivity {
                 });
         if (current >= 0 || !in.isEmpty()) {
             sheet.danger("Ukloni iz pravila", () -> {
-                if (Store.REMOVE_NOW) {
-                    store.removeNow(null, java.util.Collections.singleton(domain));
-                    removedToast();
-                    render();
-                    return true;
-                }
-                for (DailySchedule.Rule r : rules) if (in.contains(r.id) && !store.modes.setScheduleSite(r.id, domain, false)) busy();
-                if (current >= 0) store.removeSite(domain);
-                pendingToast();
+                store.removals.request(null, java.util.Collections.singleton(domain));
+                requestedToast();
                 render();
                 return true;
             });
