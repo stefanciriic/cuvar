@@ -135,20 +135,23 @@ public final class SettingsSheets {
         Sheet sheet = new Sheet(a, "Pre otključavanja").view(box).secondary("Zatvori", null);
         String current = Ui.unlockChallenge(a);
         String[] all = Ui.CHALLENGES;
+        TextView[] buttons = new TextView[all.length];
         for (int i = 0; i < all.length; i++) {
             final String ch = all[i];
             TextView b = Ui.button(a, challengeName(ch), ch.equals(current));
-            b.setOnClickListener(v -> {
-                sheet.dismiss();
+            buttons[i] = b;
+            // Prozor ostaje otvoren: izbor se samo označi, a zatvara se dugmetom Zatvori.
+            b.setOnClickListener(Safe.click("challenge", v -> {
                 Ui.setUnlockChallenge(a, ch);
-            });
+                for (int j = 0; j < all.length; j++) Ui.styleButton(a, buttons[j], all[j].equals(ch));
+            }));
             box.addView(b, Ui.fill(a, i == 0 ? 0 : 10));
         }
         // Proba izabrane igrice; kod pitalica ili nasumičnog izbora nasumična igrica.
         TextView play = Ui.button(a, "Probaj igricu", false);
         play.setOnClickListener(v -> {
             sheet.dismiss();
-            String game = current;
+            String game = Ui.unlockChallenge(a);
             if (!java.util.Arrays.asList(Ui.GAMES).contains(game)) game = Ui.GAMES[new java.util.Random().nextInt(Ui.GAMES.length)];
             QuickGame.Kind k = QuickGameView.kind(game);
             if (k != null) QuickGameView.practice(a, k);

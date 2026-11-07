@@ -276,11 +276,17 @@ public final class Ui {
         t.setAllCaps(false);
         t.setMinHeight(dp(c, 52));
         t.setMinimumWidth(dp(c, 52));
-        float r = dp(c, 14);
-        t.setBackground(primary ? pressable(ACCENT, ACCENT_DOWN, r) : pressable(SOFT, SOFT_DOWN, r));
+        styleButton(c, t, primary);
         int p = dp(c, 15);
         t.setPadding(p, p, p, p);
         return t;
+    }
+
+    /** Boja dugmeta: glavno (narandžasto, npr. izabrano) ili sporedno. */
+    public static void styleButton(Context c, TextView t, boolean primary) {
+        t.setTextColor(primary ? 0xFFFFFFFF : INK);
+        float r = dp(c, 14);
+        t.setBackground(primary ? pressable(ACCENT, ACCENT_DOWN, r) : pressable(SOFT, SOFT_DOWN, r));
     }
 
     /** Mala oznaka stanja: obojen tekst na blagoj podlozi iste boje. */
