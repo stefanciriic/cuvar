@@ -140,6 +140,11 @@ public final class BlockRulesTest {
 
         f.nightFree.add("com.game");
         check(!kinds(BlockRules.front(f, app("com.game"))).contains(BlockKind.NIGHT), "Aplikacija bez noćne blokade");
+        f.guarded.add("com.android.chrome");
+        f.nightFree.add("com.android.chrome");
+        f.siteLimits.put("youtube.com", 30);
+        check(kinds(BlockRules.front(f, browser("com.android.chrome", "youtube.com"))).contains(BlockKind.NIGHT),
+                "Pregledač bez noćne blokade ne otvara sajt iz pravila noću");
         f.guarded.remove("com.game");
         List<Integer> k = kinds(BlockRules.front(f, app("com.game")));
         check(!k.contains(BlockKind.DAY) && !k.contains(BlockKind.NIGHT), "Dnevni limit i noć samo za aplikacije pod pravilima");

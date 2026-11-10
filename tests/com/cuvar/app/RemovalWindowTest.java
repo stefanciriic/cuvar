@@ -21,6 +21,9 @@ public final class RemovalWindowTest {
         // Kraj meseca i godine.
         check(st("20261231", 2027, 1, 1, 9, 0) == RemovalWindow.ASK, "Prelaz godine");
         check(st("xx", 2026, 11, 7, 9, 0) == RemovalWindow.EXPIRED, "Oštećen dan propada");
+        check(RemovalWindow.asksToday(day, java.time.LocalDate.of(2026, 11, 7)), "Zahtev posle ponoći: pita danas");
+        check(!RemovalWindow.asksToday(day, java.time.LocalDate.of(2026, 11, 6)), "Zahtev danju: pita sutra");
+        check(!RemovalWindow.asksToday("xx", java.time.LocalDate.of(2026, 11, 7)), "Oštećen dan");
         System.out.println("RemovalWindowTest: " + checks + " provera prošlo.");
     }
 

@@ -30,12 +30,15 @@ public final class Removals {
         public final String pkg;
         public final Set<String> sites;
         public final int state;
+        /** Pitanje stiže danas od 08:00 (zahtev je dat posle ponoći), a ne sutra. */
+        public final boolean today;
 
-        Request(String key, String pkg, Set<String> sites, int state) {
+        Request(String key, String pkg, Set<String> sites, int state, boolean today) {
             this.key = key;
             this.pkg = pkg;
             this.sites = sites;
             this.state = state;
+            this.today = today;
         }
     }
 
@@ -52,6 +55,13 @@ public final class Removals {
                 // put sa ispravnim ključem i vrednošću ne baca grešku
             }
             save(out);
+        }
+    }
+
+    /** Da li bi pitanje za zahtev dat sada stiglo danas od 08:00 (posle ponoći, a pre 06:00). */
+    public boolean newRequestAsksToday() {
+        synchronized (store) {
+            return RemovalWindow.asksToday(store.rulesDay(), now().toLocalDate());
         }
     }
 
@@ -76,7 +86,8 @@ public final class Removals {
                     if (!d.isEmpty()) sites.add(d);
                 }
                 String pkg = o.optString("pkg", "");
-                out.add(new Request(o.optString("key"), pkg.isEmpty() ? null : pkg, sites, state));
+                out.add(new Request(o.optString("key"), pkg.isEmpty() ? null : pkg, sites, state,
+                        RemovalWindow.asksToday(o.optString("day"), now.toLocalDate())));
             }
             if (dropped) save(keep);
             return out;

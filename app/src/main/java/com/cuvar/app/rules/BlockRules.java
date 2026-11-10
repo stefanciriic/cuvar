@@ -103,8 +103,9 @@ public final class BlockRules {
         }
         if (f.nightActive() && !exempt) {
             String site = web ? f.siteGuarded(s.host) : null;
-            if (f.guarded(pkg)) {
-                if (f.nightBlocksApp(pkg)) out.add(new Block(appKey, BlockKind.NIGHT, null, false));
+            // Pregledač bez noćne blokade ne oslobađa sajtove iz pravila koji se u njemu otvaraju.
+            if (f.guarded(pkg) && f.nightBlocksApp(pkg)) {
+                out.add(new Block(appKey, BlockKind.NIGHT, null, false));
             } else if (site != null) {
                 out.add(new Block(ItemKey.site(site), BlockKind.NIGHT, null, false));
             }

@@ -383,7 +383,9 @@ public class RulesActivity extends SubActivity {
     }
 
     private void requestedToast() {
-        Ui.toast(this, "Sutra od 08:00 Čuvar pita da li si siguran. Tek tada se uklanja.");
+        Ui.toast(this, store.removals.newRequestAsksToday()
+                ? "Danas od 08:00 Čuvar pita da li si siguran. Tek tada se uklanja."
+                : "Sutra od 08:00 Čuvar pita da li si siguran. Tek tada se uklanja.");
     }
 
     private boolean saveRules(List<DailySchedule.Rule> rules, List<CheckRow> rows, String key, boolean site) {

@@ -30,4 +30,13 @@ public final class RemovalWindow {
         if (now.isBefore(start)) return WAITING;
         return now.isBefore(end) ? ASK : EXPIRED;
     }
+
+    /** Da li pitanje stiže danas (zahtev posle ponoći, a pre 06:00), a ne sutra po kalendaru. */
+    public static boolean asksToday(String requestDay, LocalDate today) {
+        try {
+            return LocalDate.parse(requestDay, DateTimeFormatter.BASIC_ISO_DATE).plusDays(1).equals(today);
+        } catch (RuntimeException e) {
+            return false;
+        }
+    }
 }

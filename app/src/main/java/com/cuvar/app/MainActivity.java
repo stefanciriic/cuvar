@@ -501,6 +501,7 @@ public class MainActivity extends Activity {
             card.addView(Ui.text(a, removalName(a, r), 15, Ui.INK, true), Ui.fill(a, 10));
             card.addView(Ui.text(a, ask
                             ? "Da li si siguran da želiš da ukloniš? Bez potvrde do 22:00 ostaje zaključano."
+                            : r.today ? "Ostaje zaključano. Danas od 08:00 do 22:00 Čuvar pita da li si siguran, i tek tada se uklanja."
                             : "Ostaje zaključano. Sutra od 08:00 do 22:00 Čuvar pita da li si siguran, i tek tada se uklanja.",
                     13, Ui.MUTED, false), Ui.fill(a, 2));
             TextView b = Ui.button(a, ask ? "Odgovori" : "Odustani od uklanjanja", false);
