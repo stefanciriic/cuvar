@@ -21,6 +21,10 @@ public final class WebAddressTest {
         eq("google.com/search?q=amp", "google.com/search?q=amp", "Google pretraga ostaje");
         eq("translate.google.com", "translate.google.com", "Prevodilac sam ostaje");
         eq("notfb.com", "notfb.com", "Samo tačan domen");
+        eq("yewtu.be./watch?v=1", "youtube.com/watch?v=1", "Tačka na kraju");
+        eq("https://www-reddit-com.translate.goog./r/all", "https://www.reddit.com/r/all", "Prevodilac sa tačkom na kraju");
+        eq("https://x@www.google.com/amp/s/www.reddit.com/r/x", "https://www.reddit.com/r/x", "AMP sa korisnikom");
+        eq("https://a@yewtu.be:443/watch", "https://youtube.com/watch", "Korisnik i port");
         check(WebAddress.real(null) == null, "Prazno");
         System.out.println("Prošlo: " + checks + " provera.");
     }

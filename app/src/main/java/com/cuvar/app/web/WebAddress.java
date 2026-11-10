@@ -52,8 +52,12 @@ public final class WebAddress {
         }
         String host = s.substring(0, cut);
         String rest = s.substring(cut);
+        // "korisnik@sajt" i tačka na kraju ("yewtu.be.") su ista adresa: bez ovoga zaobilazna adresa ne bi bila prepoznata.
+        int at = host.lastIndexOf('@');
+        if (at >= 0) host = host.substring(at + 1);
         int colon = host.indexOf(':');
         if (colon >= 0) host = host.substring(0, colon);
+        while (host.endsWith(".")) host = host.substring(0, host.length() - 1);
         if (host.startsWith("www.")) host = host.substring(4);
 
         if (GOOGLE.matcher(host).matches()) {
