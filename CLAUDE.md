@@ -38,6 +38,7 @@ Glavna sesija je orkestrator: svaka izmena u `app/`, `tests/` ili gradle fajlovi
 5. Commit; hook (`tools/guard-hook.sh`) blokira commit koda dok fali review, check ili emulator.
 
 Agenti: `.claude/agents/` (postupak pregleda: `.claude/agents/README.md`), skripte: `tools/`, radni fajlovi: `.review/` (nije u git-u).
+Potrošnja po agentu i modelu (tokeni, cena, kontekst, limit pretplate): `bash tools/potrosnja.sh -w`, status line `tools/statusline.sh` ([tools/README-potrosnja.md](tools/README-potrosnja.md)).
 
 | Agent | Model | Zašto |
 |---|---|---|
