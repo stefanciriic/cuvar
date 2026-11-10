@@ -20,19 +20,25 @@ najviše otvaranja, najduže u komadu, ili je u **uključenom** vremenskom reži
 (bez obzira da li režim sada traje). Sajt je pod pravilom ako je na listi sajtova
 ili u uključenom režimu (pokriva i poddomene).
 
-To je važno jer se tri pravila za ceo telefon odnose na sve što je pod pravilom,
-**i van perioda režima**:
+To je važno jer se dva pravila odnose na sve što je pod pravilom, **i van
+perioda režima**:
 
-- noćna blokada (22:00–06:00),
 - ukupni dnevni limit (to vreme se sabira),
 - kratka pauza od 6 s pre svakog otvaranja.
 
-Primer: WhatsApp koji je samo u režimu 09–12 noću je zaključan. Da noću radi,
-uključi mu "Bez noćne blokade" (važi od sledećih 06:00).
-
 Nikad se ne blokiraju: telefon (dialer), SMS aplikacija, početni ekran i sam Čuvar.
 
-### 2. Pravila za aplikaciju i sajt
+### 2. Gde se šta podešava
+
+Pravila → "Aplikacije, sajtovi i režimi" je jedini ekran za ovo:
+
+- **Režimi**: svaki režim je jedan blok (vreme, dani, šta blokira). Aplikacija ili
+  sajt se u režim dodaje i iz njega skida samo u tom bloku. Tu su i "+ Novi
+  režim" i gotovi "Noćno zaključavanje" i "Radno vreme".
+- **Ceo dan**: zaključavanje, dnevni limit, broj otvaranja i "najduže u komadu",
+  bez obzira na režime. Kartica aplikacije samo pokazuje u kojim je režimima.
+
+### 2a. Pravila za aplikaciju i sajt
 
 | Pravilo | Kad blokira | Otključava se? |
 |---|---|---|
@@ -57,9 +63,10 @@ Nikad se ne blokiraju: telefon (dialer), SMS aplikacija, početni ekran i sam Č
 
 ### 3. Pravila za ceo telefon
 
-- **Noćna blokada 22:00–06:00** (podrazumevano uključena): sve pod pravilom je
-  zaključano, ne otključava se ničim. Izuzetak po aplikaciji: "Bez noćne
-  blokade". Pregledač bez noćne blokade i dalje ne otvara sajtove iz pravila.
+- **Noć**: noću je zaključano samo ono što je u režimu **"Noćno zaključavanje"**
+  (gotov režim, 22:00–06:00, dodaje se na ekranu Pravila). Kao svaki režim, ne
+  otključava se ničim. Opšta "Noćna blokada" koja je zaključavala sve iz pravila
+  ukinuta je 11. 11. 2026 (poslednji put je važila te noći do 06:00).
 - **Ukupni dnevni limit**: zbir vremena svega što je pod pravilom. Kad se potroši,
   sve pod pravilom je zaključano do ponoći, bez otključavanja. Može da se poveća
   jednom dnevno i samo dok nije potrošen (do 1 h za 30 %, 2 h za 20 %, od 4 h za
@@ -73,7 +80,7 @@ Nikad se ne blokiraju: telefon (dialer), SMS aplikacija, početni ekran i sam Č
 
 ### 4. Redosled (šta se prikazuje kad važi više pravila)
 
-Ukupni limit → noć → fokus → otvaranja → pauza u komadu → režim → dnevni limit
+Ukupni limit → fokus → otvaranja → pauza u komadu → režim → dnevni limit
 aplikacije / zaključavanje / šifra van perioda → pregledač bez adrese i
 aplikacije za kloniranje → pravila sajta. Prikazuje se prva blokada koja važi;
 otključavanje jedne stavke ne otvara druge.
@@ -91,14 +98,13 @@ otključavanje jedne stavke ne otvara druge.
 - 5 pogrešnih šifri zaredom: 30 s čekanja.
 - **Hitno otključavanje**: jednom dnevno, 10 min, preskače pauzu od 60 min, ali
   takođe samo 17–22 i uz šifru i najtežu igricu.
-- Tvrde blokade (noć, ukupni limit, potrošen limit, otvaranja, pauza u komadu,
+- Tvrde blokade (ukupni limit, potrošen limit, otvaranja, pauza u komadu,
   režim, fokus) se ne otključavaju ni šifrom ni hitno.
 
 ### 6. Pooštravanje odmah, popuštanje u 06:00
 
 Strožije pravilo važi odmah. Svako popuštanje (veći limit, skinuto zaključavanje,
-isključen ili skraćen režim, aplikacija izbačena iz režima, "Bez noćne blokade",
-isključena noćna blokada ili zaštita) važi tek od **sledećih 06:00**. Kartica
+isključen ili skraćen režim, aplikacija izbačena iz režima, isključena zaštita) važi tek od **sledećih 06:00**. Kartica
 "Zakazane promene" pokazuje šta čeka i može da se otkaže.
 
 Dok režim traje, ne može da se isključi, obriše, skrati, promene mu se dani ili
@@ -139,20 +145,17 @@ Zahtev dat između ponoći i 06:00 pita isti kalendarski dan od 08:00
 
 ### 10. Otvorena pitanja (predlozi, još nisu odlučeni)
 
-1. Aplikacija koja je samo u režimu je noću zaključana, troši ukupni limit i
-   dobija pauzu od 6 s i van režima (vidi 1.). Da li to treba da važi samo za
-   stavke sa sopstvenim pravilom?
-2. Gotov režim "Noćno zaključavanje" (22:30–06:00) ne radi ništa dok je noćna
-   blokada uključena, jer ona već pokriva 22:00–06:00. Predlog: dugme za njega
-   prikazati samo kad je noćna blokada isključena.
-3. Povećanje ukupnog limita ostaje zauvek, pa limit može da raste iz dana u dan.
+1. Aplikacija koja je samo u režimu troši ukupni limit i dobija pauzu od 6 s
+   i van režima (vidi 1.). Da li to treba da važi samo za stavke sa sopstvenim
+   pravilom?
+2. Povećanje ukupnog limita ostaje zauvek, pa limit može da raste iz dana u dan.
    Predlog: povećanje samo za danas.
-4. "Hitno otključavanje" radi samo 17–22 i uz šifru, pa nije hitno: samo
+3. "Hitno otključavanje" radi samo 17–22 i uz šifru, pa nije hitno: samo
    preskače pauzu od 60 min. Predlog: preimenovati u "Otključaj bez čekanja"
    ili ukloniti.
-5. Dok traje jedan internet poziv, prolaze sve aplikacije sa "Pozivi uvek
+4. Dok traje jedan internet poziv, prolaze sve aplikacije sa "Pozivi uvek
    prolaze", ne samo ona koja zove.
-6. Broj otvaranja i "najduže u komadu" ne važe za sajt iste aplikacije u
+5. Broj otvaranja i "najduže u komadu" ne važe za sajt iste aplikacije u
    pregledaču.
 
 ### Statistika i jezik

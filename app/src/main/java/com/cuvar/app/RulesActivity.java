@@ -50,7 +50,7 @@ public class RulesActivity extends SubActivity {
         ScrollView scroll = new ScrollView(this);
         scroll.setBackgroundColor(Ui.BG);
         LinearLayout root = Ui.column(this);
-        root.addView(header("Aplikacije i sajtovi", "Sve na jednom mestu. Aplikacija i njen sajt su jedna stavka."));
+        root.addView(header("Aplikacije, sajtovi i režimi", "Svaki režim ima svoje vreme i svoje aplikacije. Ispod je ono što važi ceo dan."));
         content = Ui.column(this);
         int p = Ui.dp(this, 20);
         content.setPadding(p, 0, p, p);
@@ -65,17 +65,13 @@ public class RulesActivity extends SubActivity {
                 + "2. Ostatak dana: zaključano se otvara samo dnevnom šifrom (17:00 do 22:00), a potrošen limit se ne otvara do ponoći.\n"
                 + "3. Ukupni dnevni limit broji samo vreme u ovim stavkama; kad se potroši, zaključava ih sve do ponoći.\n"
                 + "4. Strože pravilo važi odmah, a blaže tek sutra od 06:00.\n"
-                + "5. Od 22:00 do 06:00 sve ovo je zaključano (noćna blokada).\n"
+                + "5. Noću je zaključano samo ono što je u režimu „Noćno zaključavanje“.\n"
                 + "6. Ručni Fokus je zaseban: dok traje, dozvoljene su samo izabrane aplikacije i sajtovi.")
                 .secondary("Zatvori", null).show());
         content.addView(how, Ui.fill(this, 4));
 
         View removals = MainActivity.removalCard(this, store, this::render);
         if (removals != null) content.addView(removals, Ui.fill(this, 14));
-
-        TextView add = Ui.button(this, "+ Dodaj aplikaciju ili sajt", true);
-        add.setOnClickListener(v -> addItem());
-        content.addView(add, Ui.fill(this, 14));
 
         List<DailySchedule.Rule> rules = store.modes.schedulesNow();
         List<DailySchedule.Rule> next = store.modes.schedules();
@@ -86,7 +82,7 @@ public class RulesActivity extends SubActivity {
         LinearLayout now = Ui.card(this);
         boolean any = false;
         if (store.nightActive()) {
-            now.addView(Ui.text(this, "⛔ Noćna blokada do 06:00: sve ispod je zaključano", 15, Ui.ACCENT, true));
+            now.addView(Ui.text(this, "⛔ Noćna blokada do 06:00: sve ispod je zaključano (poslednji put, od sada noću važi samo režim „Noćno zaključavanje“)", 15, Ui.ACCENT, true));
             any = true;
         }
         for (DailySchedule.Rule r : store.modes.activeSchedules()) {
@@ -101,20 +97,38 @@ public class RulesActivity extends SubActivity {
                 : "Zaključano se otvara dnevnom šifrom od 17:00 do 22:00", 13, Ui.MUTED, false), Ui.fill(this, 6));
         content.addView(now, Ui.fill(this, 8));
 
-        // 2. Režimi, svaki jednom, sa onim što blokira.
+        // 2. Režimi, svaki jednom (i isključeni), sa onim što blokira; stavke se dodaju u samom režimu.
         content.addView(Ui.section(this, "Režimi"), Ui.fill(this, 26));
-        boolean anyRule = false;
-        for (DailySchedule.Rule r : rules) {
-            if (!r.enabled) continue;
-            anyRule = true;
+        Set<String> shown = new HashSet<>();
+        List<DailySchedule.Rule> all = new ArrayList<>(rules);
+        all.addAll(next);
+        for (DailySchedule.Rule r : all) {
+            if (!shown.add(r.id)) continue;
             DailySchedule.Rule d = null;
             for (DailySchedule.Rule x : next) if (x.id.equals(r.id)) d = x;
             content.addView(regimeCard(r, d, pm), Ui.fill(this, 10));
         }
-        if (!anyRule) empty("Nema uključenih režima. Napravi ih u Vremenskim režimima.");
+        if (shown.isEmpty()) empty("Još nema režima.");
+        TextView newRule = Ui.button(this, "+ Novi režim", false);
+        newRule.setOnClickListener(Safe.click("newRule", v -> openRule(store.modes.addSchedule().id)));
+        content.addView(newRule, Ui.fill(this, 10));
+        if (!store.modes.hasNightSchedule()) {
+            TextView night = Ui.button(this, "+ Noćno zaključavanje (22:00–06:00)", false);
+            night.setOnClickListener(Safe.click("nightRule", v -> openRule(store.modes.addNightSchedule().id)));
+            content.addView(night, Ui.fill(this, 8));
+        }
+        if (!store.modes.hasWorkSchedule()) {
+            TextView work = Ui.button(this, "+ Radno vreme (09:00–17:00)", false);
+            work.setOnClickListener(Safe.click("workRule", v -> openRule(store.modes.addWorkSchedule().id)));
+            content.addView(work, Ui.fill(this, 8));
+        }
 
-        // 3. Ostatak dana: zaključavanja i limiti van režima.
-        content.addView(Ui.section(this, "Ostatak dana"), Ui.fill(this, 26));
+        // 3. Ceo dan: zaključavanja i limiti van režima.
+        content.addView(Ui.section(this, "Ceo dan"), Ui.fill(this, 26));
+        empty("Zaključavanje, dnevni limit i broj otvaranja, bez obzira na režime.");
+        TextView add = Ui.button(this, "+ Dodaj aplikaciju ili sajt", true);
+        add.setOnClickListener(Safe.click("addItem", v -> addItem()));
+        content.addView(add, Ui.fill(this, 10));
         Set<String> apps = new LinkedHashSet<>(store.appListNow());
         apps.addAll(store.appList());
         Set<String> sites = new LinkedHashSet<>(store.siteListNow());
@@ -156,6 +170,10 @@ public class RulesActivity extends SubActivity {
         empty("Tapni režim da mu menjaš vreme i stavke, a aplikaciju ili sajt da mu menjaš zaključavanje i limit.");
     }
 
+    private void openRule(String id) {
+        startActivity(new Intent(this, ScheduleActivity.class).putExtra("id", id));
+    }
+
     /** Kartica režima: naziv i vreme, pa šta blokira; stavke koje otpadaju od sutra su označene. */
     private View regimeCard(DailySchedule.Rule r, DailySchedule.Rule d, PackageManager pm) {
         LinearLayout card = Ui.column(this);
@@ -167,7 +185,9 @@ public class RulesActivity extends SubActivity {
         top.addView(name, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         top.addView(Ui.text(this, shortTime(r), 15, Ui.ACCENT, true), Ui.wrap(this, 8));
         card.addView(top);
-        if (d == null || !d.enabled) {
+        if (!r.enabled && (d == null || !d.enabled)) {
+            card.addView(Ui.text(this, "Isključen", 13, Ui.MUTED, false), Ui.fill(this, 4));
+        } else if (d == null || !d.enabled) {
             card.addView(Ui.text(this, "Isključuje se sutra u 06:00", 13, Ui.ACCENT, false), Ui.fill(this, 4));
         } else if (!shortTime(d).equals(shortTime(r))) {
             card.addView(Ui.text(this, "Od sutra: " + shortTime(d), 13, Ui.ACCENT, false), Ui.fill(this, 4));
@@ -186,7 +206,13 @@ public class RulesActivity extends SubActivity {
             card.addView(Ui.text(this, "Posle perioda ostaje zaključano, otvara se šifrom", 13, Ui.MUTED, false),
                     Ui.fill(this, 4));
         }
-        card.setOnClickListener(v -> startActivity(new Intent(this, ScheduleActivity.class).putExtra("id", r.id)));
+        card.setOnClickListener(Safe.click("regimeCard", v -> openRule(r.id)));
+        if (d != null) {
+            TextView add = Ui.text(this, "+ Dodaj aplikaciju ili sajt", 14, Ui.ACCENT, true);
+            add.setPadding(0, Ui.dp(this, 10), 0, 0);
+            add.setOnClickListener(Safe.click("regimeAdd", v -> openRule(r.id)));
+            card.addView(add);
+        }
         return card;
     }
 
@@ -359,20 +385,20 @@ public class RulesActivity extends SubActivity {
     /** Štikle za režime u prozoru za izmenu; vraća ih da bi se pri čuvanju pročitale. */
     private List<CheckRow> ruleChecks(LinearLayout box, List<DailySchedule.Rule> rules, Set<String> selectedIds,
                                       Set<String> enforcedIds) {
+        // Režimi se ovde samo prikazuju: stavka se dodaje i skida u samom režimu, da postoji jedno mesto za to.
         List<CheckRow> rows = new ArrayList<>();
-        box.addView(Sheet.label(this, "Blokiraj u režimima"), Ui.fill(this, 18));
-        if (rules.isEmpty()) {
-            box.addView(Ui.text(this, "Još nema režima. Napravi ih u Vremenskim režimima.", 13, Ui.MUTED, false),
-                    Ui.fill(this, 6));
-        }
+        List<String> names = new ArrayList<>();
         for (DailySchedule.Rule r : rules) {
-            String sub = r.label() + " · " + r.daysLabel() + (r.enabled ? "" : " · isključen");
-            if (!selectedIds.contains(r.id) && enforcedIds.contains(r.id)) sub += "\nUklonjeno, važi još do sutra u 06:00";
-            CheckRow row = new CheckRow(this, null, r.name, sub);
+            CheckRow row = new CheckRow(this, null, r.name, "");
             row.setChecked(selectedIds.contains(r.id));
             rows.add(row);
-            box.addView(row, Ui.fill(this, 6));
+            if (selectedIds.contains(r.id)) names.add(r.name + " (" + r.label() + ")");
         }
+        box.addView(Sheet.label(this, "U režimima"), Ui.fill(this, 18));
+        box.addView(Ui.text(this, names.isEmpty() ? "Ni u jednom režimu." : android.text.TextUtils.join(", ", names),
+                14, Ui.INK, false), Ui.fill(this, 4));
+        box.addView(Ui.text(this, "Dodaje se i skida u samom režimu, na ekranu Pravila.", 13, Ui.MUTED, false),
+                Ui.fill(this, 2));
         return rows;
     }
 
@@ -418,7 +444,7 @@ public class RulesActivity extends SubActivity {
         if (dom != null) siteBox.setText(dom);
         box.addView(siteBox, Ui.fill(this, 6));
         List<CheckRow> rows = ruleChecks(box, rules, in, now);
-        box.addView(Sheet.label(this, "Ostatak dana"), Ui.fill(this, 18));
+        box.addView(Sheet.label(this, "Ceo dan"), Ui.fill(this, 18));
         CheckRow lock = new CheckRow(this, null, "Zaključaj", "Otvara se samo dnevnom šifrom, od 17:00 do 22:00");
         lock.setChecked(store.appLockLinked(pkg));
         box.addView(lock, Ui.fill(this, 6));
@@ -446,14 +472,9 @@ public class RulesActivity extends SubActivity {
         session.setText(String.valueOf(store.appSession(pkg)));
         box.addView(session, Ui.fill(this, 6));
         CheckRow calls = new CheckRow(this, null, "Pozivi uvek prolaze",
-                "Glasovni i video pozivi rade i noću i preko limita, a poruke ostaju zaključane");
+                "Glasovni i video pozivi rade i u režimu i preko limita, a poruke ostaju zaključane");
         calls.setChecked(store.callsPass(pkg));
         box.addView(calls, Ui.fill(this, 14));
-        final boolean wasFree = store.nightFree().contains(pkg);
-        CheckRow night = new CheckRow(this, null, "Bez noćne blokade",
-                "Od 22:00 do 06:00 ostaje otvorena, ako je ne zaključava nešto drugo. Uključivanje važi od sutra u 06:00");
-        night.setChecked(wasFree);
-        box.addView(night, Ui.fill(this, 14));
         box.addView(Ui.text(this, "Danas korišćeno: " + Ui.fmt(store.usedShared(pkg)) + ", otvoreno "
                 + Ui.count(store.usageLog.opensToday(ItemKey.app(pkg)), "put", "puta", "puta"), 13, Ui.MUTED, false),
                 Ui.fill(this, 8));
@@ -477,7 +498,6 @@ public class RulesActivity extends SubActivity {
                     boolean adding = wantLock || wantLimit > 0 || wantOpens > 0 || wantSession > 0;
                     for (CheckRow r : rows) adding |= r.isChecked();
                     if (calls.isChecked() != store.callsPass(pkg)) store.setCallsPass(pkg, calls.isChecked());
-                    if (night.isChecked() != wasFree) store.setNightFree(pkg, night.isChecked());
                     if (codeFree != null && codeFree.isChecked() != wasCodeFree) store.setCodeFree(pkg, codeFree.isChecked());
                     saveGuarding(pkg, label, adding, () -> {
                         if (!java.util.Objects.equals(wantSite, dom)) store.setLink(pkg, wantSite);
@@ -540,8 +560,8 @@ public class RulesActivity extends SubActivity {
 
         LinearLayout box = Ui.column(this);
         List<CheckRow> rows = ruleChecks(box, rules, in, now);
-        box.addView(Sheet.label(this, "Ostatak dana"), Ui.fill(this, 18));
-        CheckRow listed = new CheckRow(this, null, "Ograniči i van režima",
+        box.addView(Sheet.label(this, "Ceo dan"), Ui.fill(this, 18));
+        CheckRow listed = new CheckRow(this, null, "Ograniči ceo dan",
                 "Dnevni limit ispod; 0 znači uvek blokiran (otvara se dnevnom šifrom)");
         listed.setChecked(current >= 0);
         box.addView(listed, Ui.fill(this, 6));

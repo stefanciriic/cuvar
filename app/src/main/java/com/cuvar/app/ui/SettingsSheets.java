@@ -285,22 +285,6 @@ public final class SettingsSheets {
                 .show();
     }
 
-    /** Uključivanje važi odmah, isključivanje tek sutra od 06:00. */
-    public void chooseNight() {
-        boolean on = store.nightBlock();
-        Sheet sheet = new Sheet(a, "Noćna blokada").message("Od " + DailyCode.LOCK_HOUR + ":00 do 0"
-                + DailyCode.NIGHT_END_HOUR + ":00 sve aplikacije i sajtovi iz tvojih pravila su zaključani i ne otvaraju se, "
-                + "ni dnevnom šifrom ni hitnim otključavanjem. Pozivi i poruke rade.\n\n"
-                + (on ? "Isključivanje važi tek sutra od 0" + DailyCode.NIGHT_END_HOUR + ":00." : "Uključivanje važi odmah."))
-                .secondary("Zatvori", null);
-        sheet.primary(on ? "Isključi od sutra" : "Uključi", () -> {
-            store.setNightBlock(!on);
-            refresh.run();
-            return true;
-        });
-        sheet.show();
-    }
-
     /** Zaštita od isključivanja: uključivanje važi odmah, isključivanje tek sutra od 06:00. */
     public void chooseProtect() {
         boolean on = store.protectSelf();

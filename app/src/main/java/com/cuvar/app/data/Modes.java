@@ -148,7 +148,7 @@ public final class Modes {
 
     public DailySchedule.Rule addNightSchedule() {
         synchronized (store) {
-            DailySchedule.Rule r = new DailySchedule.Rule(newScheduleId(), NIGHT_NAME, true, 22 * 60 + 30, 6 * 60);
+            DailySchedule.Rule r = new DailySchedule.Rule(newScheduleId(), NIGHT_NAME, true, 22 * 60, 6 * 60);
             schedules.add(r);
             saveSchedules();
             return copy(r);

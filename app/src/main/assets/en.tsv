@@ -754,3 +754,20 @@ Odustani od uklanjanja	Cancel removal
 Sutra od 08:00 Čuvar pita da li si siguran. Tek tada se uklanja.	Tomorrow from 08:00 Čuvar asks if you are sure. Only then is it removed.
 Ostaje zaključano. Danas od 08:00 do 22:00 Čuvar pita da li si siguran, i tek tada se uklanja.	Stays locked. Today from 08:00 to 22:00 Čuvar asks if you are sure, and only then removes it.
 Danas od 08:00 Čuvar pita da li si siguran. Tek tada se uklanja.	Today from 08:00 Čuvar asks if you are sure. Only then is it removed.
+Šta je kad blokirano · 	What is blocked when · 
++ Novi režim	+ New mode
+U režimima	In modes
+Aplikacije, sajtovi i režimi	Apps, sites and modes
+Režimi (i noćni) i zaključavanje ili limit za ceo dan	Modes (including night) and all-day lock or limit
+Svaki režim ima svoje vreme i svoje aplikacije. Ispod je ono što važi ceo dan.	Each mode has its own time and apps. Below is what applies all day.
+5. Noću je zaključano samo ono što je u režimu „Noćno zaključavanje“.\n	5. At night only what is in the "Night lock" mode is locked.\n
+⛔ Noćna blokada do 06:00: sve ispod je zaključano (poslednji put, od sada noću važi samo režim „Noćno zaključavanje“)	⛔ Night block until 06:00: everything below is locked (last time; from now on only the "Night lock" mode applies at night)
++ Noćno zaključavanje (22:00–06:00)	+ Night lock (22:00–06:00)
++ Radno vreme (09:00–17:00)	+ Work hours (09:00–17:00)
+Ceo dan	All day
+Zaključavanje, dnevni limit i broj otvaranja, bez obzira na režime.	Lock, daily limit and number of opens, regardless of modes.
+Ni u jednom režimu.	Not in any mode.
+Dodaje se i skida u samom režimu, na ekranu Pravila.	Added and removed in the mode itself, on the Rules screen.
+Ograniči ceo dan	Limit all day
+Glasovni i video pozivi rade i u režimu i preko limita, a poruke ostaju zaključane	Voice and video calls work during modes and over the limit, while messages stay locked
+22:00–06:00 · svakog dana	22:00–06:00 · every day

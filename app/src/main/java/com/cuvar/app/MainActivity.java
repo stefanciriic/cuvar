@@ -215,10 +215,6 @@ public class MainActivity extends Activity {
         Ui.groupRow(this, whole, "Ukupni dnevni limit", sheets.dayLimitSummary(), v -> sheets.chooseDayLimit());
         Ui.groupRow(this, whole, "Fokus · dozvoli samo izabrano", focusSummary(),
                 v -> startActivity(new Intent(this, FocusActivity.class)));
-        Ui.groupRow(this, whole, "Noćna blokada", store.nightBlockNow()
-                ? "Uključena · od " + DailyCode.LOCK_HOUR + ":00 do 0" + DailyCode.NIGHT_END_HOUR + ":00 sve iz pravila je zaključano"
-                    + (store.nightBlock() ? "" : " · isključuje se od sledećih 06:00")
-                : "Isključena", v -> sheets.chooseNight());
         Ui.groupRow(this, whole, "Zaštita od isključivanja", store.protectNow()
                 ? "Uključena · Čuvar ne može da se isključi ni obriše"
                     + (store.protectSelf() ? "" : " · isključuje se od sledećih 06:00")
@@ -228,11 +224,9 @@ public class MainActivity extends Activity {
         int items = store.appListNow().size() + store.siteListNow().size();
         col.addView(Ui.section(this, "Po aplikaciji i sajtu"), Ui.fill(this, 24));
         LinearLayout rules = Ui.group(this);
-        Ui.groupRow(this, rules, "Aplikacije i sajtovi",
-                items == 0 ? "Zaključaj, postavi dnevni limit ili blokiraj u režimu" : "Šta je kad blokirano · pravila: " + items,
+        Ui.groupRow(this, rules, "Aplikacije, sajtovi i režimi",
+                items == 0 ? "Režimi (i noćni) i zaključavanje ili limit za ceo dan" : "Šta je kad blokirano · " + scheduleSummary(),
                 v -> startActivity(new Intent(this, RulesActivity.class)));
-        Ui.groupRow(this, rules, "Vremenski režimi", scheduleSummary(),
-                v -> startActivity(new Intent(this, ScheduleActivity.class)));
         col.addView(rules, Ui.fill(this, 8));
 
         TextView note = Ui.text(this,

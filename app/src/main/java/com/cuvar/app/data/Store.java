@@ -294,19 +294,17 @@ public final class Store {
 
     // ---------- Noćna blokada ----------
 
-    /** Podešena noćna blokada (uključivanje važi odmah, isključivanje tek sledećeg jutra u 06:00). */
+    /**
+     * Opšta noćna blokada (sve iz pravila 22–06) je ukinuta 11. 11. 2026: noću važi samo režim
+     * „Noćno zaključavanje“. Stara uključena blokada važi još do prvih 06:00 (eNight), kao svako popuštanje.
+     */
     public synchronized boolean nightBlock() {
-        return sp.getBoolean("night", true);
+        return false;
     }
 
     public synchronized boolean nightBlockNow() {
         roll();
         return eApps == null ? nightBlock() : eNight;
-    }
-
-    public synchronized void setNightBlock(boolean on) {
-        sp.edit().putBoolean("night", on).apply();
-        enforce();
     }
 
     /** Podešene aplikacije bez noćne blokade. */
@@ -799,7 +797,6 @@ public final class Store {
         roll();
         List<String> out = new ArrayList<>();
         if (eApps == null) return out;
-        if (eNight && !nightBlock()) out.add("Noćna blokada se isključuje");
         if (eProtect && !protectSelf()) out.add("Zaštita Čuvara od isključivanja se isključuje");
         for (String pkg : nightFree()) {
             if (eNightFree.contains(pkg)) continue;

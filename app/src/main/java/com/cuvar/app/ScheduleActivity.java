@@ -88,7 +88,7 @@ public class ScheduleActivity extends SubActivity {
                         () -> open(store.modes.addWorkSchedule().id)), Ui.fill(this, 10));
             }
             if (night) {
-                content.addView(presetCard("Noćno zaključavanje", "22:30–06:00 · svakog dana",
+                content.addView(presetCard("Noćno zaključavanje", "22:00–06:00 · svakog dana",
                         () -> open(store.modes.addNightSchedule().id)), Ui.fill(this, 10));
             }
         }
