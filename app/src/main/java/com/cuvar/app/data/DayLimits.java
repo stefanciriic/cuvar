@@ -99,14 +99,17 @@ public final class DayLimits {
     public boolean canRaiseDayLimit() {
         synchronized (store) {
             String d = store.day();
-            return dayLimit() > 0 && !d.equals(store.sp.getString("dayLimitRaised", null)) && !d.equals(store.sp.getString("dayLimitHit", null));
+            return dayLimit() > 0 && !d.equals(store.sp.getString("dayLimitRaised", null)) && !dayLimitHitToday();
         }
     }
 
-    /** Da li je ukupni limit danas već potrošen; tada je sve zaključano do ponoći i povećanje ne pomaže. */
+    /**
+     * Da li je ukupni limit danas već potrošen; tada je sve zaključano do ponoći i povećanje ne pomaže.
+     * Proverava se i izmereno vreme: servis beleži potrošen limit tek pri sledećoj proveri aplikacije sa pravilom.
+     */
     public boolean dayLimitHitToday() {
         synchronized (store) {
-            return store.day().equals(store.sp.getString("dayLimitHit", null));
+            return store.day().equals(store.sp.getString("dayLimitHit", null)) || DayLimit.reached(dayLimit(), guardedToday());
         }
     }
 
