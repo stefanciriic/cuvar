@@ -26,5 +26,9 @@ ili telefonom sa uključenim USB debagovanjem.
 7. Reset: `adb shell pm clear com.cuvar.app.debug`. Popuštanje pravila važi tek
    od 06:00 sutra, to je namerno.
 
+Kad radi agent `tester-emulator`: ne pomera sat da bi prošao scenarije sa vremenom (takve
+upisuje kao neproverene), rezultat piše u `.review/emulator.md` sa poslednjim redom
+`Rezultat: prošlo` ili `Rezultat: nije prošlo`, i samo posle prolaska pokreće `tools/emulator-ok.sh`.
+
 Detaljni scenariji (limiti, noć, režimi, pitalice): `tests/README.md`, čitaj samo
 odeljak koji ti treba (`grep -n '^## ' tests/README.md`).

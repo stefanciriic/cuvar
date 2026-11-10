@@ -27,6 +27,31 @@ Pregled funkcija i mapa fajlova: [README.md](README.md).
 - Kad kažeš da je nešto gotovo, reci i da li je provereno na telefonu. Većina
   novijih funkcija nije probana na pravom uređaju.
 
+## Rad sa agentima
+
+Glavna sesija je orkestrator: svaka izmena u `app/`, `tests/` ili gradle fajlovima ide po skill-u
+`rad-sa-agentima`. Ukratko:
+1. `tools/review-novi.sh "naslov"` i `.review/zadatak.md`; kod piše agent `izvodjac`.
+2. `tools/review-stanje.sh` kaže koji pregledači su obavezni; oni rade paralelno i pišu u `.review/nalazi/<ime>.md`.
+3. Ispravke jedna po jedna, pa ponovni review dok svi ne odobre isto stanje (`tools/review-ok.sh`, najviše 3 kruga).
+4. `proveravac` (`tools/check.sh`), pa `tester-emulator` ako izmena dira ekrane/`guard/` i emulator radi.
+5. Commit; hook (`tools/guard-hook.sh`) blokira commit koda dok fali review, check ili emulator.
+
+Agenti: `.claude/agents/` (postupak pregleda: `.claude/agents/README.md`), skripte: `tools/`, radni fajlovi: `.review/` (nije u git-u).
+
+| Agent | Model | Zašto |
+|---|---|---|
+| glavna sesija (orkestrator) | najjači (`/model`) | plan, spajanje nalaza, neslaganja |
+| `pregled-bezbednosti` | opus | greška = korisnik zaključan bez izlaza |
+| `pregled-pravila` | opus | rupa u pravilima, granice vremena |
+| `izvodjac` | sonnet (opus za `GuardService`, `Store`, `guard/`, `enforce()`) | obične izmene; jači ga pregleda |
+| `pregled-stabilnosti` | sonnet | obrasci (`Safe`, `finally`), lako proverljivo |
+| `pregled-prikaza` | sonnet | tekst i raspored |
+| `proveravac` | haiku | pokreće skriptu i čita ispis |
+| `tester-emulator` | haiku | adb komande i čitanje ekrana |
+
+Model se menja u polju `model:` u `.claude/agents/<ime>.md`.
+
 ## Bezbednost korisnika (najvažnije)
 
 - Nikad ne pravi izmenu koja može korisniku da preseče internet ili da zaključa

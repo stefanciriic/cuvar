@@ -2,14 +2,10 @@
 # Provera pre commita: testovi kao u CI-u, pa debug build. Ispisuje samo greške i kratak rezultat.
 # Upotreba: tools/check.sh [--no-build]
 set -uo pipefail
-mark_ok() {
-  # Oznaka za hook pred push: stablo radnog direktorijuma koje je prošlo proveru (pravi index se ne dira).
-  idx=$(mktemp); cp "$(git rev-parse --git-path index)" "$idx" 2>/dev/null
-  GIT_INDEX_FILE="$idx" git add -A . >/dev/null 2>&1
-  GIT_INDEX_FILE="$idx" git write-tree > "$(git rev-parse --git-path cuvar-check-ok)" 2>/dev/null
-  rm -f "$idx"
-}
 cd "$(dirname "$0")/.."
+. tools/oznake.sh
+# Oznaka za hook pred commit/push: stablo koda koje je prošlo proveru.
+mark_ok() { radno_stablo > "$(oznaka check)"; }
 out="${TMPDIR:-/tmp}/cuvar-check"
 rm -rf "$out" && mkdir -p "$out"
 
