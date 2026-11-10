@@ -771,3 +771,18 @@ Dodaje se i skida u samom režimu, na ekranu Pravila.	Added and removed in the m
 Ograniči ceo dan	Limit all day
 Glasovni i video pozivi rade i u režimu i preko limita, a poruke ostaju zaključane	Voice and video calls work during modes and over the limit, while messages stay locked
 22:00–06:00 · svakog dana	22:00–06:00 · every day
+UPOZORENJE	WARNING
+Prečica može da isključi Čuvara	A shortcut can turn Čuvar off
+oba tastera za jačinu i dugme Pristupačnosti	both volume keys and the Accessibility button
+oba tastera za jačinu	both volume keys
+dugme ili pokret Pristupačnosti	the Accessibility button or gesture
+Čuvar je dodeljen prečici Pristupačnosti (	Čuvar is assigned to the Accessibility shortcut (
+). Tom prečicom se Čuvar gasi bez ulaska u podešavanja. 	). With that shortcut Čuvar is turned off without opening Settings. 
+Podešavanje zaštite	Protection settings
+pa onda prečicu. Čuvar prečicu ne gasi sam.	then the shortcut. Čuvar does not turn the shortcut off by itself.
+(na Samsungu: Pristupačnost → Napredna podešavanja → prečice). Čuvar prečicu ne gasi sam.	(on Samsung: Accessibility → Advanced settings → shortcuts). Čuvar does not turn the shortcut off by itself.
+Zaštita od isključivanja se isključuje od sledećih 06:00. Tada isključi prečicu: 	Protection from turning off switches off from the next 06:00. Then turn the shortcut off: 
+Podešavanja → Pristupačnost → Čuvar → isključi „Prečica za Čuvar“. Čuvar prečicu ne gasi sam.	Settings → Accessibility → Čuvar → turn off “Čuvar shortcut”. Čuvar does not turn the shortcut off by itself.
+Zaštita od isključivanja je uključena, pa Čuvar zatvara svoj ekran u Pristupačnosti i prečicu 	Protection from turning off is on, so Čuvar closes its screen in Accessibility and you cannot turn the shortcut off there. 
+tamo ne možeš da isključiš. Prvo isključi zaštitu u Čuvaru (važi od sledećeg jutra u 06:00), 	First turn off the protection in Čuvar (takes effect the next morning at 06:00), 
+Isključi je: Podešavanja → Pristupačnost → Čuvar → isključi „Prečica za Čuvar“ 	Turn it off: Settings → Accessibility → Čuvar → turn off “Čuvar shortcut” 

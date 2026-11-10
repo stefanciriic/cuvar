@@ -9,6 +9,7 @@ import com.cuvar.app.data.Unlocks;
 import com.cuvar.app.guard.AndroidUsage;
 import com.cuvar.app.guard.ForegroundApp;
 import com.cuvar.app.i18n.Lang;
+import com.cuvar.app.rules.AccessibilityShortcut;
 import com.cuvar.app.rules.DailyCode;
 import com.cuvar.app.rules.DailySchedule;
 import com.cuvar.app.rules.DayLimit;
@@ -182,6 +183,9 @@ public class MainActivity extends Activity {
                             + "bez pravila (mape, pozive, kameru). Pronađi „Čuvar“ na listi i uključi dozvolu.",
                     "Otvori podešavanje", v -> openUsageAccess(), null, null), Ui.fill(this, 14));
         }
+
+        boolean[] shortcut = shortcutAssigned();
+        if (shortcut[0] || shortcut[1]) col.addView(shortcutCard(shortcut), Ui.fill(this, 14));
 
         col.addView(Ui.section(this, "Sada"), Ui.fill(this, 24));
         col.addView(nowCard(), Ui.fill(this, 8));
@@ -386,17 +390,68 @@ public class MainActivity extends Activity {
         }
     }
 
+    /** Koje prečice Pristupačnosti su dodeljene Čuvaru: [0] tasteri za jačinu, [1] dugme ili pokret. */
+    private boolean[] shortcutAssigned() {
+        String cls = GuardService.class.getName();
+        boolean keys = shortcutHas("accessibility_shortcut_target_service", cls);
+        boolean button = shortcutHas("accessibility_button_targets", cls)
+                || shortcutHas("accessibility_gesture_targets", cls);
+        return new boolean[]{keys, button};
+    }
+
+    private boolean shortcutHas(String key, String cls) {
+        try {
+            String v = Settings.Secure.getString(getContentResolver(), key);
+            return AccessibilityShortcut.contains(v, getPackageName(), cls);
+        } catch (Throwable t) {
+            return false; // čitanje zabranjeno ili ključ ne postoji: nema upozorenja
+        }
+    }
+
+    /** Upozorenje: prečica gasi Čuvara bez ulaska u podešavanja; Čuvar je ne gasi sam. */
+    private View shortcutCard(boolean[] shortcut) {
+        String which = shortcut[0] && shortcut[1] ? "oba tastera za jačinu i dugme Pristupačnosti"
+                : shortcut[0] ? "oba tastera za jačinu" : "dugme ili pokret Pristupačnosti";
+        String body = "Čuvar je dodeljen prečici Pristupačnosti (" + which + "). "
+                + "Tom prečicom se Čuvar gasi bez ulaska u podešavanja. ";
+        if (store.protectNow() && !store.protectSelf()) {
+            // isključivanje zaštite je već zakazano: prečica se gasi tek kad zaštita prestane da važi
+            return setupCard("UPOZORENJE", "Prečica može da isključi Čuvara",
+                    body + "Zaštita od isključivanja se isključuje od sledećih 06:00. Tada isključi prečicu: "
+                            + "Podešavanja → Pristupačnost → Čuvar → isključi „Prečica za Čuvar“. Čuvar prečicu ne gasi sam.",
+                    null, null, null, null);
+        }
+        if (store.protectNow()) {
+            return setupCard("UPOZORENJE", "Prečica može da isključi Čuvara",
+                    body + "Zaštita od isključivanja je uključena, pa Čuvar zatvara svoj ekran u Pristupačnosti i prečicu "
+                            + "tamo ne možeš da isključiš. Prvo isključi zaštitu u Čuvaru (važi od sledećeg jutra u 06:00), "
+                            + "pa onda prečicu. Čuvar prečicu ne gasi sam.",
+                    "Podešavanje zaštite", Safe.click("shortcutProtect", v -> sheets.chooseProtect()), null, null);
+        }
+        return setupCard("UPOZORENJE", "Prečica može da isključi Čuvara",
+                body + "Isključi je: Podešavanja → Pristupačnost → Čuvar → isključi „Prečica za Čuvar“ "
+                        + "(na Samsungu: Pristupačnost → Napredna podešavanja → prečice). Čuvar prečicu ne gasi sam.",
+                "Otvori Pristupačnost", Safe.click("shortcutOpen", v -> openAccessibilitySettings()), null, null);
+    }
+
     private View setupCard(String title, String body, String action, View.OnClickListener onAction,
                            String help, View.OnClickListener onHelp) {
+        return setupCard("POTREBNO", title, body, action, onAction, help, onHelp);
+    }
+
+    private View setupCard(String label, String title, String body, String action, View.OnClickListener onAction,
+                           String help, View.OnClickListener onHelp) {
         LinearLayout card = Ui.card(this);
-        TextView eyebrow = Ui.text(this, "POTREBNO", 12, Ui.ACCENT, true);
+        TextView eyebrow = Ui.text(this, label, 12, Ui.ACCENT, true);
         eyebrow.setLetterSpacing(0.15f);
         card.addView(eyebrow);
         card.addView(Ui.text(this, title, 20, Ui.INK, true), Ui.fill(this, 4));
         card.addView(Ui.text(this, body, 14, Ui.MUTED, false), Ui.fill(this, 6));
-        TextView b = Ui.button(this, action, true);
-        b.setOnClickListener(onAction);
-        card.addView(b, Ui.fill(this, 14));
+        if (action != null) {
+            TextView b = Ui.button(this, action, true);
+            b.setOnClickListener(onAction);
+            card.addView(b, Ui.fill(this, 14));
+        }
         if (help != null) {
             TextView hlp = Ui.text(this, help, 14, Ui.ACCENT, true);
             hlp.setGravity(Gravity.CENTER);
