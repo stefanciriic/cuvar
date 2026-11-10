@@ -20,6 +20,17 @@ public final class SystemScreensTest {
         check(SystemScreens.settingsLike("com.samsung.accessibility"), "Samsung Pristupačnost");
         check(SystemScreens.settingsLike("com.android.vending"), "Play prodavnica");
         check(!SystemScreens.settingsLike("com.instagram.android"), "Obična aplikacija");
+        check(SystemScreens.wellbeing("com.google.android.apps.wellbeing"), "Google Digital Wellbeing");
+        check(SystemScreens.wellbeing("com.samsung.android.forest"), "Samsung Digital Wellbeing");
+        check(SystemScreens.settingsLike("com.google.android.apps.wellbeing")
+                && SystemScreens.settingsLike("com.samsung.android.forest"), "Wellbeing je pod zaštitom kao podešavanja");
+        check(!SystemScreens.wellbeing("com.google.android.apps.maps")
+                && !SystemScreens.settingsLike("com.google.android.apps.maps"), "Mape nisu Wellbeing");
+        check(!SystemScreens.wellbeing("com.android.settings"), "Podešavanja nisu Wellbeing");
+        for (String w : SystemScreens.WELLBEING_APPS) {
+            check(SystemScreens.wellbeing(w) && SystemScreens.settingsLike(w), "Spisak Wellbeing paketa: " + w);
+        }
+        check(!SystemScreens.installer("com.google.android.apps.wellbeing"), "Wellbeing nije instalacija");
         check(SystemScreens.installer("com.android.vending") && !SystemScreens.installer("com.android.settings"),
                 "U Play prodavnici se zatvara samo brisanje");
 

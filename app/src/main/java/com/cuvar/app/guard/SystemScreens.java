@@ -8,6 +8,9 @@ public final class SystemScreens {
     public static final String[] UNINSTALL = {"uninstall", "deinstal", "деинстал", "ukloni", "уклони", "obriši", "обриши", // bez prevoda: reči sa sistemskog ekrana
             "izbriši", "избриши", "delete", "remove"}; // bez prevoda
 
+    /** Digital Wellbeing (Google, Samsung): isti spisak koristi i AppKinds.SETTINGS_APPS za praćenje događaja. */
+    public static final String[] WELLBEING_APPS = {"com.google.android.apps.wellbeing", "com.samsung.android.forest"};
+
     private SystemScreens() {
     }
 
@@ -21,11 +24,19 @@ public final class SystemScreens {
         return n.contains("call") || n.contains("voip") || n.startsWith("phone");
     }
 
-    /** Podešavanja telefona, instalacija i brisanje aplikacija, Play prodavnica i slični sistemski ekrani. */
+    /** Podešavanja telefona, instalacija i brisanje aplikacija, Play prodavnica, Digital Wellbeing i slični sistemski ekrani. */
     public static boolean settingsLike(String p) {
-        return p.contains("settings") || p.contains("packageinstaller") || p.contains("permissioncontroller")
+        return wellbeing(p) || p.contains("settings") || p.contains("packageinstaller") || p.contains("permissioncontroller")
                 || p.contains("securitycenter") || p.contains("safecenter") || p.contains("accessibility")
                 || p.equals("com.android.vending") || p.equals("com.samsung.android.lool");
+    }
+
+    /** Digital Wellbeing (Google i Samsung): tu se Čuvar može pauzirati ili mu se može postaviti tajmer. */
+    public static boolean wellbeing(String p) {
+        for (String w : WELLBEING_APPS) {
+            if (w.equals(p)) return true;
+        }
+        return false;
     }
 
     /** Ekran za instalaciju ili Play prodavnica: tu se Čuvar sme ažurirati, samo se brisanje zatvara. */

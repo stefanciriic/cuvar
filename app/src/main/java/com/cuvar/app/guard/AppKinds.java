@@ -45,11 +45,18 @@ public final class AppKinds {
             "com.twitter.android", "com.snapchat.android", "com.linkedin.android", "com.reddit.frontpage",
             "com.google.android.googlequicksearchbox", "com.google.android.gm", "org.telegram.messenger", "com.pinterest"};
 
-    /** Sistemski ekrani koje zaštita od isključivanja mora da vidi. */
-    public static final String[] SETTINGS_APPS = {"com.android.settings", "com.google.android.packageinstaller",
+    /** Sistemski ekrani koje zaštita od isključivanja mora da vidi (uz Digital Wellbeing iz SystemScreens). */
+    public static final String[] SETTINGS_APPS = withWellbeing("com.android.settings", "com.google.android.packageinstaller",
             "com.android.packageinstaller", "com.google.android.permissioncontroller", "com.android.permissioncontroller",
             "com.android.vending", "com.miui.securitycenter", "com.samsung.android.lool", "com.samsung.accessibility",
-            "com.google.android.marvin.talkback", "com.huawei.systemmanager", "com.coloros.safecenter", "com.oplus.safecenter"};
+            "com.google.android.marvin.talkback", "com.huawei.systemmanager", "com.coloros.safecenter", "com.oplus.safecenter");
+
+    private static String[] withWellbeing(String... apps) {
+        String[] w = SystemScreens.WELLBEING_APPS;
+        String[] out = java.util.Arrays.copyOf(apps, apps.length + w.length);
+        System.arraycopy(w, 0, out, apps.length, w.length);
+        return out;
+    }
 
     public Map<String, String> clones;
     private long clonesAt;
@@ -176,7 +183,7 @@ public final class AppKinds {
         return SystemScreens.settingsLike(p);
     }
 
-    /** Da li sistemski ekran prikazuje Čuvara (podaci o aplikaciji, Pristupačnost, brisanje). */
+    /** Da li sistemski ekran prikazuje Čuvara (podaci o aplikaciji, Pristupačnost, brisanje, Digital Wellbeing). */
     public boolean guardsSelf(AccessibilityNodeInfo root, String p) {
         if (p.equals(svc.getPackageName()) || exempt().contains(p)) return false;
         if (!settingsLike(p)) return false;
