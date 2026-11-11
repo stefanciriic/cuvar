@@ -26,6 +26,17 @@ public final class BrowserAddressStateTest {
         s.missing(910000);
         check(!s.unresolved(912999), "unverified window waits for the toolbar");
         check(s.unresolved(913000), "unverified window does not inherit old host and fails closed");
+        BrowserAddressState r = new BrowserAddressState();
+        r.missing(0);
+        r.reopened();
+        r.missing(600000);
+        check(!r.unresolved(600000), "reopened browser waits again for the toolbar");
+        check(r.unresolved(603000), "reopened browser still fails closed after the wait");
+        BrowserAddressState k = new BrowserAddressState();
+        k.readable("example.com");
+        k.reopened();
+        k.missing(600000);
+        check("example.com".equals(k.host()) && !k.unresolved(700000), "reopening keeps a verified host");
         BrowserAddressState h = new BrowserAddressState();
         h.missing(0);
         h.internalScreen();

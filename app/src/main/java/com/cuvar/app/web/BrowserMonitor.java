@@ -104,6 +104,14 @@ public final class BrowserMonitor {
         return state;
     }
 
+    /** Pregledač ponovo napred: čekanje na adresnu traku kreće iznova u svim njegovim prozorima. */
+    public void reopened(String pkg) {
+        String prefix = pkg + ":";
+        for (Map.Entry<String, BrowserAddressState> e : addresses.entrySet()) {
+            if (e.getKey().startsWith(prefix)) e.getValue().reopened();
+        }
+    }
+
     private void readInto(BrowserAddressState state, AccessibilityNodeInfo root, String id, String activity) {
         List<AccessibilityNodeInfo> nodes = root.findAccessibilityNodeInfosByViewId(id);
         if (nodes == null || nodes.isEmpty()) {

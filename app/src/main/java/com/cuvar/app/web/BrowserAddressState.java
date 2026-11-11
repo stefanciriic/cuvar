@@ -50,6 +50,16 @@ public final class BrowserAddressState {
         if (missingSince < 0) missingSince = elapsedMs;
     }
 
+    /**
+     * Pregledač je ponovo otvoren: čekanje na adresnu traku kreće iznova. Inače bi „nema trake“ zapamćeno
+     * pre izlaska odmah zaključalo pregledač pri povratku, pre nego što se traka stigne nacrtati.
+     */
+    public void reopened() {
+        if (host != null) return;
+        missing = false;
+        missingSince = -1;
+    }
+
     public String host() {
         return host;
     }

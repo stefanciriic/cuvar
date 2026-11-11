@@ -766,6 +766,7 @@ public class GuardService extends AccessibilityService {
                 leftPause = currentPkg.equals(pausePkg);
             }
             currentPkg = pkg;
+            if (browserMonitor != null) browserMonitor.reopened(raw);
             setContentEvents(wantsContent(pkg));
             currentHost = null;
             currentAddress = null;
