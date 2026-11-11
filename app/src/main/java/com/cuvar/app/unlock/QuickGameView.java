@@ -48,6 +48,12 @@ public final class QuickGameView {
     /** Nova partija; greška ili isteklo vreme daje novu partiju istog nivoa. */
     public static void show(final Context c, final Handler h, final LinearLayout area, final Runnable onPass,
                             String notice, final QuickGame.Kind kind, final int level) {
+        show(c, h, area, onPass, notice, kind, level, null);
+    }
+
+    /** Kao gore; kad lost nije null, poraz zove lost umesto nove partije iste igrice. */
+    public static void show(final Context c, final Handler h, final LinearLayout area, final Runnable onPass,
+                            String notice, final QuickGame.Kind kind, final int level, final NumberGameView.Lost lost) {
         final QuickGame game = new QuickGame(kind, level, RANDOM, SystemClock.elapsedRealtime());
         final TextView status = Ui.text(c, "", 15, Ui.NIGHT_MUTED, true);
         status.setGravity(Gravity.CENTER);
@@ -86,9 +92,11 @@ public final class QuickGameView {
                 } else if (t == NumberGame.Tap.DONE) {
                     onPass.run();
                 } else if (t == NumberGame.Tap.WRONG) {
-                    show(c, h, area, onPass, "Pogrešno. Kreni ispočetka.", kind, level);
+                    if (lost != null) lost.lost(false);
+                    else show(c, h, area, onPass, "Pogrešno. Kreni ispočetka.", kind, level, null);
                 } else if (t == NumberGame.Tap.LATE) {
-                    show(c, h, area, onPass, "Vreme je isteklo. Kreni ispočetka.", kind, level);
+                    if (lost != null) lost.lost(true);
+                    else show(c, h, area, onPass, "Vreme je isteklo. Kreni ispočetka.", kind, level, null);
                 }
             });
             status.setText(status(game));
@@ -96,7 +104,7 @@ public final class QuickGameView {
         };
         draw[0].run();
 
-        // Odbrojavanje dok je igrica na ekranu; posle isteka nova partija.
+        // Odbrojavanje dok je igrica na ekranu; posle isteka nova partija (ili lost).
         h.postDelayed(new Runnable() {
             @Override
             public void run() {
@@ -106,7 +114,9 @@ public final class QuickGameView {
             private void tick() {
                 if (game.over() || board.getParent() != area) return;
                 if (game.leftMs(SystemClock.elapsedRealtime()) == 0) {
-                    if (area.isAttachedToWindow()) show(c, h, area, onPass, "Vreme je isteklo. Kreni ispočetka.", kind, level);
+                    if (!area.isAttachedToWindow()) return;
+                    if (lost != null) lost.lost(true);
+                    else show(c, h, area, onPass, "Vreme je isteklo. Kreni ispočetka.", kind, level, null);
                     return;
                 }
                 status.setText(status(game));

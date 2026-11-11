@@ -786,3 +786,5 @@ Podešavanja → Pristupačnost → Čuvar → isključi „Prečica za Čuvar�
 Zaštita od isključivanja je uključena, pa Čuvar zatvara svoj ekran u Pristupačnosti i prečicu 	Protection from turning off is on, so Čuvar closes its screen in Accessibility and you cannot turn the shortcut off there. 
 tamo ne možeš da isključiš. Prvo isključi zaštitu u Čuvaru (važi od sledećeg jutra u 06:00), 	First turn off the protection in Čuvar (takes effect the next morning at 06:00), 
 Isključi je: Podešavanja → Pristupačnost → Čuvar → isključi „Prečica za Čuvar“ 	Turn it off: Settings → Accessibility → Čuvar → turn off “Čuvar shortcut” 
+Vreme je isteklo. Probaj nešto drugo.	Time is up. Try something else.
+Pogrešno. Probaj nešto drugo.	Wrong. Try something else.

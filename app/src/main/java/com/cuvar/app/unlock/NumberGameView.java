@@ -87,9 +87,20 @@ public final class NumberGameView {
         show(c, h, area, onPass, notice, NumberGame.SIDE, NumberGame.TIME_MS);
     }
 
+    /** Poraz u igrici (pogrešan tap ili isteklo vreme); late je true kad je isteklo vreme. */
+    public interface Lost {
+        void lost(boolean late);
+    }
+
     /** Igrica sa zadatom veličinom mreže i vremenom (teža za svako sledeće otključavanje u danu). */
     public static void show(final Context c, final Handler h, final LinearLayout area, final Runnable onPass, String notice,
                      final int side, final long timeMs) {
+        show(c, h, area, onPass, notice, side, timeMs, null);
+    }
+
+    /** Kao gore; kad lost nije null, poraz zove lost umesto nove partije iste igrice. */
+    public static void show(final Context c, final Handler h, final LinearLayout area, final Runnable onPass, String notice,
+                     final int side, final long timeMs, final Lost lost) {
         area.removeAllViews();
         final NumberGame game = new NumberGame(RANDOM, SystemClock.elapsedRealtime(), side, timeMs);
 
@@ -123,9 +134,11 @@ public final class NumberGameView {
                     } else if (t == NumberGame.Tap.DONE) {
                         onPass.run();
                     } else if (t == NumberGame.Tap.WRONG) {
-                        show(c, h, area, onPass, "Pogrešan broj. Kreni ispočetka.", side, timeMs);
+                        if (lost != null) lost.lost(false);
+                        else show(c, h, area, onPass, "Pogrešan broj. Kreni ispočetka.", side, timeMs, null);
                     } else if (t == NumberGame.Tap.LATE) {
-                        show(c, h, area, onPass, "Vreme je isteklo. Kreni ispočetka.", side, timeMs);
+                        if (lost != null) lost.lost(true);
+                        else show(c, h, area, onPass, "Vreme je isteklo. Kreni ispočetka.", side, timeMs, null);
                     }
                 }));
                 LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, Ui.dp(c, side > 5 ? 46 : 54), 1f);
@@ -138,7 +151,7 @@ public final class NumberGameView {
         area.addView(grid, Ui.fill(c, 12));
         status.setText(numbersStatus(game));
 
-        // Odbrojavanje dok je igrica na ekranu; posle isteka nova partija.
+        // Odbrojavanje dok je igrica na ekranu; posle isteka nova partija (ili lost).
         h.postDelayed(new Runnable() {
             @Override
             public void run() {
@@ -149,7 +162,9 @@ public final class NumberGameView {
                 if (game.over() || grid.getParent() != area) return;
                 if (game.leftMs(SystemClock.elapsedRealtime()) == 0) {
                     // Zatvoren ekran blokade: samo stani.
-                    if (area.isAttachedToWindow()) show(c, h, area, onPass, "Vreme je isteklo. Kreni ispočetka.", side, timeMs);
+                    if (!area.isAttachedToWindow()) return;
+                    if (lost != null) lost.lost(true);
+                    else show(c, h, area, onPass, "Vreme je isteklo. Kreni ispočetka.", side, timeMs, null);
                     return;
                 }
                 status.setText(numbersStatus(game));

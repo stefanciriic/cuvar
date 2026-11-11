@@ -9,6 +9,7 @@ import com.cuvar.app.rules.DayLimit;
 import com.cuvar.app.rules.UnlockCost;
 import com.cuvar.app.ui.Safe;
 import com.cuvar.app.ui.Ui;
+import com.cuvar.app.unlock.ChallengePick;
 import com.cuvar.app.unlock.Jokes;
 import com.cuvar.app.unlock.NumberGameView;
 import com.cuvar.app.unlock.QuickGame;
@@ -31,6 +32,8 @@ import java.util.Random;
 /** Builds the guarded app and site lock screen and its unlock interactions. */
 public final class BlockOverlayContent {
     private static final Random RANDOM = new Random();
+    /** Prošli izbor izazova, da nasumičan izbor ne ponovi isto (posle restarta procesa može). */
+    private static String lastPick;
     private final GuardService host;
 
     public BlockOverlayContent(GuardService host) {
@@ -189,7 +192,7 @@ public final class BlockOverlayContent {
                 TextView ask = overlayButton(c, "Hitno otključavanje (" + Unlocks.EMERGENCY_MS / 60000L + " min)");
                 ask.setTextColor(Ui.NIGHT_MUTED);
                 ask.setBackground(null);
-                ask.setOnClickListener(Safe.click("overlayAsk", v -> showQuiz(urgent, () -> showEmergencyPad(urgent, key, code), null)));
+                ask.setOnClickListener(Safe.click("overlayAsk", v -> showChallenge(urgent, () -> showEmergencyPad(urgent, key, code), null)));
                 urgent.addView(ask);
             }
         } else if (code && !GuardService.hard(kind) && !host.store.unlock.dailyCodeVisible()) {
@@ -210,7 +213,7 @@ public final class BlockOverlayContent {
             box.addView(unlock, Ui.fill(c, 22));
             // Zaključana aplikacija odmah traži odgovor pa PIN; kod isteklog vremena i blokiranog sajta prvo pitamo.
             if (kind == GuardService.KIND_LOCK || kind == GuardService.KIND_CODE || kind == GuardService.KIND_BROWSER || kind == GuardService.KIND_CLONER) {
-                showQuiz(unlock, () -> showPinPad(unlock, key, code), null);
+                showChallenge(unlock, () -> showPinPad(unlock, key, code), null);
             } else {
                 TextView ask = overlayButton(c, "Ipak želim da otključam");
                 ask.setTextColor(Ui.NIGHT_MUTED);
@@ -263,7 +266,7 @@ public final class BlockOverlayContent {
         area.addView(no, Ui.fill(c, 16));
 
         TextView yes = overlayButton(c, Jokes.pick(Jokes.YES));
-        yes.setOnClickListener(Safe.click("overlayYes", v -> showQuiz(area, () -> showPinPad(area, key, code), null)));
+        yes.setOnClickListener(Safe.click("overlayYes", v -> showChallenge(area, () -> showPinPad(area, key, code), null)));
         area.addView(yes, Ui.fill(c, 10));
     }
 
@@ -282,36 +285,43 @@ public final class BlockOverlayContent {
         }
     }
 
-    /** Pitanje pre šifre. Tačan odgovor vodi dalje, a pogrešan traži više tačnih zaredom. */
-    private void showQuiz(final LinearLayout area, final Runnable onPass, String notice) {
-        final Context c = host;
+    /**
+     * Novi pokušaj (otvaranje ekrana ili poraz u igrici): bira izazov preko ChallengePick, kod nasumičnog
+     * različit od prošlog. Pitalice na novom pokušaju kreću od lestvice za današnje otključavanje.
+     */
+    private void showChallenge(final LinearLayout area, final Runnable onPass, String notice) {
         int done = host.store.unlock.unlocksToday();
         UnlockCost cost = UnlockCost.emergency(done);
-        if (notice == null) Quiz.LADDER.atLeast(cost.answers);
-        String ch = Ui.unlockChallenge(c);
-        // Nasumično se bira na početku otključavanja (notice == null), posle odgovora ostaju pitanja.
-        String game = null;
-        if (Ui.CHALLENGE_GAMES.equals(ch) || Ui.CHALLENGE_MIX.equals(ch) && notice == null && RANDOM.nextBoolean()) {
-            game = Ui.GAMES[RANDOM.nextInt(Ui.GAMES.length)];
-        } else if (!Ui.CHALLENGE_QUIZ.equals(ch) && !Ui.CHALLENGE_MIX.equals(ch)) {
-            game = ch;
-        }
-        if (Ui.CHALLENGE_NUMBERS.equals(game)) {
+        String ch = Ui.unlockChallenge(host);
+        String pick = ChallengePick.pick(ch, Ui.GAMES, lastPick, RANDOM);
+        lastPick = pick;
+        // Kod nasumičnog izbora poraz u igrici daje novi izazov; izabrana igrica počinje ispočetka.
+        final boolean random = Ui.CHALLENGE_GAMES.equals(ch) || Ui.CHALLENGE_MIX.equals(ch);
+        NumberGameView.Lost lost = !random ? null : late -> showChallenge(area, onPass,
+                late ? "Vreme je isteklo. Probaj nešto drugo." : "Pogrešno. Probaj nešto drugo.");
+        if (Ui.CHALLENGE_NUMBERS.equals(pick)) {
             String price = done == 0 ? null : (done + 1) + ". otključavanje danas: brojevi do " + cost.side * cost.side
                     + " za " + cost.timeMs / 1000 + " s";
-            NumberGameView.show(host, host.h, area, onPass, price, cost.side, cost.timeMs);
+            NumberGameView.show(host, host.h, area, onPass, notice != null ? notice : price, cost.side, cost.timeMs, lost);
             return;
         }
-        QuickGame.Kind quick = QuickGameView.kind(game);
+        QuickGame.Kind quick = QuickGameView.kind(pick);
         if (quick != null) {
             // Nivo prati broj otključavanja danas (cost.answers je 1, 2 ili 3).
             int level = cost.answers - 1;
             String price = done == 0 ? null : (done + 1) + ". otključavanje danas: "
                     + Ui.count(QuickGame.rounds(quick, level), "zadatak", "zadatka", "zadataka")
                     + " za " + QuickGame.timeMs(quick, level) / 1000 + " s";
-            QuickGameView.show(host, host.h, area, onPass, price, quick, level);
+            QuickGameView.show(host, host.h, area, onPass, notice != null ? notice : price, quick, level, lost);
             return;
         }
+        Quiz.LADDER.atLeast(cost.answers);
+        showQuiz(area, onPass, notice);
+    }
+
+    /** Pitanje pre šifre. Tačan odgovor vodi dalje, a pogrešan traži više tačnih zaredom. */
+    private void showQuiz(final LinearLayout area, final Runnable onPass, String notice) {
+        final Context c = host;
         area.removeAllViews();
         final Quiz.Question q = Quiz.next();
 
