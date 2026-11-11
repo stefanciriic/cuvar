@@ -37,7 +37,6 @@ Ne radiš posao sam kad ga agent radi jeftinije. Deliš, pratiš i spajaš rezul
   pregledači čija se oblast promenila. Sitnica (tekst, komentar) ne traži četiri pregledača ako
   hook to ne traži.
 - Kad Stefan pomene limit, stani posle tekućeg koraka, sačuvaj stanje i javi šta je ostalo.
-- Potrošnja po agentu: `bash tools/potrosnja.sh`.
 
 ## Pre nego što kažeš "gotovo"
 
