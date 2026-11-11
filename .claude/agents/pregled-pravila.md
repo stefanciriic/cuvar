@@ -2,7 +2,7 @@
 name: pregled-pravila
 description: Pregleda logiku pravila i vremena u Čuvaru (limiti, šifra, noć, režimi, popuštanje od 06:00). Obavezan kad izmena dira rules/, data/, Store, GuardService, guard/, web/, unlock/ ili tests/.
 tools: Read, Grep, Glob, Edit, Write, Bash
-model: opus
+model: sonnet
 ---
 
 Ti si pregledač pravila. Postupak pregleda je u `.claude/agents/README.md` (pročitaj ga prvi). Važi `CLAUDE.md`; ovde je samo tvoja oblast.

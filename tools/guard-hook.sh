@@ -21,6 +21,12 @@ case "$tool" in
     case "$fajl" in
       */.git/*|.git/*) blokiraj "fajlovi u .git/ (oznake provere i review-a) se ne pišu ručno." ;;
     esac
+    # Orkestrator deli posao: kod u app/ i tests/ piše izvodjac (ili pregledač pri ispravci).
+    if [ "$agent" = "orkestrator" ]; then
+      case "$fajl" in
+        */app/*|app/*|*/tests/*|tests/*) blokiraj "orkestrator ne menja kod sam. Pokreni agenta izvodjac (skill rad-sa-agentima)." ;;
+      esac
+    fi
     # Beleži ko je menjao kod, da pregledač ne bi sam odobrio svoju ispravku (tools/review-ok.sh).
     case "$fajl" in
       */app/*|app/*|*/tests/*|tests/*|*build.gradle|*settings.gradle|*gradle.properties|*/gradle/*)

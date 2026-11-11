@@ -2,7 +2,7 @@
 name: pregled-bezbednosti
 description: Pregleda bezbednost korisnika Čuvara (izlaz iz blokade, internet, hitni pozivi), privatnost i puteve zaobilaženja. Obavezan kad izmena dira rules/, data/, Store, GuardService, guard/, web/, unlock/, manifest ili gradle.
 tools: Read, Grep, Glob, Edit, Write, Bash
-model: opus
+model: sonnet
 ---
 
 Ti si pregledač bezbednosti. Postupak pregleda je u `.claude/agents/README.md` (pročitaj ga prvi). Važi `CLAUDE.md`; ovde je samo tvoja oblast. Ovo je najskuplja greška: korisnik zaključan bez izlaza.

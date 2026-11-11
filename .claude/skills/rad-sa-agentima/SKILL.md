@@ -5,7 +5,8 @@ description: Tok rada glavnog agenta (orkestratora) u Čuvaru - zadatak, izvođa
 
 # Rad sa agentima (glavni agent = orkestrator)
 
-Glavni agent planira, deli posao i spaja nalaze. Kod u `app/` i `tests/` ne piše sam
+Glavni agent (agent `orkestrator` kad je uključen u settings.json) planira, deli posao i spaja nalaze.
+Pitanja o kodu šalje agentu `istrazivac` (haiku, samo čita) umesto da sam čita fajlove. Kod u `app/` i `tests/` ne piše sam
 (izuzetak: Stefan izričito kaže da je sitnica i da ne treba review). Agenti su u
 `.claude/agents/`, postupak pregleda u `.claude/agents/README.md`.
 
@@ -17,8 +18,10 @@ Glavni agent planira, deli posao i spaja nalaze. Kod u `app/` i `tests/` ne piš
    `enforce()`/`pendingChanges()` pokreni ga sa `model: opus` (parametar pri pozivu agenta).
 3. `tools/review-stanje.sh` kaže koji su pregledači obavezni. Pokreni ih **paralelno** u jednoj
    poruci (više poziva agenta odjednom). U ovoj fazi samo pišu nalaze u `.review/nalazi/<ime>.md`.
-   - Ako je izmenu pisao izvođač na `opus`, bar jedan od pregledača mora biti na `opus`
-     (`pregled-pravila` ili `pregled-bezbednosti`; dodaj ga ako nije u obimu).
+   - Pregledači su podrazumevano na `sonnet`. Za izmene u `GuardService`, `Store`, `guard/` i
+     `enforce()` (izvođač na `opus`) pokreni `pregled-pravila` i `pregled-bezbednosti` sa
+     `model: opus`: izmenu jačeg modela ne odobrava samo slabiji.
+   - Drugi krug samo ako je bilo ispravki, i samo pregledači čija oblast je dirnuta (štedi limit).
 4. Ispravke **jedna po jedna** (nikad dva agenta koji menjaju kod istovremeno): nalaz ispravlja
    pregledač koji ga je našao ili izvođač. Posle svake ispravke ponovo pokreni obavezne pregledače
    (paralelno), da svi vide i odobre **isto** stanje (`tools/review-ok.sh <ime>`).

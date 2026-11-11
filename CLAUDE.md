@@ -42,15 +42,15 @@ Potrošnja po agentu i modelu (tokeni, cena, kontekst, limit pretplate): `bash t
 
 | Agent | Model | Zašto |
 |---|---|---|
-| glavna sesija (orkestrator) | najjači (`/model`) | plan, spajanje nalaza, neslaganja |
-| `pregled-bezbednosti` | opus | greška = korisnik zaključan bez izlaza |
-| `pregled-pravila` | opus | rupa u pravilima, granice vremena |
-| `izvodjac` | sonnet (opus za `GuardService`, `Store`, `guard/`, `enforce()`) | obične izmene; jači ga pregleda |
-| `pregled-stabilnosti` | sonnet | obrasci (`Safe`, `finally`), lako proverljivo |
-| `pregled-prikaza` | sonnet | tekst i raspored |
-| `proveravac` | haiku | pokreće skriptu i čita ispis |
-| `tester-emulator` | haiku | adb komande i čitanje ekrana |
+| `orkestrator` (glavna sesija) | opus | plan, deljenje posla, spajanje nalaza, neslaganja |
+| `istrazivac` | haiku | samo čita i nalazi mesto u kodu, da glavna sesija ne troši na čitanje |
+| `izvodjac` | sonnet (opus za `GuardService`, `Store`, `guard/`, `enforce()`) | obične izmene; pregledači ga proveravaju |
+| `pregled-bezbednosti`, `pregled-pravila` | sonnet (opus za jezgro, isto kao izvođač) | izmenu jačeg modela ne odobrava samo slabiji |
+| `pregled-stabilnosti`, `pregled-prikaza` | sonnet | obrasci, tekst i raspored |
+| `proveravac`, `tester-emulator` | haiku | pokreću komande i čitaju ispis |
 
+Stalni orkestrator: `"agent": "orkestrator"` u `.claude/settings.json` (ili `claude --agent orkestrator`);
+tada glavna sesija od početka deli posao, a hook joj ne da da sama menja `app/` i `tests/`.
 Model se menja u polju `model:` u `.claude/agents/<ime>.md`.
 
 ## Bezbednost korisnika (najvažnije)
