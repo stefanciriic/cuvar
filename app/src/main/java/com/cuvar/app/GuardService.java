@@ -20,6 +20,7 @@ import com.cuvar.app.guard.SystemScreens;
 import com.cuvar.app.rules.BlockKind;
 import com.cuvar.app.rules.DailySchedule;
 import com.cuvar.app.rules.DayLimit;
+import com.cuvar.app.rules.QuickCover;
 import com.cuvar.app.rules.UsageTracker;
 import com.cuvar.app.ui.Safe;
 import com.cuvar.app.ui.Ui;
@@ -120,6 +121,10 @@ public class GuardService extends AccessibilityService {
     private boolean checkPending;
     private boolean contentEvents = true; // da li stižu i događaji o promeni sadržaja (samo za pregledače)
     private long lastEventCheck;
+    private String coverPkg;         // aplikacija zbog koje je stavljena zavesa pre blokade
+    private long coverAt;
+    private String seenPkg;          // šta je poslednja provera videla napred (null = ne zna se)
+    private boolean seenUsable;      // ekran upaljen i otključan pri poslednjoj proveri
     private long lastContentCheck; // poslednja provera posle promene sadržaja (SystemClock.elapsedRealtime)
     // Najkraći razmak provera dok se sadržaj stalno menja (skrolovanje): adresa se čita najviše ~2,5 puta u sekundi.
     private static final long CONTENT_CHECK_MS = 400L;
@@ -346,7 +351,7 @@ public class GuardService extends AccessibilityService {
                 contentEvents = false;
                 info.flags |= AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
                         | AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS;
-                info.notificationTimeout = 100; // manje čekanja na događaj: blokada stiže brže
+                info.notificationTimeout = 0; // događaj stiže odmah, bez čekanja: blokada se pojavi pre aplikacije
                 setServiceInfo(info);
             }
         } catch (Throwable error) {
@@ -460,6 +465,11 @@ public class GuardService extends AccessibilityService {
                 // Pamti se samo ekran aplikacije, ne sistemski dijalozi i delovi ekrana.
                 if (c.contains(".") && !c.startsWith("android.") && !c.startsWith("androidx.")) activityOf.put(p.toString(), c);
             }
+            if (p != null && !p.toString().equals(rawPkg) && !TRANSPARENT.contains(p.toString()) && store != null) {
+                // Nova aplikacija napred: zavesa odmah ako će biti blokirana, i provera bez čekanja.
+                guarded("cover", () -> coverIfBlocked(p.toString()));
+                lastEventCheck = 0L;
+            }
         }
         if ((type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED || type == AccessibilityEvent.TYPE_WINDOWS_CHANGED)
                 && currentQuiet && screen.overlay == null && !windowsRearranged(event)) {
@@ -510,6 +520,50 @@ public class GuardService extends AccessibilityService {
     }
 
     /**
+     * Zavesa pre blokade: Android javi novu aplikaciju pre nego što se njen prozor može pročitati, pa bi se bez ovoga
+     * aplikacija videla dok provera ne stigne. Gleda se samo pravilo same aplikacije (bez sajta, poziva, prozora);
+     * provera posle toga stavlja pravi ekran blokade ili skida zavesu (vidi QuickCover).
+     */
+    private void coverIfBlocked(String raw) {
+        if (screen.overlay != null || overlayWindow == null || TRANSPARENT.contains(raw) || kinds.quiet(raw)) return;
+        String p = kinds.cloneOf(raw);
+        if (p.equals(getPackageName()) || p.equals(currentPkg) || kinds.exempt().contains(p) || store.callsPass(p)) return;
+        if (power == null || keyguard == null || !power.isInteractive() || keyguard.isKeyguardLocked()) return;
+        long nowEl = SystemClock.elapsedRealtime();
+        boolean back = p.equals(lastLeftPkg) && nowEl - lastLeftAt < OPEN_GRACE_MS;
+        int max = store.appOpensNow(p);
+        boolean opens = back ? leftBlocked : max > 0 && store.usageLog.opensToday(ItemKey.app(p)) >= max;
+        String appKey = ItemKey.app(p);
+        boolean blocked = BlockKind.pick(BlockRules.front(facts, new BlockRules.Front(p, null, false, false, opens, false)),
+                this::unlockedNow) != null;
+        if (!blocked) {
+            boolean justPaused = p.equals(pauseDonePkg) && nowEl - pauseDoneAt < OPEN_GRACE_MS;
+            boolean pause = back ? leftPause : store.appGuarded(p) && !justPaused;
+            blocked = pause && !unlockedNow(appKey);
+        }
+        if (!blocked) return;
+        overlayWindow.cover();
+        if (!overlayWindow.covered()) return;
+        coverPkg = p;
+        coverAt = nowEl;
+        // Android često tek posle desetak milisekundi prijavi prozor kao aktivan: još jedna brza provera.
+        h.removeCallbacks(recheckCover);
+        h.postDelayed(recheckCover, 120L);
+    }
+
+    private final Runnable recheckCover = this::safeCheck;
+
+    /** Posle provere: ekran blokade je tu (zavesa ide kad se nacrta) ili se odlučuje da li zavesa još treba. */
+    private void settleCover() {
+        if (overlayWindow == null || !overlayWindow.covered()) return;
+        if (screen.overlay != null) {
+            overlayWindow.uncoverAfterDraw(screen.overlay);
+        } else if (QuickCover.lift(seenUsable, seenPkg, coverPkg, SystemClock.elapsedRealtime() - coverAt)) {
+            overlayWindow.uncover();
+        }
+    }
+
+    /**
      * Prozor je dodat, uklonjen ili mu je promenjena veličina (podeljen ekran, plutajući prozor): proverava se odmah,
      * i kad je napred aplikacija bez pravila, jer se u drugom prozoru mogla pojaviti blokirana aplikacija.
      */
@@ -549,6 +603,7 @@ public class GuardService extends AccessibilityService {
         // I kad merenje ili skidanje prozora pukne, prijemnici se odjave i podaci se sačuvaju.
         guarded("stopAccount", () -> accounting.accountUntilNow(Collections.emptySet()));
         guarded("stopOverlay", screen::hideOverlay);
+        if (overlayWindow != null) guarded("stopCover", overlayWindow::uncover);
         if (receiverOn) {
             try {
                 unregisterReceiver(screenReceiver);
@@ -594,6 +649,7 @@ public class GuardService extends AccessibilityService {
             GuardDiagnostics.report("check", error);
         } finally {
             LoadMeter.GUARD.check(System.nanoTime() - started);
+            guarded("settleCover", this::settleCover);
             try {
                 accounting.accountUntilNow(accounting.usageKeys());
             } catch (Throwable error) {
@@ -621,6 +677,8 @@ public class GuardService extends AccessibilityService {
     /** Glavna odluka: šta je na ekranu i da li to treba blokirati. */
     private void check() {
         observationValid = false;
+        seenPkg = null;
+        seenUsable = false;
         if (store == null || power == null || keyguard == null) {
             return;
         }
@@ -657,6 +715,8 @@ public class GuardService extends AccessibilityService {
             String fg = foreground.current();
             if (fg != null && kinds.quiet(fg)) pkg = fg;
         }
+        seenUsable = true;
+        if (pkg != null && !TRANSPARENT.contains(pkg)) seenPkg = kinds.cloneOf(pkg);
         if (pkg == null || TRANSPARENT.contains(pkg)) {
             blockOtherWindows();
             return;
@@ -912,6 +972,8 @@ public class GuardService extends AccessibilityService {
             } else {
                 info.eventTypes &= ~AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED;
             }
+            // Dok se prate promene sadržaja (pregledač), događaji se kratko skupljaju da ih ne bude previše.
+            info.notificationTimeout = on ? 50 : 0;
             setServiceInfo(info);
             contentEvents = on;
         } catch (Throwable error) {

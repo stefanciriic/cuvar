@@ -18,6 +18,7 @@ app/src/main/java/com/cuvar/app/web/WebAddress.java
 app/src/main/java/com/cuvar/app/web/Browsers.java
 app/src/main/java/com/cuvar/app/rules/UnlockStreak.java
 app/src/main/java/com/cuvar/app/rules/UnlockTimer.java
+app/src/main/java/com/cuvar/app/rules/QuickCover.java
 app/src/main/java/com/cuvar/app/rules/CodeAttempts.java
 app/src/main/java/com/cuvar/app/rules/TrustedClock.java
 app/src/main/java/com/cuvar/app/rules/SessionLimit.java

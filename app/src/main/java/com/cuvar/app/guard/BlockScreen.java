@@ -255,6 +255,8 @@ public final class BlockScreen {
             return;
         }
         if (overlay == null && overlayRetryAt > SystemClock.elapsedRealtime()) return;
+        // Zamena jednog ekrana blokade drugim: zavesa preko, da se između njih ne vidi aplikacija.
+        if (overlay != null) svc.overlayWindow.cover();
         hideOverlay();
         try {
             boolean notice = false;
@@ -282,6 +284,7 @@ public final class BlockScreen {
             if (catchBack) v = backCatcher(v, key, kind);
             svc.overlayWindow.show(v, catchBack, svc.rawPkg, bounds);
             overlay = v;
+            svc.overlayWindow.uncoverAfterDraw(v);
             overlayBounds = bounds;
             svc.h.removeCallbacks(followBounds);
             if (bounds != null) svc.h.postDelayed(followBounds, FOLLOW_MS);
@@ -296,6 +299,7 @@ public final class BlockScreen {
             overlayRetryAt = 0L;
         } catch (Throwable t) {
             GuardDiagnostics.report("showOverlay", t);
+            svc.overlayWindow.uncover();
             overlay = null;
             overlayKey = null;
             cooldownLabel = null;

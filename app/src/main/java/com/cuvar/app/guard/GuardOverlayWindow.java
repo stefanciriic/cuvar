@@ -4,18 +4,29 @@ import android.content.Context;
 import android.graphics.PixelFormat;
 import android.media.AudioAttributes;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.media.AudioFocusRequest;
 import android.media.AudioManager;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
+import android.view.ViewTreeObserver;
 import android.view.WindowInsets;
 import android.view.WindowManager;
+
+import com.cuvar.app.rules.QuickCover;
+import com.cuvar.app.ui.Safe;
+import com.cuvar.app.ui.Ui;
 
 /** Owns the accessibility overlay window and pauses media while it is visible. */
 public final class GuardOverlayWindow {
     private final WindowManager windows;
     private final AudioManager audio;
+    private final Context context;
+    private final Handler handler = new Handler(Looper.getMainLooper());
+    /** Zavesa pre blokade (vidi QuickCover): prazna pozadina dok ekran blokade ne bude nacrtan. */
+    private View shield;
     private AudioFocusRequest silence;
     /** Da li je muzika svirala pri poslednjoj proveri, i koja je aplikacija bila napred kad je muzika krenula. */
     private boolean musicPlaying;
@@ -23,6 +34,7 @@ public final class GuardOverlayWindow {
     private boolean musicSeen;
 
     public GuardOverlayWindow(Context context) {
+        this.context = context;
         windows = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
         audio = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
     }
@@ -78,6 +90,80 @@ public final class GuardOverlayWindow {
             }
             return insets;
         });
+    }
+
+    /**
+     * Odmah prekriva ceo ekran pozadinom ekrana blokade, bez sadržaja. Ne prima dodir ni fokus, pa ni greška
+     * ne može da zaključa telefon; skida se sa uncover (najkasnije posle QuickCover.MAX_MS).
+     */
+    public void cover() {
+        if (shield != null) return;
+        try {
+            View v = new View(context);
+            v.setBackgroundColor(Ui.NIGHT);
+            WindowManager.LayoutParams params = new WindowManager.LayoutParams(
+                    WindowManager.LayoutParams.MATCH_PARENT,
+                    WindowManager.LayoutParams.MATCH_PARENT,
+                    WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+                    PixelFormat.OPAQUE);
+            params.gravity = Gravity.TOP | Gravity.START;
+            params.windowAnimations = 0; // bez animacije: zavesa mora da se vidi odmah
+            place(params, null);
+            windows.addView(v, params);
+            shield = v;
+            handler.postDelayed(Safe.task("coverTimeout", () -> {
+                if (shield == v) uncover();
+            }), QuickCover.MAX_MS + 100L);
+        } catch (Throwable error) {
+            GuardDiagnostics.report("cover", error);
+            shield = null;
+        }
+    }
+
+    public boolean covered() {
+        return shield != null;
+    }
+
+    public void uncover() {
+        View v = shield;
+        if (v == null) return;
+        shield = null;
+        try {
+            windows.removeView(v);
+        } catch (Throwable error) {
+            GuardDiagnostics.report("uncover", error);
+        }
+    }
+
+    /**
+     * Skida zavesu tek kad je ekran blokade nacrtan; inače bi se između njih na trenutak videla aplikacija.
+     * Ako crtanje ne stigne, zavesa se ipak skida posle kratkog vremena.
+     */
+    public void uncoverAfterDraw(View view) {
+        final View s = shield;
+        if (s == null || s.getTag() != null) return;
+        s.setTag(Boolean.TRUE); // skidanje je već zakazano
+        final Runnable lift = Safe.task("uncoverDrawn", () -> {
+            if (shield == s) uncover();
+        });
+        try {
+            final ViewTreeObserver.OnDrawListener[] drawn = new ViewTreeObserver.OnDrawListener[1];
+            drawn[0] = () -> handler.post(Safe.task("uncoverDraw", () -> {
+                try {
+                    view.getViewTreeObserver().removeOnDrawListener(drawn[0]);
+                } catch (Throwable ignored) {
+                    // prozor je već skinut
+                }
+                // Još dva kadra da sistem prikaže nacrtano.
+                handler.postDelayed(lift, 40L);
+            }));
+            view.getViewTreeObserver().addOnDrawListener(drawn[0]);
+            view.invalidate();
+        } catch (Throwable error) {
+            GuardDiagnostics.report("uncoverAfterDraw", error);
+        }
+        handler.postDelayed(lift, 500L);
     }
 
     /** Pomera blokadu na nove granice prozora (pomerena granica podeljenog ekrana). */
