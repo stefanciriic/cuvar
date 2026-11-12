@@ -129,6 +129,8 @@ public class GuardService extends AccessibilityService {
     // Najkraći razmak provera dok se sadržaj stalno menja (skrolovanje): adresa se čita najviše ~2,5 puta u sekundi.
     private static final long CONTENT_CHECK_MS = 400L;
     private long ruledSeenAt;     // kad je poslednji put viđena aplikacija sa pravilom ili pregledač napred (System.currentTimeMillis)
+    // Toliko posle aplikacije sa pravilom se ne veruje prozoru bez pravila (Android kasni tokom animacije pokretanja).
+    private static final long RULED_LAG_MS = 3000L;
     private String pendingOpen;      // aplikacija upravo otvorena; broji se kad se zaista prikaže, bez blokade
     private String opensBlocked;     // aplikacija otvorena posle potrošenih otvaranja; blokirana dok se ne izađe
     public final Map<String, String> activityOf = new LinkedHashMap<String, String>() {
@@ -696,7 +698,9 @@ public class GuardService extends AccessibilityService {
         // pravilom, pregledač, podešavanja pod zaštitom ili kad se ne zna šta je napred.
         AccessibilityNodeInfo root = null;
         String pkg = null;
-        if (usageOk && foreground != null && screen.overlay == null) {
+        // Dok je zavesa gore upravo se otvara aplikacija sa pravilom: prozor se mora pročitati.
+        boolean covering = overlayWindow != null && overlayWindow.covered();
+        if (usageOk && foreground != null && screen.overlay == null && !covering) {
             String fg = foreground.current();
             // Android ponekad kasni sa zapisom: ako je posle njega javila aplikacija sa pravilom, čita se prozor.
             if (fg != null && !TRANSPARENT.contains(fg) && kinds.quiet(fg)
@@ -708,9 +712,14 @@ public class GuardService extends AccessibilityService {
             // Prvo se uzme samo vrh ekrana, bez ostatka sadržaja: za aplikacije bez pravila to je sve što treba.
             root = Build.VERSION.SDK_INT >= 33 ? getRootInActiveWindow(0) : getRootInActiveWindow();
             pkg = root == null || root.getPackageName() == null ? null : root.getPackageName().toString();
-            if (pkg != null && !pkg.equals(getPackageName())) ruledSeenAt = kinds.quiet(pkg) ? 0L : System.currentTimeMillis();
+            if (pkg != null && !pkg.equals(getPackageName()) && !TRANSPARENT.contains(pkg)) {
+                long nowMs = System.currentTimeMillis();
+                // Prozor bez pravila odmah posle aplikacije sa pravilom može biti zakasneo (početni ekran u animaciji).
+                if (!kinds.quiet(pkg)) ruledSeenAt = nowMs;
+                else if (nowMs - ruledSeenAt >= RULED_LAG_MS || nowMs < ruledSeenAt) ruledSeenAt = 0L;
+            }
         }
-        if (pkg == null && usageOk && foreground != null && screen.overlay == null) {
+        if (pkg == null && usageOk && foreground != null && screen.overlay == null && !covering) {
             // Prozor se ne može pročitati: koju je aplikaciju Android poslednju pokrenuo.
             String fg = foreground.current();
             if (fg != null && kinds.quiet(fg)) pkg = fg;
