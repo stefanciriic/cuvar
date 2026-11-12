@@ -788,3 +788,10 @@ tamo ne možeš da isključiš. Prvo isključi zaštitu u Čuvaru (važi od sled
 Isključi je: Podešavanja → Pristupačnost → Čuvar → isključi „Prečica za Čuvar“ 	Turn it off: Settings → Accessibility → Čuvar → turn off “Čuvar shortcut” 
 Vreme je isteklo. Probaj nešto drugo.	Time is up. Try something else.
 Pogrešno. Probaj nešto drugo.	Wrong. Try something else.
+ min. Zbir limita ne sme preći 	 min. Total of limits must not exceed 
+ (ukupni dnevni limit)	 (total daily limit)
+ Limit može biti najviše 	 The limit can be at most 
+, ni povećanjem ne ide preko.	, and raising never goes above it.
+Limit je na najvišem (	Limit is at its maximum (
+Limiti aplikacija i sajtova zajedno: 	App and site limits together: 
+, više od ukupnog limita.	, more than the total limit.

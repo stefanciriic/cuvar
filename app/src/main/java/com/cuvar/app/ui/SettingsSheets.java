@@ -176,6 +176,12 @@ public final class SettingsSheets {
         return s;
     }
 
+    /** Napomena kad su limiti aplikacija i sajtova zajedno veći od ukupnog limita. */
+    private static String overNote(int itemsTotal, int limit) {
+        return itemsTotal > limit ? "\n\n" + "Limiti aplikacija i sajtova zajedno: " + DayLimit.label(itemsTotal)
+                + ", više od ukupnog limita." : "";
+    }
+
     /** Izbor ukupnog limita: manji važi odmah, povećanje jednom dnevno za deo limita, isključivanje od sutra. */
     public void chooseDayLimit() {
         final int limit = store.dayLimits.dayLimit();
@@ -192,6 +198,9 @@ public final class SettingsSheets {
                         + "i samo dok limit još nije potrošen. "
                         + "Isključivanje važi tek od sutra."
                 : "Izaberi limit. Posle toga se može smanjiti u svako doba, a povećati jednom dnevno i samo malo.";
+        intro += " Limit može biti najviše " + DayLimit.label(DayLimit.MAX) + ", ni povećanjem ne ide preko.";
+        // Zbir limita aplikacija i sajtova: smanjenje ukupnog limita se ne blokira, samo se napomene.
+        final int itemsTotal = store.limitsTotal(null, null);
         Sheet sheet = new Sheet(a, "Ukupni dnevni limit").message(intro).view(box).secondary("Zatvori", null);
 
         if (limit > 0) {
@@ -201,6 +210,7 @@ public final class SettingsSheets {
             boolean can = store.dayLimits.canRaiseDayLimit();
             final int add = DayLimit.maxRaise(limit);
             String raise = can ? "Povećaj za " + Ui.fmt(add * 60000L) + " → " + DayLimit.label(limit + add)
+                    : limit >= DayLimit.MAX ? "Limit je na najvišem (" + DayLimit.label(DayLimit.MAX) + ")"
                     : store.dayLimits.dayLimitHitToday() ? "Limit je potrošen, danas se više ne povećava"
                     : "Povećanje je danas već iskorišćeno";
             TextView up = Ui.button(a, raise, can);
@@ -217,6 +227,10 @@ public final class SettingsSheets {
                         });
             });
             box.addView(up, Ui.fill(a, 14));
+            if (itemsTotal > limit) {
+                box.addView(Ui.text(a, "Limiti aplikacija i sajtova zajedno: " + DayLimit.label(itemsTotal)
+                        + ", više od ukupnog limita.", 13, Ui.MUTED, false), Ui.fill(a, 8));
+            }
         }
 
         boolean header = false;
@@ -240,14 +254,16 @@ public final class SettingsSheets {
                 if (limit <= 0) {
                     confirm("Uključiti limit od " + DayLimit.label(min) + "?",
                             "Važi odmah. Posle se može smanjiti u svako doba, a povećati samo jednom dnevno i malo "
-                                    + "(sa " + DayLimit.label(min) + " najviše za " + Ui.fmt(DayLimit.maxRaise(min) * 60000L) + ").",
+                                    + "(sa " + DayLimit.label(min) + " najviše za " + Ui.fmt(DayLimit.maxRaise(min) * 60000L) + ")."
+                                    + overNote(itemsTotal, min),
                             "Uključi", apply);
                 } else {
                     confirm("Smanjiti limit na " + DayLimit.label(min) + "?",
                             "Limit postaje ukupno " + DayLimit.label(min) + " umesto " + DayLimit.label(limit)
                                     + ". Važi odmah i ne može se vratiti: posle toga se danas "
                                     + "može povećati najviše za " + Ui.fmt(DayLimit.maxRaise(min) * 60000L)
-                                    + (store.dayLimits.canRaiseDayLimit() ? "." : ", a povećanje je danas već iskorišćeno."),
+                                    + (store.dayLimits.canRaiseDayLimit() ? "." : ", a povećanje je danas već iskorišćeno.")
+                                    + overNote(itemsTotal, min),
                             "Smanji", apply);
                 }
             });

@@ -5,6 +5,7 @@ import com.cuvar.app.data.AppLabels;
 import com.cuvar.app.data.Store;
 import com.cuvar.app.data.Sessions;
 import com.cuvar.app.rules.DailySchedule;
+import com.cuvar.app.rules.DayLimit;
 import com.cuvar.app.ui.AppPicker;
 import com.cuvar.app.ui.CheckRow;
 import com.cuvar.app.ui.Sheet;
@@ -489,6 +490,8 @@ public class RulesActivity extends SubActivity {
                     if (wantOpens == null) return false;
                     Integer wantSession = Ui.nonNegativeNumber(session);
                     if (wantSession == null) return false;
+                    int before = store.appLockLinked(pkg) ? 0 : store.appLimitLinked(pkg);
+                    if (!limitFits(limit, wantLock ? 0 : wantLimit, before, store.limitsTotal(pkg, null))) return false;
                     String typed = siteBox.getText().toString().trim();
                     String wantSite = typed.isEmpty() ? null : Hosts.hostOf(typed);
                     if (!typed.isEmpty() && (wantSite == null || !wantSite.contains("."))) {
@@ -541,6 +544,17 @@ public class RulesActivity extends SubActivity {
         sheet.show();
     }
 
+    /** Zbir dnevnih limita ne sme preći ukupni limit (ili 4 h); greška ispod polja ako bi prešao. */
+    private boolean limitFits(EditText field, int wanted, int before, int others) {
+        int budget = store.limitBudget();
+        if (DayLimit.allowedItemLimit(wanted, before, others, budget)) return true;
+        String why = store.dayLimits.dayLimit() > 0 ? " (ukupni dnevni limit)" : "";
+        field.setError(Ui.cyr("Najviše " + DayLimit.roomFor(others, budget) + " min. Zbir limita ne sme preći "
+                + DayLimit.label(budget) + why));
+        field.requestFocus();
+        return false;
+    }
+
     private void busy() {
         Ui.toast(this, "Režim koji sada traje ne može da izgubi stavku dok traje");
     }
@@ -580,6 +594,12 @@ public class RulesActivity extends SubActivity {
                     Integer want = -1;
                     if (listed.isChecked()) want = Ui.nonNegativeNumber(limit);
                     if (want == null) return false;
+                    // Poddomen do limita roditelja troši roditeljsko vreme, pa ne povećava zbir.
+                    int parent = store.parentSiteLimit(domain);
+                    boolean nested = parent > 0 && want > 0 && want <= parent;
+                    if (!nested && !limitFits(limit, want > 0 ? want : 0, Math.max(0, current), store.limitsTotal(null, domain))) {
+                        return false;
+                    }
                     saveRules(rules, rows, domain, true);
                     if (want != current) {
                         if (want < 0) store.removeSite(domain); else store.setSite(domain, want);

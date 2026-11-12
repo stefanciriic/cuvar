@@ -3,6 +3,7 @@ package com.cuvar.app.data;
 import com.cuvar.app.rules.AppRule;
 import com.cuvar.app.rules.ItemKey;
 import com.cuvar.app.rules.DailyCode;
+import com.cuvar.app.rules.DayLimit;
 import com.cuvar.app.rules.DailySchedule;
 import com.cuvar.app.rules.DomainRules;
 import com.cuvar.app.rules.EnforcedRules;
@@ -779,6 +780,48 @@ public final class Store {
     /** Podešeni sajtovi sa pravilom koje pokriva povezan sajt aplikacije. */
     public synchronized List<String> linkedSiteRules(String pkg) {
         return coveredSites(pkg, false);
+    }
+
+    /**
+     * Zbir podešenih dnevnih limita aplikacija i sajtova, svaka stavka jednom (aplikacija sa povezanim
+     * sajtom je jedna stavka). Stavka skipPkg / skipDomain (ona koja se menja) se ne računa.
+     */
+    public synchronized int limitsTotal(String skipPkg, String skipDomain) {
+        Set<String> pkgs = new HashSet<>(keysOf(apps));
+        List<String> pairs = linkPairs();
+        List<String> siteKeys = keysOf(sites);
+        for (String d : siteKeys) pkgs.addAll(Links.appsOf(pairs, d));
+        Set<String> counted = new HashSet<>();
+        int total = 0;
+        for (String pkg : pkgs) {
+            List<String> covered = coveredSites(pkg, false);
+            counted.addAll(covered);
+            if (pkg.equals(skipPkg) || (skipDomain != null && covered.contains(skipDomain))) continue;
+            if (groupLock(pkg, false)) continue;
+            int l = groupLimit(pkg, false);
+            if (l > 0) total += l;
+        }
+        for (String d : siteKeys) {
+            if (counted.contains(d) || d.equals(skipDomain)) continue;
+            boolean nested = false;
+            for (String parent : siteKeys) nested |= d.endsWith("." + parent);
+            if (nested) continue;
+            int l = sites.optJSONObject(d) == null ? 0 : sites.optJSONObject(d).optInt("limit", 0);
+            if (l > 0) total += l;
+        }
+        return total;
+    }
+
+    /** Najmanji podešeni limit (> 0) roditeljskih sajtova domena, ili 0. */
+    public synchronized int parentSiteLimit(String domain) {
+        Map<String, Integer> limits = new HashMap<>();
+        for (String d : keysOf(sites)) limits.put(d, sites.optJSONObject(d) == null ? 0 : sites.optJSONObject(d).optInt("limit", 0));
+        return DayLimit.parentLimit(domain, limits);
+    }
+
+    /** Granica za zbir limita aplikacija i sajtova. */
+    public synchronized int limitBudget() {
+        return DayLimit.budget(dayLimits.dayLimit());
     }
 
     /** Povezivanje važi odmah, a razdvajanje tek sutra od 06:00. */

@@ -39,8 +39,43 @@ public final class DayLimitTest {
         check(DayLimit.maxRaise(60) == 18, "1 h: +30 %");
         check(DayLimit.maxRaise(120) == 24, "2 h: +20 %");
         check(DayLimit.maxRaise(180) == 27, "3 h: +15 %");
-        check(DayLimit.maxRaise(240) == 24, "4 h: +10 %");
-        check(DayLimit.maxRaise(600) == 60, "10 h: +10 %");
+        check(DayLimit.maxRaise(240) == 0, "4 h je najviše: nema povećanja");
+        check(DayLimit.maxRaise(600) == 0, "Preko 4 h nema povećanja");
+        check(DayLimit.maxRaise(230) == 10, "Povećanje ne prelazi 4 h");
+        check(DayLimit.maxRaise(210) == 26, "3 h 30 min: +12,5 %");
+        for (int m = 1; m <= 300; m++) {
+            check(m + DayLimit.maxRaise(m) <= Math.max(m, DayLimit.MAX), "Povećanje nikad preko MAX");
+        }
+        for (int c : DayLimit.CHOICES) check(c <= DayLimit.MAX, "Izbor najviše 4 h");
+
+        // Gornja granica: stari 5 h postaje 4 h, isključen ostaje isključen.
+        check(DayLimit.clamp(300) == 240, "5 h postaje 4 h");
+        check(DayLimit.clamp(180) == 180, "3 h ostaje");
+        check(DayLimit.clamp(0) == 0, "Isključen ostaje 0");
+        check(DayLimit.budget(120) == 120, "Granica zbira je ukupni limit");
+        check(DayLimit.budget(0) == 240, "Bez ukupnog limita granica je 4 h");
+        check(DayLimit.budget(300) == 240, "Granica ni tada preko 4 h");
+
+        // Zbir limita aplikacija i sajtova ne sme preći granicu.
+        check(!DayLimit.allowedItemLimit(300, 0, 0, 120), "5 h na jednu aplikaciju uz ukupni 2 h");
+        check(DayLimit.allowedItemLimit(60, 0, 60, 120), "Druga aplikacija od 1 h staje u 2 h");
+        check(!DayLimit.allowedItemLimit(60, 0, 120, 120), "Treća aplikacija od 1 h ne staje");
+        check(DayLimit.allowedItemLimit(0, 60, 500, 120), "Bez limita uvek može");
+        check(DayLimit.allowedItemLimit(30, 60, 500, 120), "Smanjenje uvek može, i kad je zbir preko");
+        check(DayLimit.allowedItemLimit(60, 60, 500, 120), "Ista vrednost uvek može");
+        check(!DayLimit.allowedItemLimit(90, 60, 100, 120), "Povećanje preko granice ne može");
+        check(DayLimit.allowedItemLimit(20, 0, 100, 120), "Tačno do granice može");
+        Map<String, Integer> limits = new HashMap<>();
+        limits.put("youtube.com", 120);
+        limits.put("m.youtube.com", 60);
+        limits.put("reddit.com", 0);
+        limits.put("tube.com", 90);
+        check(DayLimit.parentLimit("music.m.youtube.com", limits) == 60, "Najmanji limit roditelja");
+        check(DayLimit.parentLimit("www.youtube.com", limits) == 120, "Roditelj youtube.com");
+        check(DayLimit.parentLimit("youtube.com", limits) == 0, "Sam sebi nije roditelj, tube.com nije roditelj");
+        check(DayLimit.parentLimit("old.reddit.com", limits) == 0, "Blokiran roditelj nema limit");
+        check(DayLimit.roomFor(100, 120) == 20, "Ostalo 20 min");
+        check(DayLimit.roomFor(500, 120) == 0, "Nema mesta, nikad negativno");
         for (int m = 1; m < 600; m++) {
             check(DayLimit.raisePercent(m + 1) <= DayLimit.raisePercent(m), "Procenat ne raste");
         }

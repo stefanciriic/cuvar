@@ -72,8 +72,12 @@ public final class DayLimits {
             int eff = DayLimit.effective(cur, store.sp.getInt("dayLimitNext", -1), from, today);
             if (from != null && today.compareTo(from) >= 0) {
                 store.sp.edit().putInt("dayLimit", eff).remove("dayLimitNext").remove("dayLimitFrom").apply();
+                cur = eff;
             }
-            return eff;
+            int max = DayLimit.clamp(eff);
+            // Limit preko najvećeg (npr. stari 5 h) odmah postaje 4 h: to je pooštravanje.
+            if (max != eff && cur == eff) store.sp.edit().putInt("dayLimit", max).apply();
+            return max;
         }
     }
 
@@ -99,7 +103,8 @@ public final class DayLimits {
     public boolean canRaiseDayLimit() {
         synchronized (store) {
             String d = store.day();
-            return dayLimit() > 0 && !d.equals(store.sp.getString("dayLimitRaised", null)) && !dayLimitHitToday();
+            int cur = dayLimit();
+            return cur > 0 && DayLimit.maxRaise(cur) > 0 && !d.equals(store.sp.getString("dayLimitRaised", null)) && !dayLimitHitToday();
         }
     }
 

@@ -10,8 +10,10 @@ import java.util.Map;
  * dnevno i samo za deo limita (što je limit veći, to manji deo), a isključivanje važi tek od sutra.
  */
 public final class DayLimit {
+    /** Najveći ukupni dnevni limit u minutima (4 h); ni povećanjem ne sme preko. */
+    public static final int MAX = 240;
     /** Ponuđene vrednosti u minutima. */
-    public static final int[] CHOICES = {60, 90, 120, 180, 240, 300};
+    public static final int[] CHOICES = {60, 90, 120, 180, 240};
     /** Predložena vrednost. */
     public static final int SUGGESTED = 180;
     /** Koliko pre isteka stiže upozorenje. */
@@ -32,10 +34,47 @@ public final class DayLimit {
         return 10;
     }
 
-    /** Najviše minuta koje danas sme da se doda limitu (0 ako limit nije uključen). */
+    /** Najviše minuta koje danas sme da se doda limitu (0 ako limit nije uključen ili je na MAX). */
     public static int maxRaise(int limitMin) {
-        if (limitMin <= 0) return 0;
-        return Math.max(1, (int) Math.round(limitMin * raisePercent(limitMin) / 100.0));
+        if (limitMin <= 0 || limitMin >= MAX) return 0;
+        int add = Math.max(1, (int) Math.round(limitMin * raisePercent(limitMin) / 100.0));
+        return Math.min(add, MAX - limitMin);
+    }
+
+    /** Limit ograničen na MAX (0 = isključen ostaje 0). */
+    public static int clamp(int min) {
+        return min > MAX ? MAX : min;
+    }
+
+    /** Granica za zbir limita aplikacija i sajtova: ukupni limit, a bez njega MAX. */
+    public static int budget(int dayLimitMin) {
+        return dayLimitMin > 0 ? Math.min(dayLimitMin, MAX) : MAX;
+    }
+
+    /**
+     * Da li sme da se sačuva limit stavke: bez limita, smanjenje ili isto uvek prolaze (i kad je zbir
+     * već preko), a povećanje samo ako zbir ostane u granici.
+     */
+    public static boolean allowedItemLimit(int wanted, int before, int othersSum, int budget) {
+        return wanted <= 0 || wanted <= before || othersSum + wanted <= budget;
+    }
+
+    /**
+     * Najmanji limit (> 0) roditeljskih sajtova domena sa liste, ili 0. Poddomen troši roditeljsko vreme,
+     * pa limit poddomena do te vrednosti ne povećava zbir.
+     */
+    public static int parentLimit(String domain, Map<String, Integer> siteLimits) {
+        int min = 0;
+        for (Map.Entry<String, Integer> e : siteLimits.entrySet()) {
+            int l = e.getValue() == null ? 0 : e.getValue();
+            if (l > 0 && domain.endsWith("." + e.getKey()) && (min == 0 || l < min)) min = l;
+        }
+        return min;
+    }
+
+    /** Koliko minuta još staje u granicu (za poruku). */
+    public static int roomFor(int othersSum, int budget) {
+        return Math.max(0, budget - othersSum);
     }
 
     /** Da li nova vrednost važi odmah: samo ako je strožija od trenutne. */
