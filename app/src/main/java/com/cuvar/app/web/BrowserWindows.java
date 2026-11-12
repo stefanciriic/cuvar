@@ -70,8 +70,15 @@ public final class BrowserWindows {
         return !hasNode(other.root, urlBarId);
     }
 
-    /** Other visible application windows; retain their roots to enforce website rules too. */
-    public List<AppWindow> otherAppWindows() {
+    /** Kad je napred naš ekran blokade: preskače se aktivan ili fokusiran prozor (aplikacija ispod blokade). */
+    public static final int FOCUSED = -2;
+
+    /**
+     * Ostali vidljivi prozori aplikacija; root se zadržava da bi se proverila i pravila sajtova.
+     * Preskače se samo prozor koji je check() već pročitao (frontWindowId); -1: nijedan.
+     * Na MIUI aktivan može biti početni ekran dok je fokusirana aplikacija sa pravilom, pa se fokus ne gleda.
+     */
+    public List<AppWindow> otherAppWindows(int frontWindowId) {
         List<AppWindow> out = new ArrayList<>();
         try {
             List<AccessibilityWindowInfo> apps = new ArrayList<>();
@@ -81,7 +88,7 @@ public final class BrowserWindows {
             // Samo jedna aplikacija na ekranu (uobičajeno): ne pita se aplikacija za sadržaj bez potrebe.
             if (apps.size() < 2) return out;
             for (AccessibilityWindowInfo w : apps) {
-                if (w.isActive() || w.isFocused()) continue;
+                if (frontWindowId == FOCUSED ? (w.isActive() || w.isFocused()) : w.getId() == frontWindowId) continue;
                 AccessibilityNodeInfo r = w.getRoot();
                 if (r == null || r.getPackageName() == null) continue;
                 String p = r.getPackageName().toString();

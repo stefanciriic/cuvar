@@ -55,6 +55,14 @@ public final class GuardDiagnostics {
                 + " @" + ErrorLog.frame(error));
     }
 
+    /** Beleška bez greške (npr. zavesa skinuta bez blokade); detail su samo šifre, nikad paket, adresa ni tekst. */
+    public static synchronized void note(String where, String type, String detail) {
+        if (log == null) return;
+        log.record(where, type, detail, now());
+        dirty = true;
+        if (SystemClock.elapsedRealtime() - savedAt >= SAVE_EVERY_MS) save(false);
+    }
+
     /** Neuhvaćen pad: upisuje se odmah (commit), jer proces posle toga nestaje. */
     public static synchronized void crash(Throwable error) {
         record("crash", error);
@@ -78,14 +86,16 @@ public final class GuardDiagnostics {
 
     private static void record(String operation, Throwable error) {
         if (log == null) return;
-        long now;
-        try {
-            now = clock.getAsLong();
-        } catch (Throwable ignored) {
-            now = System.currentTimeMillis(); // samo za prikaz u dnevniku, ne za pravila
-        }
-        log.record(operation, error, now);
+        log.record(operation, error, now());
         dirty = true;
+    }
+
+    private static long now() {
+        try {
+            return clock.getAsLong();
+        } catch (Throwable ignored) {
+            return System.currentTimeMillis(); // samo za prikaz u dnevniku, ne za pravila
+        }
     }
 
     private static void save(boolean now) {

@@ -560,8 +560,14 @@ public class GuardService extends AccessibilityService {
         if (overlayWindow == null || !overlayWindow.covered()) return;
         if (screen.overlay != null) {
             overlayWindow.uncoverAfterDraw(screen.overlay);
-        } else if (QuickCover.lift(seenUsable, seenPkg, coverPkg, SystemClock.elapsedRealtime() - coverAt)) {
+        } else {
+            long held = SystemClock.elapsedRealtime() - coverAt;
+            if (!QuickCover.lift(seenUsable, seenPkg, coverPkg, held)) return;
             overlayWindow.uncover();
+            // Beleška za dijagnostiku (Xiaomi): samo šifre, bez naziva paketa.
+            String seen = seenPkg == null ? "none" : seenPkg.equals(coverPkg) ? "same" : "other";
+            GuardDiagnostics.note("cover", "lifted", "seen=" + seen + " w=" + windows.appWindowCount()
+                    + " u=" + (usageOk ? 1 : 0) + " t=" + (held < QuickCover.LAG_MS ? "fast" : held < QuickCover.MAX_MS ? "mid" : "max"));
         }
     }
 
@@ -700,12 +706,14 @@ public class GuardService extends AccessibilityService {
         String pkg = null;
         // Dok je zavesa gore upravo se otvara aplikacija sa pravilom: prozor se mora pročitati.
         boolean covering = overlayWindow != null && overlayWindow.covered();
+        boolean fromForeground = false; // paket od Androida, prozor nije čitan
         if (usageOk && foreground != null && screen.overlay == null && !covering) {
             String fg = foreground.current();
             // Android ponekad kasni sa zapisom: ako je posle njega javila aplikacija sa pravilom, čita se prozor.
             if (fg != null && !TRANSPARENT.contains(fg) && kinds.quiet(fg)
                     && (kinds.handsOff(fg) || (foreground.since() > ruledSeenAt && windows.appWindowCount() < 2))) {
                 pkg = fg;
+                fromForeground = true;
             }
         }
         if (pkg == null) {
@@ -722,17 +730,26 @@ public class GuardService extends AccessibilityService {
         if (pkg == null && usageOk && foreground != null && screen.overlay == null && !covering) {
             // Prozor se ne može pročitati: koju je aplikaciju Android poslednju pokrenuo.
             String fg = foreground.current();
-            if (fg != null && kinds.quiet(fg)) pkg = fg;
+            if (fg != null && kinds.quiet(fg)) {
+                pkg = fg;
+                fromForeground = true;
+            }
         }
+        // Pročitan prednji prozor se ne proverava ponovo među ostalima; fokusiran prozor se ipak proverava
+        // (MIUI: aktivan je početni ekran, a fokusirana aplikacija sa pravilom). Naš ekran napred ili paket
+        // od Androida bez čitanja prozora: kao ranije, da se prozor Mapa i sl. nikad ne čita.
+        int frontId = fromForeground ? BrowserWindows.FOCUSED : root == null ? -1
+                : root.getPackageName() != null && getPackageName().equals(root.getPackageName().toString())
+                ? BrowserWindows.FOCUSED : root.getWindowId();
         seenUsable = true;
         if (pkg != null && !TRANSPARENT.contains(pkg)) seenPkg = kinds.cloneOf(pkg);
         if (pkg == null || TRANSPARENT.contains(pkg)) {
-            blockOtherWindows();
+            blockOtherWindows(frontId);
             return;
         }
         boolean quiet = screen.overlay == null && kinds.quiet(pkg) && (kinds.handsOff(pkg) || windows.appWindowCount() < 2);
         if (!quiet && root == null) {
-            blockOtherWindows();
+            blockOtherWindows(frontId);
             return;
         }
         // Ceo vrh ekrana (sa delom sadržaja) treba samo za pregledač unutar aplikacije, gde se adresa traži po ekranu.
@@ -800,7 +817,7 @@ public class GuardService extends AccessibilityService {
             currentHost = null;
             currentAddress = null;
             setContentEvents(false);
-            if (!blockOtherWindows()) screen.hideOverlay();
+            if (!blockOtherWindows(frontId)) screen.hideOverlay();
             return;
         }
 
@@ -826,7 +843,7 @@ public class GuardService extends AccessibilityService {
             currentAddress = null;
             pendingOpen = null;
             setContentEvents(false);
-            if (!blockOtherWindows()) screen.hideOverlay();
+            if (!blockOtherWindows(frontId)) screen.hideOverlay();
             return;
         }
 
@@ -872,7 +889,7 @@ public class GuardService extends AccessibilityService {
 
         // Svaki prozor na ekranu se proverava i kad druga blokada pobeđuje, da se izmeri vreme svih vidljivih sajtova.
         windowHosts.put(raw, currentHost);
-        blocks.addAll(BlockRules.windows(facts, otherWindows(raw, urlBarId, addressRoot), this::unlockedNow));
+        blocks.addAll(BlockRules.windows(facts, otherWindows(raw, urlBarId, addressRoot, frontId), this::unlockedNow));
         setContentEvents(wantsContent(pkg) || inApp || !secondaryContentPackages.isEmpty());
 
         // Otključavanje dnevnom šifrom važi 5 minuta, a zatim sat vremena nema otključavanja (vidi Store),
@@ -912,10 +929,13 @@ public class GuardService extends AccessibilityService {
     }
 
     /** Ostali prozori na ekranu (podeljen ekran, plutajući prozor): aplikacija i sajt koji se u njima vidi. */
-    private List<BlockRules.Window> otherWindows(String raw, String urlBarId, AccessibilityNodeInfo addressRoot) {
+    private List<BlockRules.Window> otherWindows(String raw, String urlBarId, AccessibilityNodeInfo addressRoot,
+                                                 int frontId) {
         List<BlockRules.Window> others = new ArrayList<>();
-        for (BrowserWindows.AppWindow other : windows.otherAppWindows()) {
+        for (BrowserWindows.AppWindow other : windows.otherAppWindows(frontId)) {
             if (BrowserWindows.isSameBrowserWindow(other, raw, urlBarId, addressRoot)) continue;
+            // Ekran poziva i navigacija (Mape) prolaze kao napred: ne blokiraju se ni kad su u drugom prozoru.
+            if (callPasses(other.pkg, other.rawPkg) || kinds.handsOff(other.rawPkg)) continue;
             String id = BrowserMonitor.addressViewId(other.pkg);
             boolean embedded = id == null && kinds.inAppBrowser(other.rawPkg);
             if (id != null || embedded) secondaryContentPackages.add(other.rawPkg);
@@ -938,14 +958,14 @@ public class GuardService extends AccessibilityService {
     /**
      * Prozor napred se ne čita (nepoznat, sistemski, aplikacija bez pravila, poziv), ali u podeljenom ekranu
      * druga polovina se ipak proverava: inače bi se blokirana aplikacija tu koristila bez blokade.
-     * Vraća true kad je prikazana blokada.
+     * Vraća true kad je prikazana blokada. frontId: već pročitan prozor (vidi otherAppWindows).
      */
-    private boolean blockOtherWindows() {
+    private boolean blockOtherWindows(int frontId) {
         if (windows.appWindowCount() < 2) return false;
         visibleHosts.clear();
         secondaryContentPackages.clear();
         windowHosts.clear();
-        Block show = BlockKind.pick(BlockRules.windows(facts, otherWindows(null, null, null), this::unlockedNow), this::unlockedNow);
+        Block show = BlockKind.pick(BlockRules.windows(facts, otherWindows(null, null, null, frontId), this::unlockedNow), this::unlockedNow);
         if (show == null) return false;
         long coolLeft = hard(show.kind) ? 0 : store.unlock.cooldownLeft(show.key);
         screen.showOverlay(show.key, show.kind, show.rule, coolLeft > 0, show.code, blockBounds(show.key));
