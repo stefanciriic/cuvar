@@ -13,7 +13,7 @@ import java.util.Random;
 public final class NumberGame {
     public static final int SIDE = 5;
     public static final int SIZE = SIDE * SIDE;
-    public static final long TIME_MS = 45_000L;
+    public static final long TIME_MS = 35_000L;
 
     public enum Tap { OK, WRONG, DONE, LATE, IGNORED }
 

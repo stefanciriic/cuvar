@@ -9,11 +9,11 @@ public final class UnlockCostTest {
 
     public static void main(String[] args) {
         UnlockCost a = UnlockCost.next(0);
-        check(a.side == 5 && a.timeMs == 45_000L && a.answers == 1, "Prvo otključavanje");
+        check(a.side == 5 && a.timeMs == 35_000L && a.answers == 1, "Prvo otključavanje");
         UnlockCost b = UnlockCost.next(1);
-        check(b.side == 6 && b.timeMs == 60_000L && b.answers == 2, "Drugo je teže");
+        check(b.side == 6 && b.timeMs == 50_000L && b.answers == 2, "Drugo je teže");
         UnlockCost c = UnlockCost.next(2);
-        check(c.side == 6 && c.timeMs == 50_000L && c.timeMs < b.timeMs && c.answers == 3, "Treće je najteže");
+        check(c.side == 6 && c.timeMs == 42_000L && c.timeMs < b.timeMs && c.answers == 3, "Treće je najteže");
         check(UnlockCost.next(UnlockCost.MAX) == null, "Posle MAX nema otključavanja");
         check(UnlockCost.next(-1).side == 5, "Negativan broj");
         check(UnlockCost.emergency(7) != null && UnlockCost.emergency(7).side == 6, "Hitno uvek ima cenu");

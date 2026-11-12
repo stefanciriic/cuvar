@@ -22,9 +22,9 @@ public final class UnlockCost {
     public static UnlockCost next(int done) {
         if (done < 0) done = 0;
         if (done >= MAX) return null;
-        if (done == 0) return new UnlockCost(5, 45_000L, 1);
-        if (done == 1) return new UnlockCost(6, 60_000L, 2);
-        return new UnlockCost(6, 50_000L, 3);
+        if (done == 0) return new UnlockCost(5, 35_000L, 1);
+        if (done == 1) return new UnlockCost(6, 50_000L, 2);
+        return new UnlockCost(6, 42_000L, 3);
     }
 
     /** Hitno otključavanje ima svoje ograničenje, pa i posle MAX dobija najtežu igricu. */
