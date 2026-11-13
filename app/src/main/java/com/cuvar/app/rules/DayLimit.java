@@ -4,9 +4,9 @@ import java.util.Collection;
 import java.util.Map;
 
 /**
- * Ukupni dnevni limit: zajedničko vreme za sve aplikacije i sajtove sa pravilima. Vreme u ostalim
- * aplikacijama (mape, pozivi, poruke...) ga ne troši. Kad se pređe, aplikacije i sajtovi sa pravilima
- * su zaključani do ponoći bez ikakvog otključavanja. Smanjenje važi odmah, povećanje je moguće jednom
+ * Ukupni dnevni limit: zajedničko vreme za sve aplikacije i sajtove sa sopstvenim pravilom (ne samo
+ * u režimu). Vreme u ostalim aplikacijama (mape, pozivi, poruke...) ga ne troši. Kad se pređe, te
+ * aplikacije i sajtovi su zaključani do ponoći bez ikakvog otključavanja. Smanjenje važi odmah, povećanje je moguće jednom
  * dnevno i samo za deo limita (što je limit veći, to manji deo), a isključivanje važi tek od sutra.
  */
 public final class DayLimit {
@@ -111,6 +111,24 @@ public final class DayLimit {
             if (!nested) total += day.getOrDefault(ItemKey.site(site), 0L);
         }
         return total;
+    }
+
+    /**
+     * Da li ukupni limit troši i zaključava aplikaciju: ima sopstveno pravilo za ceo dan (zaključaj, limit,
+     * otvaranja, u komadu, ili povezan sajt sa pravilom) a nije van ukupnog limita, ili je pregledač/kloner
+     * koji se ne prati. Njega izuzetak ne oslobađa: u njemu se ne vidi sajt ni kopija, pa bi skinuo limit sa svega.
+     * Aplikacija samo u režimu nije pod ukupnim limitom.
+     */
+    public static boolean coversApp(boolean ownRule, boolean unwatched, boolean free) {
+        return (ownRule && !free) || unwatched;
+    }
+
+    /**
+     * Da li izuzimanje aplikacije iz ukupnog limita važi odmah: jedna aplikacija dnevno (usedDay/usedPkg je
+     * poslednje izuzimanje odmah). Istog dana ista aplikacija može ponovo, ostale čekaju 06:00.
+     */
+    public static boolean freeNow(String usedDay, String usedPkg, String today, String pkg) {
+        return today == null || !today.equals(usedDay) || (pkg != null && pkg.equals(usedPkg));
     }
 
     /** "3 h", "1 h 30 min" ili "Isključen". */

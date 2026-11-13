@@ -62,11 +62,13 @@ public abstract class SubActivity extends Activity {
     }
 
     /**
-     * Kad je dnevni limit potrošen ili traje noćna blokada, aplikacija bez pravila se zaključava čim dobije pravilo,
-     * a pravilo se skida tek sutra. Zato se pre toga pita, da se to ne desi slučajno.
+     * Kad traje noćna blokada, aplikacija bez pravila se zaključava čim dobije pravilo; kad je ukupni limit potrošen,
+     * čim dobije sopstveno pravilo ili režim sa šifrom (režim bez šifre ne). Pravilo se skida tek sutra, pa se pre toga
+     * pita, da se to ne desi slučajno. adding: ostaje neko pravilo (i režim); ownRule: sopstveno pravilo ili režim sa šifrom.
      */
-    protected void saveGuarding(String pkg, String label, boolean adding, Runnable save) {
-        String why = adding && !store.appGuarded(pkg) ? store.dayLimits.lockedOnceGuarded() : null;
+    protected void saveGuarding(String pkg, String label, boolean adding, boolean ownRule, Runnable save) {
+        String why = store.dayLimits.lockedOnceGuarded(adding && !store.appGuarded(pkg),
+                ownRule && !store.dayLimitApp(pkg) && !store.dayLimitFree(pkg));
         if (why == null) {
             save.run();
             return;

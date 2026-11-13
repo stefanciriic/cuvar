@@ -2,6 +2,7 @@ package com.cuvar.app.guard;
 
 import com.cuvar.app.GuardService;
 import com.cuvar.app.R;
+import com.cuvar.app.rules.DayLimit;
 import com.cuvar.app.web.BrowserMonitor;
 import com.cuvar.app.web.Hosts;
 import com.cuvar.app.web.WebAddress;
@@ -65,6 +66,11 @@ public final class AppKinds {
     /** Aplikacija sa pravilom, ili pregledač koji Čuvar ne prati dok postoje pravila za sajtove. */
     public boolean guarded(String p) {
         return svc.store.appGuarded(p) || unknownBrowser(p) || cloner(p);
+    }
+
+    /** Aplikacija koju troši i zaključava ukupni dnevni limit; samo u režimu nije (vidi DayLimit.coversApp). */
+    public boolean dayGuarded(String p) {
+        return DayLimit.coversApp(svc.store.dayLimitApp(p), unknownBrowser(p) || cloner(p), svc.store.dayLimitFree(p));
     }
 
     /**

@@ -64,7 +64,7 @@ public class RulesActivity extends SubActivity {
         how.setOnClickListener(v -> new Sheet(this, "Kako se pravila slažu").message(
                 "1. Režim je najjači: u svom periodu blokira i ne može da se otključa.\n"
                 + "2. Ostatak dana: zaključano se otvara samo dnevnom šifrom (17:00 do 22:00), a potrošen limit se ne otvara do ponoći.\n"
-                + "3. Ukupni dnevni limit broji samo vreme u ovim stavkama; kad se potroši, zaključava ih sve do ponoći.\n"
+                + "3. Ukupni dnevni limit broji samo vreme u stavkama sa sopstvenim pravilom (zaključaj, limit, otvaranja...) ili u režimu sa dnevnom šifrom, ne u onima koje su samo u režimu bez šifre; kad se potroši, zaključava ih do ponoći.\n"
                 + "4. Strože pravilo važi odmah, a blaže tek sutra od 06:00.\n"
                 + "5. Noću je zaključano samo ono što je u režimu „Noćno zaključavanje“.\n"
                 + "6. Ručni Fokus je zaseban: dok traje, dozvoljene su samo izabrane aplikacije i sajtovi.")
@@ -461,7 +461,7 @@ public class RulesActivity extends SubActivity {
         }
         final boolean wasDayFree = store.dayFree().contains(pkg);
         final CheckRow dayFree = new CheckRow(this, null, "Van ukupnog dnevnog limita",
-                "Vreme u njoj ne troši ukupni limit i ne zaključava se kad on istekne; ostala pravila važe (od sutra u 06:00)");
+                "Vreme u njoj ne troši ukupni limit i ne zaključava se kad on istekne; ostala pravila važe. Jedna aplikacija dnevno odmah, ostale od sutra u 06:00");
         dayFree.setChecked(wasDayFree);
         box.addView(dayFree, Ui.fill(this, 10));
         box.addView(Sheet.label(this, "Dnevni limit u minutima (0 = bez limita)"), Ui.fill(this, 14));
@@ -506,12 +506,23 @@ public class RulesActivity extends SubActivity {
                         siteBox.setError("Unesi adresu sajta, npr. linkedin.com");
                         return false;
                     }
-                    boolean adding = wantLock || wantLimit > 0 || wantOpens > 0 || wantSession > 0;
-                    for (CheckRow r : rows) adding |= r.isChecked();
+                    boolean ownRule = wantLock || wantLimit > 0 || wantOpens > 0 || wantSession > 0;
+                    boolean adding = ownRule;
+                    for (int i = 0; i < rows.size(); i++) {
+                        adding |= rows.get(i).isChecked();
+                        // Režim sa dnevnom šifrom drži aplikaciju ceo dan, pa je i on pod ukupnim limitom.
+                        DailySchedule.Rule r = rules.get(i);
+                        ownRule |= rows.get(i).isChecked() && r.enabled && r.code;
+                    }
                     if (calls.isChecked() != store.callsPass(pkg)) store.setCallsPass(pkg, calls.isChecked());
                     if (codeFree != null && codeFree.isChecked() != wasCodeFree) store.setCodeFree(pkg, codeFree.isChecked());
-                    if (dayFree.isChecked() != wasDayFree) store.setDayFree(pkg, dayFree.isChecked());
-                    saveGuarding(pkg, label, adding, () -> {
+                    if (dayFree.isChecked() != wasDayFree) {
+                        boolean freeNow = store.setDayFree(pkg, dayFree.isChecked());
+                        if (dayFree.isChecked()) {
+                            Ui.toast(this, label + (freeNow ? " je odmah van ukupnog limita" : " je van ukupnog limita od sutra u 06:00"));
+                        }
+                    }
+                    saveGuarding(pkg, label, adding, ownRule, () -> {
                         if (!java.util.Objects.equals(wantSite, dom)) store.setLink(pkg, wantSite);
                         saveRules(rules, rows, pkg, false);
                         // Odštiklan režim skida i sajt, ako je bio u njemu.

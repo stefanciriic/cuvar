@@ -20,11 +20,14 @@ najviše otvaranja, najduže u komadu, ili je u **uključenom** vremenskom reži
 (bez obzira da li režim sada traje). Sajt je pod pravilom ako je na listi sajtova
 ili u uključenom režimu (pokriva i poddomene).
 
-To je važno jer se dva pravila odnose na sve što je pod pravilom, **i van
-perioda režima**:
+To je važno jer se kratka pauza od 6 s pre svakog otvaranja odnosi na sve što
+je pod pravilom, **i van perioda režima**.
 
-- ukupni dnevni limit (to vreme se sabira),
-- kratka pauza od 6 s pre svakog otvaranja.
+Ukupni dnevni limit drži samo stavke sa **sopstvenim** pravilom: aplikaciju sa
+zaključavanjem, limitom, otvaranjima ili "u komadu" (i aplikaciju čiji povezani
+sajt ima pravilo) i sajt sa liste sajtova. Režim sa dnevnom šifrom drži stavku
+ceo dan, pa se računa kao sopstveno pravilo. Ono što je samo u režimu bez šifre
+ne troši ukupni limit i ne zaključava se kad on istekne; drži ga režim u svom periodu.
 
 Nikad se ne blokiraju: telefon (dialer), SMS aplikacija, početni ekran i sam Čuvar.
 
@@ -67,11 +70,14 @@ Pravila → "Aplikacije, sajtovi i režimi" je jedini ekran za ovo:
   (gotov režim, 22:00–06:00, dodaje se na ekranu Pravila). Kao svaki režim, ne
   otključava se ničim. Opšta "Noćna blokada" koja je zaključavala sve iz pravila
   ukinuta je 11. 11. 2026 (poslednji put je važila te noći do 06:00).
-- **Ukupni dnevni limit**: zbir vremena svega što je pod pravilom. Kad se potroši,
-  sve pod pravilom je zaključano do ponoći, bez otključavanja. Može da se poveća
+- **Ukupni dnevni limit**: zbir vremena u stavkama sa sopstvenim pravilom (ne
+  onih koje su samo u režimu bez šifre, vidi 1.; ni aplikacija označenih "Van ukupnog
+  dnevnog limita"). Kad se potroši, te stavke su zaključane do ponoći, bez otključavanja. Može da se poveća
   jednom dnevno i samo dok nije potrošen (do 1 h za 30 %, 2 h za 20 %, od 4 h za
   10 %); povećanje ostaje i sledećih dana. Smanjenje važi odmah, isključivanje od
-  sutra.
+  sutra. "Van ukupnog dnevnog limita" (u pravilima aplikacije) važi odmah, i kad je
+  limit već potrošen, ali za samo jednu aplikaciju dnevno (dan po pouzdanom satu,
+  od ponoći); ostale izuzete aplikacije čekaju sutra 06:00. Vraćanje u limit važi odmah.
 - **Fokus**: ručno pokrenut period u kome rade samo izabrane aplikacije i sajtovi
   (i telefon/SMS). Ne otključava se šifrom, ali može da se zaustavi u Čuvaru.
 - **Zaštita od isključivanja** (opciono): zatvara ekrane podešavanja na kojima bi
@@ -145,9 +151,8 @@ Zahtev dat između ponoći i 06:00 pita isti kalendarski dan od 08:00
 
 ### 10. Otvorena pitanja (predlozi, još nisu odlučeni)
 
-1. Aplikacija koja je samo u režimu troši ukupni limit i dobija pauzu od 6 s
-   i van režima (vidi 1.). Da li to treba da važi samo za stavke sa sopstvenim
-   pravilom?
+1. Aplikacija koja je samo u režimu i van režima dobija pauzu od 6 s. Da li
+   pauza treba da važi samo za stavke sa sopstvenim pravilom?
 2. Povećanje ukupnog limita ostaje zauvek, pa limit može da raste iz dana u dan.
    Predlog: povećanje samo za danas.
 3. "Hitno otključavanje" radi samo 17–22 i uz šifru, pa nije hitno: samo

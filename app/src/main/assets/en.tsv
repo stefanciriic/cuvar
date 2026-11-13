@@ -260,11 +260,11 @@ Svaki dan dobijaš jednu novu šifru u 	Every day you get one new code at
 Današnja šifra. Jedino ona otključava zaključane aplikacije i sajtove, i to samo do 	Today's code. Only it unlocks locked apps and sites, and only until 
  Sutra u 	 Tomorrow at 
 :00 dobijaš novu.	:00 you get a new one.
-Zajedničko vreme za sve iz tvojih pravila; kad ga potrošiš, zaključano je do ponoći	Shared time for everything in your rules; when it's used up, it's locked until midnight
- za sve iz tvojih pravila, posle toga ništa ne otključava	 for everything in your rules, after that nothing unlocks
+Zajedničko vreme za aplikacije i sajtove sa sopstvenim pravilom (ne samo u režimu bez šifre); kad ga potrošiš, zaključani su do ponoći	Shared time for apps and sites with their own rule (not only in a mode without a code); when it's used up, they're locked until midnight
+ za aplikacije i sajtove sa sopstvenim pravilom, posle toga ništa ne otključava	 for apps and sites with their own rule, after that nothing unlocks
  · isključuje se od sutra	 · turns off from tomorrow
-Računa se samo vreme u aplikacijama i na sajtovima koji imaju pravilo 	Only time in apps and sites that have a rule counts 
-(zaključani, ograničeni ili u režimu). Mape, pozivi, poruke i sve ostalo bez pravila ne troši limit. 	(locked, limited or in a mode). Maps, calls, messages and everything else without a rule don't use the limit. 
+Računa se samo vreme u aplikacijama i na sajtovima sa sopstvenim pravilom 	Only time in apps and sites with their own rule counts 
+(zaključani, ograničeni, otvaranja, u komadu ili u režimu sa dnevnom šifrom). Ono što je samo u režimu bez šifre, mape, pozivi i sve ostalo ne troši limit. 	(locked, limited, max opens, longest session or in a mode with the daily code). What is only in a mode without a code, maps, calls and everything else don't use the limit. 
 Kad se limit potroši, sve zaključane i ograničene aplikacije i sajtovi ostaju zaključani 	When the limit is used up, all locked and limited apps and sites stay locked 
 do ponoći: bez dnevne šifre i hitnog otključavanja. Upozorenje stiže 	until midnight: no daily code and no emergency unlock. A warning comes 
  min ranije.\n\n	 min before.\n\n
@@ -430,7 +430,7 @@ Kako se pravila slažu  ›	How rules combine  ›
 Kako se pravila slažu	How rules combine
 1. Režim je najjači: u svom periodu blokira i ne može da se otključa.\n	1. A mode is the strongest: in its period it blocks and can't be unlocked.\n
 2. Ostatak dana: zaključano se otvara samo dnevnom šifrom (17:00 do 22:00), a potrošen limit se ne otvara do ponoći.\n	2. Rest of the day: locked items open only with the daily code (17:00 to 22:00), and a used-up limit doesn't open until midnight.\n
-3. Ukupni dnevni limit broji samo vreme u ovim stavkama; kad se potroši, zaključava ih sve do ponoći.\n	3. The total daily limit counts only time in these items; when used up, it locks all of them until midnight.\n
+3. Ukupni dnevni limit broji samo vreme u stavkama sa sopstvenim pravilom (zaključaj, limit, otvaranja...) ili u režimu sa dnevnom šifrom, ne u onima koje su samo u režimu bez šifre; kad se potroši, zaključava ih do ponoći.\n	3. The total daily limit counts only time in items with their own rule (lock, limit, opens...) or in a mode with the daily code, not in those that are only in a mode without a code; when used up, it locks them until midnight.\n
 4. Strože pravilo važi odmah, a blaže tek sutra od 06:00.\n	4. A stricter rule applies now, a looser one only from 06:00 tomorrow.\n
 5. Od 22:00 do 06:00 sve ovo je zaključano (noćna blokada).\n	5. From 22:00 to 06:00 all of this is locked (night block).\n
 6. Ručni Fokus je zaseban: dok traje, dozvoljene su samo izabrane aplikacije i sajtovi.	6. Manual Focus is separate: while it lasts, only the chosen apps and sites are allowed.
@@ -796,5 +796,7 @@ Limit je na najvišem (	Limit is at its maximum (
 Limiti aplikacija i sajtova zajedno: 	App and site limits together: 
 , više od ukupnog limita.	, more than the total limit.
 Van ukupnog dnevnog limita	Outside the total daily limit
-Vreme u njoj ne troši ukupni limit i ne zaključava se kad on istekne; ostala pravila važe (od sutra u 06:00)	Time in it does not use the total limit and it is not locked when the limit runs out; other rules still apply (from tomorrow at 06:00)
+Vreme u njoj ne troši ukupni limit i ne zaključava se kad on istekne; ostala pravila važe. Jedna aplikacija dnevno odmah, ostale od sutra u 06:00	Time in it doesn't use the total limit and it isn't locked when the limit runs out; other rules still apply. One app per day right away, others from tomorrow at 06:00
 : van ukupnog dnevnog limita	: outside the total daily limit
+ je odmah van ukupnog limita	 is now outside the total limit
+ je van ukupnog limita od sutra u 06:00	 is outside the total limit from tomorrow at 06:00

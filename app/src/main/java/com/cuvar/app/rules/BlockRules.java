@@ -18,14 +18,16 @@ public final class BlockRules {
     public interface Facts {
         /** Telefon, SMS, početni ekran: nikad se ne blokiraju. */
         boolean exempt(String pkg);
-        /** Aplikacija pod pravilima (za dnevni limit i noć). */
+        /** Aplikacija pod nekim pravilom, i samo u režimu (za noć). */
         boolean guarded(String pkg);
         boolean dayLimitReached();
-        /** Aplikacija van ukupnog dnevnog limita (sajt sa pravilom u njoj i dalje ga poštuje). */
-        boolean dayFree(String pkg);
+        /** Aplikacija pod ukupnim dnevnim limitom: sopstveno pravilo za ceo dan i nije van limita (vidi DayLimit.coversApp). */
+        boolean dayGuarded(String pkg);
+        /** Domen sa liste sajtova (ne samo iz režima) koji pokriva host, ili null: pod ukupnim limitom. */
+        String daySite(String host);
         boolean nightActive();
         boolean nightBlocksApp(String pkg);
-        /** Domen sa pravilom koji pokriva host, ili null. */
+        /** Domen sa pravilom (lista ili režim) koji pokriva host, ili null. */
         String siteGuarded(String host);
         boolean focusActive();
         boolean focusAllowsApp(String pkg);
@@ -96,8 +98,8 @@ public final class BlockRules {
         boolean web = s.browsing && s.host != null;
         boolean exempt = f.exempt(pkg);
         if (f.dayLimitReached() && !exempt) {
-            String site = web ? f.siteGuarded(s.host) : null;
-            if (f.guarded(pkg) && !f.dayFree(pkg)) {
+            String site = web ? f.daySite(s.host) : null;
+            if (f.dayGuarded(pkg)) {
                 out.add(new Block(appKey, BlockKind.DAY, null, false));
             } else if (site != null) {
                 out.add(new Block(ItemKey.site(site), BlockKind.DAY, null, false));
@@ -173,7 +175,7 @@ public final class BlockRules {
         if (f.exempt(p)) return null;
         String k = ItemKey.app(p);
         Block b = null;
-        if (f.guarded(p) && f.dayLimitReached() && !f.dayFree(p)) {
+        if (f.dayLimitReached() && f.dayGuarded(p)) {
             b = new Block(k, BlockKind.DAY, null, false);
         } else if (f.guarded(p) && f.nightBlocksApp(p)) {
             b = new Block(k, BlockKind.NIGHT, null, false);
@@ -209,10 +211,11 @@ public final class BlockRules {
 
     /** Sajt u drugom prozoru: dnevni limit, noć, režim ili šifra, pa limit sajta. */
     static void windowSite(Facts f, List<Block> out, String pkg, String host) {
-        String guardedSite = f.siteGuarded(host);
-        if (guardedSite != null && !f.exempt(pkg)) {
-            if (f.dayLimitReached()) out.add(new Block(ItemKey.site(guardedSite), BlockKind.DAY, null, false));
-            if (f.nightActive()) out.add(new Block(ItemKey.site(guardedSite), BlockKind.NIGHT, null, false));
+        if (!f.exempt(pkg)) {
+            String daySite = f.dayLimitReached() ? f.daySite(host) : null;
+            if (daySite != null) out.add(new Block(ItemKey.site(daySite), BlockKind.DAY, null, false));
+            String guardedSite = f.nightActive() ? f.siteGuarded(host) : null;
+            if (guardedSite != null) out.add(new Block(ItemKey.site(guardedSite), BlockKind.NIGHT, null, false));
         }
         DailySchedule.Rule rule = f.scheduleSite(host);
         if (rule != null) {

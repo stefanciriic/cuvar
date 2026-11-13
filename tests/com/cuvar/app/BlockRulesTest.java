@@ -4,6 +4,7 @@ import com.cuvar.app.rules.BlockKind;
 import com.cuvar.app.rules.BlockKind.Block;
 import com.cuvar.app.rules.BlockRules;
 import com.cuvar.app.rules.DailySchedule;
+import com.cuvar.app.rules.DayLimit;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -25,6 +26,8 @@ public final class BlockRulesTest {
         boolean dayReached, night, focus, hasSiteRules, hardSite;
         Set<String> nightFree = new HashSet<>();
         Set<String> dayFree = new HashSet<>();
+        Set<String> modeOnly = new HashSet<>();   // aplikacije samo u režimu (bez sopstvenog pravila)
+        Set<String> modeSites = new HashSet<>();  // sajtovi samo u režimu (nisu na listi)
         Set<String> focusApps = new HashSet<>();
         Set<String> focusSites = new HashSet<>();
         Set<String> onBreak = new HashSet<>();
@@ -42,10 +45,25 @@ public final class BlockRulesTest {
         @Override public boolean exempt(String pkg) { return exempt.contains(pkg); }
         @Override public boolean guarded(String pkg) { return guarded.contains(pkg); }
         @Override public boolean dayLimitReached() { return dayReached; }
-        @Override public boolean dayFree(String pkg) { return dayFree.contains(pkg); }
+        @Override public boolean dayGuarded(String pkg) {
+            // Režim sa dnevnom šifrom se računa kao sopstveno pravilo (drži ceo dan).
+            boolean own = (guarded.contains(pkg) && !modeOnly.contains(pkg)) || codeApp(pkg) != null;
+            return DayLimit.coversApp(own,
+                    unknownBrowsers.contains(pkg) || cloners.contains(pkg), dayFree.contains(pkg));
+        }
+        @Override public String daySite(String host) {
+            String listed = DailySchedule.matchDomain(host, siteLimits.keySet());
+            if (listed != null) return listed;
+            DailySchedule.Rule code = codeSite(host);
+            return code == null ? null : DailySchedule.matchDomain(host, code.sites);
+        }
         @Override public boolean nightActive() { return night; }
         @Override public boolean nightBlocksApp(String pkg) { return night && guarded.contains(pkg) && !nightFree.contains(pkg); }
-        @Override public String siteGuarded(String host) { return DailySchedule.matchDomain(host, siteLimits.keySet()); }
+        @Override public String siteGuarded(String host) {
+            Set<String> all = new HashSet<>(siteLimits.keySet());
+            all.addAll(modeSites);
+            return DailySchedule.matchDomain(host, all);
+        }
         @Override public boolean focusActive() { return focus; }
         @Override public boolean focusAllowsApp(String pkg) { return focus && focusApps.contains(pkg); }
         @Override public boolean focusAllowsSite(String host) { return focus && DailySchedule.matchDomain(host, focusSites) != null; }
@@ -85,6 +103,7 @@ public final class BlockRulesTest {
         exemptNeverBlocked();
         priority();
         dayFree();
+        modeOnly();
         appRules();
         schedules();
         sites();
@@ -174,6 +193,70 @@ public final class BlockRulesTest {
                 "Sajt bez pravila u izuzetom pregledaču nema DAY");
         f.night = true;
         check(kinds(BlockRules.front(f, app("com.whatsapp"))).contains(BlockKind.NIGHT), "Noć i dalje važi za izuzetu aplikaciju");
+    }
+
+    /** Ukupni limit drži samo stavke sa sopstvenim pravilom; ono što je samo u režimu drži režim (i noć). */
+    private static void modeOnly() {
+        Fake f = new Fake();
+        f.dayReached = true;
+        f.guarded.add("com.whatsapp");
+        f.modeOnly.add("com.whatsapp");
+        check(BlockRules.front(f, app("com.whatsapp")).isEmpty(), "Aplikacija samo u režimu nema DAY");
+        check(BlockRules.appOnly(f, "com.whatsapp", k -> false) == null, "Aplikacija samo u režimu u drugom prozoru nema DAY");
+        f.night = true;
+        check(kinds(BlockRules.front(f, app("com.whatsapp"))).equals(Collections.singletonList(BlockKind.NIGHT)),
+                "Noću je i dalje drži noćni režim");
+        check(BlockRules.appOnly(f, "com.whatsapp", k -> false).kind == BlockKind.NIGHT, "Noć i u drugom prozoru");
+        f.night = false;
+        f.activeRules.add(rule("r", "com.whatsapp"));
+        check(kinds(BlockRules.front(f, app("com.whatsapp"))).equals(Collections.singletonList(BlockKind.SCHEDULE)),
+                "U svom periodu je drži režim, ne ukupni limit");
+
+        f.guarded.add("com.game");
+        f.appLimits.put("com.game", 30);
+        check(kinds(BlockRules.front(f, app("com.game"))).contains(BlockKind.DAY), "Aplikacija sa limitom ima DAY");
+        f.guarded.add("com.insta");
+        f.locked.add("com.insta");
+        check(BlockRules.appOnly(f, "com.insta", k -> true).kind == BlockKind.DAY, "Zaključana aplikacija ima DAY");
+        f.dayFree.add("com.insta");
+        check(BlockRules.appOnly(f, "com.insta", k -> false).kind == BlockKind.LOCK, "Van ukupnog limita ostaje samo zaključavanje");
+        f.unknownBrowsers.add("org.unknown");
+        check(kinds(BlockRules.front(f, app("org.unknown"))).contains(BlockKind.DAY), "Nepoznat pregledač i dalje ima DAY");
+        f.dayFree.add("org.unknown");
+        f.cloners.add("com.clone");
+        f.dayFree.add("com.clone");
+        check(kinds(BlockRules.front(f, app("org.unknown"))).contains(BlockKind.DAY), "Izuzet nepoznat pregledač i dalje ima DAY");
+        check(BlockRules.appOnly(f, "com.clone", k -> true).kind == BlockKind.DAY, "Izuzet kloner i dalje ima DAY");
+
+        Fake s = new Fake();
+        s.dayReached = true;
+        s.modeSites.add("reddit.com");
+        s.siteLimits.put("youtube.com", 30);
+        check(BlockRules.front(s, browser("com.android.chrome", "reddit.com")).isEmpty(), "Sajt samo u režimu nema DAY");
+        List<Block> b = BlockRules.front(s, browser("com.android.chrome", "youtube.com"));
+        check(kinds(b).contains(BlockKind.DAY) && b.get(0).key.equals("site:youtube.com"), "Sajt sa liste ima DAY");
+        check(BlockRules.windows(s, Collections.singletonList(new BlockRules.Window("com.android.chrome", "reddit.com", false, false)),
+                k -> false).isEmpty(), "Sajt samo u režimu u drugom prozoru nema DAY");
+        check(kinds(BlockRules.windows(s, Collections.singletonList(new BlockRules.Window("com.android.chrome", "youtube.com", false, false)),
+                k -> false)).contains(BlockKind.DAY), "Sajt sa liste u drugom prozoru ima DAY");
+
+        // Režim sa dnevnom šifrom drži stavku ceo dan, pa je pod ukupnim limitom (tvrdo, šifra ne otvara).
+        Fake c = new Fake();
+        c.dayReached = true;
+        c.guarded.add("com.chat");
+        c.modeOnly.add("com.chat");
+        c.codeRules.add(codeRule("com.chat", "x.com"));
+        List<Block> cb = BlockRules.front(c, app("com.chat"));
+        check(cb.get(0).kind == BlockKind.DAY, "Aplikacija samo u režimu sa šifrom ima DAY");
+        check(BlockKind.pick(cb, k -> true).kind == BlockKind.DAY, "Šifra ne otvara DAY");
+        check(BlockRules.appOnly(c, "com.chat", k -> true).kind == BlockKind.DAY, "Režim sa šifrom u drugom prozoru ima DAY");
+        List<Block> cs = BlockRules.front(c, browser("com.android.chrome", "m.x.com"));
+        check(cs.get(0).kind == BlockKind.DAY && cs.get(0).key.equals("site:x.com"), "Sajt samo u režimu sa šifrom ima DAY");
+
+        s.night = true;
+        List<Block> n = BlockRules.windows(s, Collections.singletonList(new BlockRules.Window("com.android.chrome", "reddit.com", false, false)),
+                k -> false);
+        check(kinds(n).equals(Collections.singletonList(BlockKind.NIGHT)), "Sajt samo u režimu noću ima NIGHT");
     }
 
     private static void appRules() {

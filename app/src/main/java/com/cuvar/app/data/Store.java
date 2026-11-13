@@ -346,12 +346,23 @@ public final class Store {
         return new HashSet<>(sp.getStringSet("dayFree", Collections.emptySet()));
     }
 
-    /** Izuzetak od ukupnog limita važi tek od sutra u 06:00, a skidanje izuzetka odmah. */
-    public synchronized void setDayFree(String pkg, boolean free) {
+    /**
+     * Skidanje izuzetka od ukupnog limita važi odmah. Izuzetak važi odmah za jednu aplikaciju dnevno
+     * (DayLimit.freeNow, dan po pouzdanom satu), ostali od sutra u 06:00. Vraća da li sada važi.
+     */
+    public synchronized boolean setDayFree(String pkg, boolean free) {
         Set<String> next = dayFree();
         if (free) next.add(pkg); else next.remove(pkg);
         sp.edit().putStringSet("dayFree", next).apply();
         enforce();
+        if (!free || eApps == null || eDayFree.contains(pkg)) return true;
+        String today = day();
+        if (!DayLimit.freeNow(sp.getString("dayFreeNowDay", null), sp.getString("dayFreeNowPkg", null), today, pkg)) return false;
+        // I u podešenom je, pa ga enforce() (presek) ne skida.
+        eDayFree.add(pkg);
+        sp.edit().putString("dayFreeNowDay", today).putString("dayFreeNowPkg", pkg).apply();
+        saveEnforced();
+        return true;
     }
 
     /** Aplikacije van ukupnog dnevnog limita, kako sada važi. */
@@ -466,6 +477,47 @@ public final class Store {
             if (d != null && (best == null || d.length() > best.length())) best = d;
         }
         return best;
+    }
+
+    /**
+     * Da li ukupni dnevni limit troši i zaključava aplikaciju: sopstveno pravilo sada ili režim sa dnevnom
+     * šifrom (drži je ceo dan, kao zaključavanje), a nije van limita. Samo u režimu bez šifre nije.
+     */
+    public synchronized boolean dayLimitApp(String pkg) {
+        return (appKeysNow().contains(pkg) || codeRegimeApp(pkg)) && !dayLimitFree(pkg);
+    }
+
+    /** Aplikacija je u režimu sa dnevnom šifrom i nije van njega (codeFree). */
+    private boolean codeRegimeApp(String pkg) {
+        return !codeFreeNow().contains(pkg) && DailySchedule.codeApp(enforced(), pkg) != null;
+    }
+
+    /** Aplikacije pod ukupnim dnevnim limitom (sopstveno pravilo ili režim sa šifrom, bez onih van limita). */
+    public synchronized Set<String> dayLimitApps() {
+        Set<String> out = new HashSet<>();
+        for (DailySchedule.Rule r : enforced()) if (r.enabled && r.code) out.addAll(r.apps);
+        out.removeAll(codeFreeNow());
+        out.addAll(appKeysNow());
+        out.removeAll(dayFreeNow());
+        return out;
+    }
+
+    /** Sajtovi pod ukupnim dnevnim limitom: lista sajtova i režimi sa šifrom (za procenu). */
+    Set<String> dayLimitSites() {
+        Set<String> out = new HashSet<>(siteKeysNow());
+        for (DailySchedule.Rule r : enforced()) if (r.enabled && r.code) out.addAll(r.sites);
+        return out;
+    }
+
+    /**
+     * Domen pod ukupnim limitom koji pokriva host, ili null: sa liste sajtova ili iz režima sa dnevnom šifrom.
+     * Sajt samo u režimu bez šifre nije.
+     */
+    public synchronized String dayLimitSite(String host) {
+        String listed = matchSiteNow(host);
+        if (listed != null) return listed;
+        DailySchedule.Rule code = modes.codeRuleForSite(host);
+        return code == null ? null : DailySchedule.matchDomain(host, code.sites);
     }
 
     // ---------- Pravila koja važe sada (popuštanje od sutra) ----------

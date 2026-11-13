@@ -21,7 +21,8 @@ public final class GuardFacts implements BlockRules.Facts {
     @Override public boolean dayLimitReached() {
         return DayLimit.reached(svc.store.dayLimits.dayLimit(), svc.store.dayLimits.guardedToday());
     }
-    @Override public boolean dayFree(String pkg) { return svc.store.dayLimitFree(pkg); }
+    @Override public boolean dayGuarded(String pkg) { return svc.kinds.dayGuarded(pkg); }
+    @Override public String daySite(String host) { return svc.store.dayLimitSite(host); }
     @Override public boolean nightActive() { return svc.store.nightActive(); }
     @Override public boolean nightBlocksApp(String pkg) { return svc.store.nightBlocksApp(pkg); }
     @Override public String siteGuarded(String host) { return svc.store.siteGuarded(host); }

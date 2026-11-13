@@ -43,11 +43,10 @@ public final class DayLimits {
         String today = store.day();
         JSONObject d = store.usageLog.usage.optJSONObject(today);
         if (d != null && !d.has(GUARDED_KEY)) {
-            Set<String> guarded = store.guardedApps();
+            Set<String> guarded = store.dayLimitApps();
             guarded.removeAll(AppKinds.exemptApps(c));
-            guarded.removeAll(store.dayFreeNow());
             try {
-                d.put(GUARDED_KEY, DayLimit.guardedEstimate(store.usageLog.dayMap(today), guarded, store.siteKeysNow()));
+                d.put(GUARDED_KEY, DayLimit.guardedEstimate(store.usageLog.dayMap(today), guarded, store.dayLimitSites()));
                 store.dirty = true;
             } catch (JSONException ignored) {
                 // put sa ispravnim ključem i vrednošću ne baca grešku; podaci ostaju kakvi su bili
@@ -120,11 +119,14 @@ public final class DayLimits {
     }
 
     /** Servis beleži da je limit potrošen, pa se posle toga danas više ne može povećati. */
-    /** Zašto bi aplikacija bez pravila bila zaključana do jutra čim dobije pravilo, ili null. */
-    public String lockedOnceGuarded() {
+    /**
+     * Zašto bi aplikacija bila zaključana do jutra čim dobije pravilo, ili null. night: dobija prvo pravilo
+     * (noć je drži); day: dobija prvo sopstveno pravilo za ceo dan (samo njega drži ukupni limit, ne režim).
+     */
+    public String lockedOnceGuarded(boolean night, boolean day) {
         synchronized (store) {
-            if (store.nightActive()) return "Sada traje noćna blokada";
-            if (dayLimit() > 0 && dayLimitHitToday()) return "Ukupni dnevni limit je danas potrošen";
+            if (night && store.nightActive()) return "Sada traje noćna blokada";
+            if (day && dayLimit() > 0 && dayLimitHitToday()) return "Ukupni dnevni limit je danas potrošen";
             return null;
         }
     }

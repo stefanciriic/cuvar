@@ -41,14 +41,14 @@ public final class UsageAccounting {
     }
 
     /**
-     * Ukupni dnevni limit troši samo ono što on i zaključa: aplikacija sa pravilom ili sajt sa pravilom.
-     * Mape, pozivi i sve ostalo bez pravila ga ne troše. Aplikacija van ukupnog limita (dayFree) ga ne troši,
-     * ali sajt sa pravilom koji se u njoj vidi troši.
+     * Ukupni dnevni limit troši samo ono što on i zaključa: aplikacija ili sajt sa sopstvenim pravilom.
+     * Stavke samo u režimu, mape, pozivi i sve ostalo ga ne troše. Aplikacija van ukupnog limita (dayFree)
+     * ga ne troši, ali sajt sa liste koji se u njoj vidi troši.
      */
     private boolean countsForDayLimit() {
         if (svc.kinds.exempt().contains(svc.currentPkg)) return false;
-        if (svc.kinds.guarded(svc.currentPkg) && !svc.store.dayLimitFree(svc.currentPkg)) return true;
-        for (String host : svc.visibleHosts) if (svc.store.siteGuarded(host) != null) return true;
+        if (svc.kinds.dayGuarded(svc.currentPkg)) return true;
+        for (String host : svc.visibleHosts) if (svc.store.dayLimitSite(host) != null) return true;
         return false;
     }
 

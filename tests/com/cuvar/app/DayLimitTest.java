@@ -48,6 +48,20 @@ public final class DayLimitTest {
         }
         for (int c : DayLimit.CHOICES) check(c <= DayLimit.MAX, "Izbor najviše 4 h");
 
+        // Ukupni limit drži sopstveno pravilo ili pregledač/kloner koji se ne prati, osim izuzetih.
+        check(DayLimit.coversApp(true, false, false), "Sopstveno pravilo je pod ukupnim limitom");
+        check(!DayLimit.coversApp(false, false, false), "Samo režim nije pod ukupnim limitom");
+        check(DayLimit.coversApp(false, true, false), "Nepoznat pregledač je pod ukupnim limitom");
+        check(!DayLimit.coversApp(true, false, true), "Izuzeta aplikacija nije pod ukupnim limitom");
+        check(DayLimit.coversApp(false, true, true), "Izuzet nepoznat pregledač ostaje pod ukupnim limitom");
+        check(DayLimit.coversApp(true, true, true), "Izuzet kloner sa pravilom ostaje pod ukupnim limitom");
+
+        // Izuzimanje iz ukupnog limita odmah: jedna aplikacija dnevno.
+        check(DayLimit.freeNow(null, null, "20261113", "com.whatsapp"), "Prvo izuzimanje važi odmah");
+        check(DayLimit.freeNow("20261113", "com.whatsapp", "20261113", "com.whatsapp"), "Ista aplikacija istog dana opet odmah");
+        check(!DayLimit.freeNow("20261113", "com.whatsapp", "20261113", "com.viber"), "Druga aplikacija istog dana čeka 06:00");
+        check(DayLimit.freeNow("20261112", "com.whatsapp", "20261113", "com.viber"), "Sutradan opet jedna odmah");
+
         // Gornja granica: stari 5 h postaje 4 h, isključen ostaje isključen.
         check(DayLimit.clamp(300) == 240, "5 h postaje 4 h");
         check(DayLimit.clamp(180) == 180, "3 h ostaje");
