@@ -21,6 +21,8 @@ public final class BlockRules {
         /** Aplikacija pod pravilima (za dnevni limit i noć). */
         boolean guarded(String pkg);
         boolean dayLimitReached();
+        /** Aplikacija van ukupnog dnevnog limita (sajt sa pravilom u njoj i dalje ga poštuje). */
+        boolean dayFree(String pkg);
         boolean nightActive();
         boolean nightBlocksApp(String pkg);
         /** Domen sa pravilom koji pokriva host, ili null. */
@@ -95,7 +97,7 @@ public final class BlockRules {
         boolean exempt = f.exempt(pkg);
         if (f.dayLimitReached() && !exempt) {
             String site = web ? f.siteGuarded(s.host) : null;
-            if (f.guarded(pkg)) {
+            if (f.guarded(pkg) && !f.dayFree(pkg)) {
                 out.add(new Block(appKey, BlockKind.DAY, null, false));
             } else if (site != null) {
                 out.add(new Block(ItemKey.site(site), BlockKind.DAY, null, false));
@@ -171,7 +173,7 @@ public final class BlockRules {
         if (f.exempt(p)) return null;
         String k = ItemKey.app(p);
         Block b = null;
-        if (f.guarded(p) && f.dayLimitReached()) {
+        if (f.guarded(p) && f.dayLimitReached() && !f.dayFree(p)) {
             b = new Block(k, BlockKind.DAY, null, false);
         } else if (f.guarded(p) && f.nightBlocksApp(p)) {
             b = new Block(k, BlockKind.NIGHT, null, false);

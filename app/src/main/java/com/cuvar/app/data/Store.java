@@ -69,6 +69,8 @@ public final class Store {
     /** Aplikacije koje noćna blokada ne zaključava, kako sada važi. */
     final Set<String> eNightFree = new HashSet<>();
     final Set<String> eCodeFree = new HashSet<>();
+    /** Aplikacije van ukupnog dnevnog limita, kako sada važi. */
+    final Set<String> eDayFree = new HashSet<>();
     boolean dirty;
     long lastSave;
     final int boot;          // redni broj paljenja telefona, -1 ako nije poznat
@@ -339,6 +341,31 @@ public final class Store {
         return eApps == null ? codeFree() : eCodeFree;
     }
 
+    /** Podešene aplikacije van ukupnog dnevnog limita. */
+    public synchronized Set<String> dayFree() {
+        return new HashSet<>(sp.getStringSet("dayFree", Collections.emptySet()));
+    }
+
+    /** Izuzetak od ukupnog limita važi tek od sutra u 06:00, a skidanje izuzetka odmah. */
+    public synchronized void setDayFree(String pkg, boolean free) {
+        Set<String> next = dayFree();
+        if (free) next.add(pkg); else next.remove(pkg);
+        sp.edit().putStringSet("dayFree", next).apply();
+        enforce();
+    }
+
+    /** Aplikacije van ukupnog dnevnog limita, kako sada važi. */
+    public synchronized Set<String> dayFreeNow() {
+        roll();
+        return new HashSet<>(eApps == null ? dayFree() : eDayFree);
+    }
+
+    /** Da li je aplikacija sada van ukupnog dnevnog limita. */
+    public synchronized boolean dayLimitFree(String pkg) {
+        roll();
+        return (eApps == null ? dayFree() : eDayFree).contains(pkg);
+    }
+
     /** Da li noćna blokada sada zaključava ovu aplikaciju. */
     public synchronized boolean nightBlocksApp(String pkg) {
         if (!nightActive()) return false;
@@ -458,6 +485,8 @@ public final class Store {
         eNightFree.addAll(sp.getStringSet("eNightFree", Collections.emptySet()));
         eCodeFree.clear();
         eCodeFree.addAll(sp.getStringSet("eCodeFree", Collections.emptySet()));
+        eDayFree.clear();
+        eDayFree.addAll(sp.getStringSet("eDayFree", Collections.emptySet()));
         Modes.parseSchedules(sp.getString("eSchedules", "[]"), eSchedules);
         eLinks.clear();
         JSONArray el = parseArray(sp.getString("eLinks", null));
@@ -477,6 +506,8 @@ public final class Store {
         eNightFree.addAll(nightFree());
         eCodeFree.clear();
         eCodeFree.addAll(codeFree());
+        eDayFree.clear();
+        eDayFree.addAll(dayFree());
         eLinks.clear();
         eLinks.addAll(linkPairs());
         eDay = rulesDay();
@@ -489,6 +520,7 @@ public final class Store {
                 .putBoolean("eNight", eNight).putBoolean("eProtect", eProtect)
                 .putStringSet("eNightFree", new HashSet<>(eNightFree))
                 .putStringSet("eCodeFree", new HashSet<>(eCodeFree))
+                .putStringSet("eDayFree", new HashSet<>(eDayFree))
                 .putString("eLinks", new JSONArray(eLinks).toString()).apply();
         clearRuleCache();
     }
@@ -527,13 +559,13 @@ public final class Store {
 
     /** Ono što sada važi. */
     EnforcedRules nowRules() {
-        return new EnforcedRules(appMap(eApps), siteMap(eSites), eSchedules, eNight, eProtect, eNightFree, eCodeFree, eLinks);
+        return new EnforcedRules(appMap(eApps), siteMap(eSites), eSchedules, eNight, eProtect, eNightFree, eCodeFree, eDayFree, eLinks);
     }
 
     /** Ono što je podešeno. */
     EnforcedRules wantedRules() {
         return new EnforcedRules(appMap(apps), siteMap(sites), modes.schedules, nightBlock(), protectSelf(),
-                nightFree(), codeFree(), new HashSet<>(linkPairs()));
+                nightFree(), codeFree(), dayFree(), new HashSet<>(linkPairs()));
     }
 
     private void setNow(EnforcedRules r) {
@@ -554,6 +586,8 @@ public final class Store {
         eNightFree.addAll(r.nightFree);
         eCodeFree.clear();
         eCodeFree.addAll(r.codeFree);
+        eDayFree.clear();
+        eDayFree.addAll(r.dayFree);
         eLinks.clear();
         eLinks.addAll(r.links);
     }
@@ -784,7 +818,8 @@ public final class Store {
 
     /**
      * Zbir podešenih dnevnih limita aplikacija i sajtova, svaka stavka jednom (aplikacija sa povezanim
-     * sajtom je jedna stavka). Stavka skipPkg / skipDomain (ona koja se menja) se ne računa.
+     * sajtom je jedna stavka). Stavka skipPkg / skipDomain (ona koja se menja) i aplikacije van ukupnog
+     * limita (dayFree) se ne računaju.
      */
     public synchronized int limitsTotal(String skipPkg, String skipDomain) {
         Set<String> pkgs = new HashSet<>(keysOf(apps));
@@ -792,8 +827,11 @@ public final class Store {
         List<String> siteKeys = keysOf(sites);
         for (String d : siteKeys) pkgs.addAll(Links.appsOf(pairs, d));
         Set<String> counted = new HashSet<>();
+        Set<String> free = dayFree();
         int total = 0;
         for (String pkg : pkgs) {
+            // Izuzeta aplikacija ne troši ukupni limit; njen sajt u pregledaču troši, pa se broji kao sajt.
+            if (free.contains(pkg)) continue;
             List<String> covered = coveredSites(pkg, false);
             counted.addAll(covered);
             if (pkg.equals(skipPkg) || (skipDomain != null && covered.contains(skipDomain))) continue;
@@ -850,6 +888,11 @@ public final class Store {
             if (eCodeFree.contains(pkg)) continue;
             String name = AppLabels.of(pm, pkg);
             out.add(name + ": van režima bez dnevne šifre");
+        }
+        for (String pkg : dayFree()) {
+            if (eDayFree.contains(pkg)) continue;
+            String name = AppLabels.of(pm, pkg);
+            out.add(name + ": van ukupnog dnevnog limita");
         }
         List<String> want = linkPairs();
         for (String p : eLinks) {
@@ -928,6 +971,7 @@ public final class Store {
                 .putString("schedules", modes.schedulesJson()).putBoolean("night", eNight).putBoolean("protect", eProtect)
                 .putStringSet("nightFree", new HashSet<>(eNightFree))
                 .putStringSet("codeFree", new HashSet<>(eCodeFree))
+                .putStringSet("dayFree", new HashSet<>(eDayFree))
                 .apply();
         copyToEnforced();
     }

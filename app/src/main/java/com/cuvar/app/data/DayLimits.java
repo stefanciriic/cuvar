@@ -45,6 +45,7 @@ public final class DayLimits {
         if (d != null && !d.has(GUARDED_KEY)) {
             Set<String> guarded = store.guardedApps();
             guarded.removeAll(AppKinds.exemptApps(c));
+            guarded.removeAll(store.dayFreeNow());
             try {
                 d.put(GUARDED_KEY, DayLimit.guardedEstimate(store.usageLog.dayMap(today), guarded, store.siteKeysNow()));
                 store.dirty = true;

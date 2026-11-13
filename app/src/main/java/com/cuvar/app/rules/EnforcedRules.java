@@ -24,11 +24,14 @@ public final class EnforcedRules {
     public final Set<String> nightFree;
     /** aplikacije kojima režim van perioda ne traži dnevnu šifru */
     public final Set<String> codeFree;
+    /** aplikacije van ukupnog dnevnog limita */
+    public final Set<String> dayFree;
     /** parovi "paket|domen" (aplikacija i njen sajt idu zajedno) */
     public final Set<String> links;
 
     public EnforcedRules(Map<String, AppRule> apps, Map<String, Integer> sites, List<DailySchedule.Rule> schedules,
-                         boolean night, boolean protect, Set<String> nightFree, Set<String> codeFree, Set<String> links) {
+                         boolean night, boolean protect, Set<String> nightFree, Set<String> codeFree, Set<String> dayFree,
+                         Set<String> links) {
         this.apps = Collections.unmodifiableMap(new HashMap<>(apps));
         this.sites = Collections.unmodifiableMap(new HashMap<>(sites));
         List<DailySchedule.Rule> copies = new ArrayList<>();
@@ -38,6 +41,7 @@ public final class EnforcedRules {
         this.protect = protect;
         this.nightFree = Collections.unmodifiableSet(new HashSet<>(nightFree));
         this.codeFree = Collections.unmodifiableSet(new HashSet<>(codeFree));
+        this.dayFree = Collections.unmodifiableSet(new HashSet<>(dayFree));
         this.links = Collections.unmodifiableSet(new HashSet<>(links));
     }
 
@@ -85,6 +89,7 @@ public final class EnforcedRules {
                 now.protect || wanted.protect,
                 RuleMerge.stricterExempt(now.nightFree, wanted.nightFree),
                 RuleMerge.stricterExempt(now.codeFree, wanted.codeFree),
+                RuleMerge.stricterExempt(now.dayFree, wanted.dayFree),
                 links);
     }
 

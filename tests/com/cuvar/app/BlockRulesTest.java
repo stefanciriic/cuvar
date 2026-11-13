@@ -24,6 +24,7 @@ public final class BlockRulesTest {
         Set<String> guarded = new HashSet<>();
         boolean dayReached, night, focus, hasSiteRules, hardSite;
         Set<String> nightFree = new HashSet<>();
+        Set<String> dayFree = new HashSet<>();
         Set<String> focusApps = new HashSet<>();
         Set<String> focusSites = new HashSet<>();
         Set<String> onBreak = new HashSet<>();
@@ -41,6 +42,7 @@ public final class BlockRulesTest {
         @Override public boolean exempt(String pkg) { return exempt.contains(pkg); }
         @Override public boolean guarded(String pkg) { return guarded.contains(pkg); }
         @Override public boolean dayLimitReached() { return dayReached; }
+        @Override public boolean dayFree(String pkg) { return dayFree.contains(pkg); }
         @Override public boolean nightActive() { return night; }
         @Override public boolean nightBlocksApp(String pkg) { return night && guarded.contains(pkg) && !nightFree.contains(pkg); }
         @Override public String siteGuarded(String host) { return DailySchedule.matchDomain(host, siteLimits.keySet()); }
@@ -82,6 +84,7 @@ public final class BlockRulesTest {
         nothing();
         exemptNeverBlocked();
         priority();
+        dayFree();
         appRules();
         schedules();
         sites();
@@ -148,6 +151,29 @@ public final class BlockRulesTest {
         f.guarded.remove("com.game");
         List<Integer> k = kinds(BlockRules.front(f, app("com.game")));
         check(!k.contains(BlockKind.DAY) && !k.contains(BlockKind.NIGHT), "Dnevni limit i noć samo za aplikacije pod pravilima");
+    }
+
+    /** Aplikacija van ukupnog dnevnog limita; sajt sa pravilom u njoj i dalje ga poštuje. */
+    private static void dayFree() {
+        Fake f = new Fake();
+        f.dayReached = true;
+        f.guarded.add("com.whatsapp");
+        f.dayFree.add("com.whatsapp");
+        check(BlockRules.front(f, app("com.whatsapp")).isEmpty(), "Izuzeta aplikacija nema DAY");
+        check(BlockRules.appOnly(f, "com.whatsapp", k -> false) == null, "Izuzeta aplikacija u drugom prozoru nema DAY");
+        f.guarded.add("com.game");
+        check(BlockRules.appOnly(f, "com.game", k -> true).kind == BlockKind.DAY, "Ostale aplikacije i dalje imaju DAY");
+
+        f.guarded.add("com.android.chrome");
+        f.dayFree.add("com.android.chrome");
+        f.siteLimits.put("youtube.com", 30);
+        List<Block> b = BlockRules.front(f, browser("com.android.chrome", "youtube.com"));
+        check(kinds(b).contains(BlockKind.DAY) && b.get(0).key.equals("site:youtube.com"),
+                "Sajt sa pravilom u izuzetom pregledaču ima DAY");
+        check(!kinds(BlockRules.front(f, browser("com.android.chrome", "example.com"))).contains(BlockKind.DAY),
+                "Sajt bez pravila u izuzetom pregledaču nema DAY");
+        f.night = true;
+        check(kinds(BlockRules.front(f, app("com.whatsapp"))).contains(BlockKind.NIGHT), "Noć i dalje važi za izuzetu aplikaciju");
     }
 
     private static void appRules() {

@@ -459,6 +459,11 @@ public class RulesActivity extends SubActivity {
             codeFree.setChecked(wasCodeFree);
             box.addView(codeFree, Ui.fill(this, 10));
         }
+        final boolean wasDayFree = store.dayFree().contains(pkg);
+        final CheckRow dayFree = new CheckRow(this, null, "Van ukupnog dnevnog limita",
+                "Vreme u njoj ne troši ukupni limit i ne zaključava se kad on istekne; ostala pravila važe (od sutra u 06:00)");
+        dayFree.setChecked(wasDayFree);
+        box.addView(dayFree, Ui.fill(this, 10));
         box.addView(Sheet.label(this, "Dnevni limit u minutima (0 = bez limita)"), Ui.fill(this, 14));
         EditText limit = Sheet.input(this, "0", true);
         limit.setText(String.valueOf(store.appLimitLinked(pkg)));
@@ -491,7 +496,10 @@ public class RulesActivity extends SubActivity {
                     Integer wantSession = Ui.nonNegativeNumber(session);
                     if (wantSession == null) return false;
                     int before = store.appLockLinked(pkg) ? 0 : store.appLimitLinked(pkg);
-                    if (!limitFits(limit, wantLock ? 0 : wantLimit, before, store.limitsTotal(pkg, null))) return false;
+                    // Limit aplikacije van ukupnog limita se ne sabira u zbir (vidi Store.limitsTotal).
+                    if (!dayFree.isChecked() && !limitFits(limit, wantLock ? 0 : wantLimit, before, store.limitsTotal(pkg, null))) {
+                        return false;
+                    }
                     String typed = siteBox.getText().toString().trim();
                     String wantSite = typed.isEmpty() ? null : Hosts.hostOf(typed);
                     if (!typed.isEmpty() && (wantSite == null || !wantSite.contains("."))) {
@@ -502,6 +510,7 @@ public class RulesActivity extends SubActivity {
                     for (CheckRow r : rows) adding |= r.isChecked();
                     if (calls.isChecked() != store.callsPass(pkg)) store.setCallsPass(pkg, calls.isChecked());
                     if (codeFree != null && codeFree.isChecked() != wasCodeFree) store.setCodeFree(pkg, codeFree.isChecked());
+                    if (dayFree.isChecked() != wasDayFree) store.setDayFree(pkg, dayFree.isChecked());
                     saveGuarding(pkg, label, adding, () -> {
                         if (!java.util.Objects.equals(wantSite, dom)) store.setLink(pkg, wantSite);
                         saveRules(rules, rows, pkg, false);
