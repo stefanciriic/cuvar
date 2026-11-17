@@ -118,12 +118,14 @@ servis i njegovi delovi, nikad ekrani.
 
 Glavna sesija je `orkestrator` (`"agent"` u `.claude/settings.json`); tok rada je u skill-u
 `rad-sa-agentima`, postupak pregleda u `.claude/agents/README.md`, radni fajlovi u `.review/`
-(nije u git-u). Model svakog agenta je u polju `model:` u `.claude/agents/<ime>.md`:
+(nije u git-u). Commit gate čuvaju dva hook-a: `tools/guard-hook.sh` (Claude Code, samo
+lokalno; zna i koji agent radi) i `tools/githooks/` (git, i u oblaku: review, autor Stefan, bez
+Claude trailer-a; uključuje se sa `git config core.hooksPath tools/githooks`). Model svakog agenta je u polju `model:` u `.claude/agents/<ime>.md`:
 
 | Agent | Model |
 |---|---|
 | `orkestrator` | opus |
-| `istrazivac`, `proveravac`, `tester-emulator` | haiku |
+| `istrazivac`, `tester-emulator` | haiku |
 | `izvodjac`, `pregled-*` | sonnet (opus po pozivu za `GuardService`, `Store`, `guard/`, `enforce()`) |
 
 ## Odluka o blokadi

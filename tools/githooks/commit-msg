@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Bez Claude trailer-a u commit poruci (pravilo projekta: commit je Stefanov).
+if grep -Eiq '^(Co-Authored-By: *Claude|Claude-Session:)' "$1"; then
+  echo "Blokirano: ukloni Co-Authored-By: Claude / Claude-Session redove iz poruke." >&2; exit 1
+fi
+exit 0

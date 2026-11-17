@@ -19,9 +19,14 @@ Every push to `main` creates a new app release (except when only `.md`, `.claude
      check the build. Do not use new system constants (see CLAUDE.md, hidden APIs).
 4. `git add` all code changes (the commit must contain exactly the reviewed state). Commit message
    in English, briefly what changed.
-5. `git pull --rebase origin main` once more, then `git push origin HEAD:main`.
-6. Check CI: locally `gh run watch $(gh run list -L1 --json databaseId -q '.[0].databaseId') --exit-status`,
+5. **Cloud only** (`check.sh` said "Build preskočen") and the change touches code: first push the
+   thread's own branch (`git push -u origin HEAD:<thread branch>`). `check.yml` builds it (tests,
+   debug build, release lint) without a release. Do not sleep in a turn: schedule a check-back in
+   ~6 min, then GitHub MCP `actions_list` (workflow `check.yml`, that branch, perPage 1). Red: fix,
+   do not push `main`. Green: go on. Locally and for `.md`/`tools/`/`.claude/` only, skip this step.
+6. `git pull --rebase origin main` once more, then `git push origin HEAD:main`.
+7. Check CI: locally `gh run watch $(gh run list -L1 --json databaseId -q '.[0].databaseId') --exit-status`,
    and only if it fails `gh run view --log-failed | tail -60` (not the whole log).
    In the cloud: GitHub MCP `actions_list` (perPage 1), then `get_job_logs` with `failed_only`.
-7. Report (in Serbian): the release number (`v<run_number+100>`), whether CI is green, who
+8. Report (in Serbian): the release number (`v<run_number+100>`), whether CI is green, who
    reviewed, and whether it was checked in the emulator and on a phone.

@@ -13,7 +13,9 @@ sajtu, dnevni limiti, noćni blok, dnevna šifra 17–22, pitalice. Glavna logik
 ## Pravila rada
 
 - Odgovori i komentari u kodu su na srpskom, kratko.
-- Pre izmena `git pull --rebase` (na repou rade i sesije iz oblaka).
+- Pre izmena `git pull --rebase` (na repou rade i sesije iz oblaka). Jednom po klonu
+  `git config core.hooksPath tools/githooks` (u oblaku hook iz `.claude/settings.json` ne radi:
+  git hook čuva review gate, autora i poruku).
 - Provera: `tools/check.sh` (Windows: `powershell ./tools/check.ps1`): testovi kao CI +
   `assembleDebug`, ispisuje samo greške. Ne pokreći Gradle ručno bez filtera. Lokalni
   `javac` prihvata skrivene API-je koje CI odbija; za novije sistemske intent-e koristi string.

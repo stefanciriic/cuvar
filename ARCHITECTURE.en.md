@@ -125,13 +125,16 @@ Only the service and its parts change it, never screens.
 
 The main session is `orkestrator` (`"agent"` in `.claude/settings.json`); the workflow is
 the `rad-sa-agentima` skill, the review procedure is `.claude/agents/README.md`, work files
-are in `.review/` (not in git). Each agent's model is the `model:` field in
+are in `.review/` (not in git). The commit gate is kept by two hooks: `tools/guard-hook.sh`
+(Claude Code, local only; also knows which agent is running) and `tools/githooks/` (git, also in
+the cloud: review, author Stefan, no Claude trailers; enabled with
+`git config core.hooksPath tools/githooks`). Each agent's model is the `model:` field in
 `.claude/agents/<name>.md`:
 
 | Agent | Model |
 |---|---|
 | `orkestrator` | opus |
-| `istrazivac`, `proveravac`, `tester-emulator` | haiku |
+| `istrazivac`, `tester-emulator` | haiku |
 | `izvodjac`, `pregled-*` | sonnet (opus per call for `GuardService`, `Store`, `guard/`, `enforce()`) |
 
 ## Block decision

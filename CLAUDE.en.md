@@ -18,7 +18,9 @@ Accessibility service: tracks what is open, measures time, shows the block).
 ## Working rules
 
 - Replies and code comments are in Serbian, short.
-- Before changes, `git pull --rebase` (cloud sessions also work on the repo).
+- Before changes, `git pull --rebase` (cloud sessions also work on the repo). Once per clone
+  `git config core.hooksPath tools/githooks` (in the cloud the hook from `.claude/settings.json` does not
+  run: the git hook guards the review gate, the author and the message).
 - Check: `tools/check.sh` (Windows: `powershell ./tools/check.ps1`): tests as in CI +
   `assembleDebug`, prints only errors. Don't run Gradle by hand without a filter. Local
   `javac` accepts hidden APIs that CI rejects; for newer system intents use a string.

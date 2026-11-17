@@ -6,7 +6,7 @@ Agent names stay Serbian because `tools/` scripts and the commit hook check them
 `orkestrator` = orchestrator, `istrazivac` = researcher, `izvodjac` = implementer,
 `pregled-pravila` = rules review, `pregled-bezbednosti` = safety review,
 `pregled-stabilnosti` = stability review, `pregled-prikaza` = UI/text review,
-`proveravac` = checker, `tester-emulator` = emulator tester.
+`tester-emulator` = emulator tester.
 Write findings and replies in Serbian (Stefan reads them). Keep the status words exactly
 as below (`otvoreno` = open, `ispravljeno` = fixed, `odbijeno` = rejected): scripts grep for them.
 

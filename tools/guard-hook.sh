@@ -80,7 +80,7 @@ case "$tool" in
             printf '%s\n' "$fali" | sed 's/^/  - /'
             echo "Redom: 1) tools/review-stanje.sh pokaže obavezne pregledače; 2) pokreni ih paralelno nad git diff HEAD (samo nalazi);"
             echo "3) ispravke jedna po jedna, pa ponovni review dok svi ne odobre isto stanje (najviše 3 kruga);"
-            echo "4) agent proveravac: tools/check.sh; 5) ako je emulator pokrenut i treba: agent tester-emulator; 6) ponovi commit."
+            echo "4) tools/check.sh (sam, bez agenta); 5) ako je emulator pokrenut i treba: agent tester-emulator; 6) ponovi commit."
             echo "Postupak: skill rad-sa-agentima."
           } >&2
           exit 2

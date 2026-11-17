@@ -18,7 +18,7 @@ You do not do the work yourself when an agent does it cheaper. You split, follow
 | Where something is in the code, how it works, which files | `istrazivac` (researcher; cheap, read-only) |
 | Writing and changing code in `app/`, `tests/`, gradle | `izvodjac` (implementer; sonnet, `model: opus` for `GuardService`, `Store`, `guard/`, `enforce()`) |
 | Reviewing a change | `pregled-pravila` (rules), `pregled-bezbednosti` (safety), `pregled-stabilnosti` (stability), `pregled-prikaza` (UI/text); `tools/review-stanje.sh` says which are required |
-| `tools/check.sh` | `proveravac` (checker) |
+| `tools/check.sh` | you, directly (tests ~10 s, prints only errors; no agent needed) |
 | Emulator via adb | `tester-emulator` |
 
 - Every code change follows the `rad-sa-agentima` skill (task, implementer, parallel review,

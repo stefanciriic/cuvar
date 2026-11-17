@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Git pre-commit: radi i u oblaku (thread-ovi ne učitavaju .claude/settings.json).
+# Uključuje se jednom po klonu: git config core.hooksPath tools/githooks
+cd "$(git rev-parse --show-toplevel)" || exit 0
+blokiraj() { echo "Blokirano: $1" >&2; exit 1; }
+
+# Autor mora da bude Stefan (globalni git u oblaku je "Claude <noreply@anthropic.com>").
+ime=$(git config user.name); mejl=$(git config user.email)
+case "$ime $mejl" in
+  *[Cc]laude*|*anthropic.com*)
+    blokiraj "autor je \"$ime <$mejl>\". Prvo: git config user.name \"Stefan Ciric\"; git config user.email \"182449459+stefanciriic@users.noreply.github.com\"" ;;
+esac
+
+# Review gate samo za Claude Code (CLAUDECODE=1); Stefanovi ručni commit-i prolaze.
+[ "${CLAUDECODE:-}" = 1 ] || exit 0
+. tools/oznake.sh
+git diff --cached --quiet HEAD -- $KOD 2>/dev/null && exit 0
+if [ -n "$(git ls-files -o --exclude-standard -- $KOD)" ] || ! git diff --quiet -- $KOD; then
+  blokiraj "commit mora da sadrži sve izmene u kodu (pregledano je celo stanje). git add app/ tests/ gradle, ili skloni nedovršeno."
+fi
+fali=$(sta_fali | grep -v '^upozorenje:' | grep .)
+if [ -n "$fali" ]; then
+  { echo "Blokirano: commit koda bez završenog review-a. Fali:"; printf '%s\n' "$fali" | sed 's/^/  - /'
+    echo "Postupak: skill rad-sa-agentima (tools/review-stanje.sh kaže šta je obavezno)."; } >&2
+  exit 1
+fi
+sta_fali | grep '^upozorenje:' | sed 's/^upozorenje: /Upozorenje: /' >&2
+exit 0

@@ -34,8 +34,8 @@ Stefan explicitly says it is a trivial change and needs no review). The agents a
    the same finding twice: stop. First try a stronger model (`opus`) instead of a third round; if
    that does not help either, put the disagreement with both positions to Stefan
    (`request_decision` or a message) and do not commit.
-6. **proveravac** (checker): `tools/check.sh`. A failure sends the work back to the implementer
-   (then review again, because the code changes).
+6. Run `tools/check.sh` yourself (no agent: it takes seconds and prints only errors). A failure
+   sends the work back to the implementer (then review again, because the code changes).
 7. **tester-emulator** if the change touches `GuardService`, `guard/`, `ui/` or screens and
    `adb devices` sees a device. Without a device: write "nije provereno u emulatoru" (not checked
    in the emulator) in the final message.
