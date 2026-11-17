@@ -1,0 +1,53 @@
+name: Provera
+# Provera grana i PR-ova pre spajanja u main (main pravi izdanje u apk.yml).
+# Bez tajni i bez prava pisanja: radi i za Dependabot i fork PR-ove.
+on:
+  pull_request:
+  push:
+    branches-ignore: [main]
+    paths-ignore: ['**.md', '.claude/**']
+permissions:
+  contents: read
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Java 17
+        run: echo "JAVA_HOME=${JAVA_HOME_17_X64}" >> "$GITHUB_ENV"
+
+      - name: Gradle keš
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle', 'gradle/wrapper/gradle-wrapper.properties', 'gradle.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - name: Proveri pravila, vreme i pitanja
+        run: |
+          out="$RUNNER_TEMP/core-tests"
+          javac --release 11 -encoding UTF-8 -d "$out" $(grep -v '^#' tests/sources.txt) tests/com/cuvar/app/*Test.java
+          for t in tests/com/cuvar/app/*Test.java; do
+            java -Dfile.encoding=UTF-8 -cp "$out" "com.cuvar.app.$(basename "$t" .java)"
+          done
+
+      # lintRelease hvata skrivene API-je koje lokalni javac prihvata.
+      - name: Build i lint
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" >/dev/null 2>&1 || true
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleDebug lintRelease
+
+      - name: Lint izveštaj
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: lint-${{ github.run_number }}
+          path: app/build/reports/lint-results-release.html
+          if-no-files-found: ignore
