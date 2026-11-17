@@ -49,6 +49,18 @@ jobs:
           ./gradlew --no-daemon assembleRelease
           cp app/build/outputs/apk/release/app-release-unsigned.apk cuvar-unsigned.apk
 
+      # Obećanja iz CLAUDE.md koja ne smeju da procure u izdanje (pre potpisa i objave).
+      - name: Proveri privatnost i bezbednost
+        run: |
+          fail=0
+          if "$ANDROID_HOME/build-tools/36.0.0/aapt2" dump permissions cuvar-unsigned.apk | grep -q "android.permission.INTERNET"; then
+            echo "::error::APK traži dozvolu za internet."; fail=1
+          fi
+          if grep -rnE "VpnService|BIND_VPN_SERVICE" app/src/main; then
+            echo "::error::VPN je uklonjen posle incidenta 10.10.2026; ne vraća se bez dogovora."; fail=1
+          fi
+          exit $fail
+
       # Rotacija ključa: stari (javni) ključ potpisuje novi tajni, pa se nova verzija
       # instalira preko stare bez brisanja podataka. Na Androidu 9+ telefon posle toga
       # prihvata samo novi ključ, pa APK potpisan samo javnim ključem ne može preko Čuvara.
