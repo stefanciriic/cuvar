@@ -26,7 +26,6 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
-import java.util.Locale;
 import java.util.Random;
 
 /** Builds the guarded app and site lock screen and its unlock interactions. */
@@ -332,8 +331,7 @@ public final class BlockOverlayContent {
             n.setGravity(Gravity.CENTER);
             area.addView(n, Ui.fill(c, 8));
         }
-        TextView cat = Ui.text(c, q.category.toUpperCase(Locale.ROOT), 11, Ui.NIGHT_MUTED, true);
-        cat.setLetterSpacing(0.15f);
+        TextView cat = Ui.caps(c, q.category, 11, Ui.NIGHT_MUTED);
         cat.setGravity(Gravity.CENTER);
         area.addView(cat, Ui.fill(c, 16));
         TextView text = Ui.text(c, q.text, 18, 0xFFFFFFFF, false);

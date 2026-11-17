@@ -29,7 +29,7 @@ public final class CheckRow extends LinearLayout implements Checkable {
         setGravity(Gravity.CENTER_VERTICAL);
         setFocusable(true);
         setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
-        setContentDescription(title + (sub == null ? "" : ". " + sub));
+        setContentDescription(Ui.cyr(String.valueOf(title)) + (sub == null ? "" : ". " + Ui.cyr(String.valueOf(sub))));
         int p = Ui.dp(c, 12);
         setPadding(p, p, p, p);
         setBackground(Ui.pressable(Ui.CARD, Ui.SOFT, Ui.dp(c, 16)));

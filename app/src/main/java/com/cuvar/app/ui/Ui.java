@@ -310,9 +310,16 @@ public final class Ui {
 
     /** Naslov odeljka: mala slova razmaknuta, prigušena boja. */
     public static TextView section(Context c, String label) {
-        TextView t = text(c, label.toUpperCase(java.util.Locale.ROOT), 12, MUTED, true);
-        t.setLetterSpacing(0.15f);
+        TextView t = caps(c, label, 12, MUTED);
         t.setPadding(dp(c, 4), 0, 0, 0);
+        return t;
+    }
+
+    /** Natpis velikim slovima, razmaknut. Prvo prevod (red u tabeli je tekst kako je u kodu), pa velika slova. */
+    public static TextView caps(Context c, String label, float sp, int color) {
+        Label t = (Label) text(c, "", sp, color, true);
+        t.setRaw(cyr(label).toUpperCase(java.util.Locale.ROOT));
+        t.setLetterSpacing(0.15f);
         return t;
     }
 
@@ -362,7 +369,7 @@ public final class Ui {
             LinearLayout cell = column(c);
             cell.setGravity(android.view.Gravity.CENTER);
             cell.setMinimumHeight(dp(c, 64));
-            cell.setContentDescription(TABS[i] + (i == active ? ", izabrano" : ""));
+            cell.setContentDescription(cyr(TABS[i]) + (i == active ? cyr(", izabrano") : ""));
             cell.setFocusable(true);
             int p = dp(c, 10);
             cell.setPadding(0, p, 0, p);
@@ -455,7 +462,7 @@ public final class Ui {
             field.setError(null);
             return value;
         } catch (Exception e) {
-            field.setError("Unesi ceo broj od 0 do 2147483647");
+            field.setError(cyr("Unesi ceo broj od 0 do 2147483647"));
             field.requestFocus();
             return null;
         }

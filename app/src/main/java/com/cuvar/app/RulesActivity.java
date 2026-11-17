@@ -516,7 +516,7 @@ public class RulesActivity extends SubActivity {
                     String typed = siteBox.getText().toString().trim();
                     String wantSite = typed.isEmpty() ? null : Hosts.hostOf(typed);
                     if (!typed.isEmpty() && (wantSite == null || !wantSite.contains("."))) {
-                        siteBox.setError("Unesi adresu sajta, npr. linkedin.com");
+                        siteBox.setError(Ui.cyr("Unesi adresu sajta, npr. linkedin.com"));
                         return false;
                     }
                     boolean ownRule = wantLock || wantLimit > 0 || wantOpens > 0 || wantSession > 0;
@@ -694,7 +694,7 @@ public class RulesActivity extends SubActivity {
                 .primary("Dalje", () -> {
                     String host = Hosts.hostOf(address.getText().toString());
                     if (host == null || !host.contains(".") || !host.matches("[a-z0-9\\p{L}.-]+")) {
-                        address.setError("Unesi adresu sajta, npr. youtube.com, ili izaberi aplikaciju");
+                        address.setError(Ui.cyr("Unesi adresu sajta, npr. youtube.com, ili izaberi aplikaciju"));
                         return false;
                     }
                     editSite(host);

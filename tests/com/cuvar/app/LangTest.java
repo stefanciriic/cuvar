@@ -31,12 +31,19 @@ public final class LangTest {
         // Tekst u kodu bez prevoda ruši test. Ne proverava se: komentar, poruka izuzetka i red označen sa
         // "// bez prevoda" (tekst koji se ne prikazuje, npr. reči za prepoznavanje sistemskih ekrana).
         Pattern lit = Pattern.compile("\"((?:[^\"\\\\\\n]|\\\\.)*)\"");
-        int missing = 0;
+        int missing = 0, bypass = 0;
         for (java.nio.file.Path p : (Iterable<java.nio.file.Path>) Files.walk(Paths.get("app/src/main/java/com/cuvar/app")).filter(f -> f.toString().endsWith(".java"))::iterator) {
             String name = p.getFileName().toString();
             if (name.equals("QuizBank.java") || name.equals("Translit.java") || name.equals("Lang.java")) continue;
             for (String line : Files.readAllLines(p, StandardCharsets.UTF_8)) {
                 String t = line.trim();
+                // Prevod traži tekst kako je u kodu: velika slova pre Label-a ("SADA") ga promaše, a
+                // setError/setContentDescription ne idu kroz Label, pa im treba Ui.cyr.
+                if (!t.startsWith("//") && !t.startsWith("*") && ((t.contains("text(") && t.contains(".toUpperCase("))
+                        || ((t.contains("setError(") || t.contains("setContentDescription(")) && !t.contains("cyr(") && !t.contains("(null)")))) {
+                    bypass++;
+                    System.out.println("Tekst mimo prevoda (" + name + "): " + t);
+                }
                 if (t.startsWith("//") || t.startsWith("*") || t.startsWith("/*") || t.contains("GuardDiagnostics")
                         || t.contains("Pattern.") || t.contains("// bez prevoda") || t.contains("Exception(\"")) continue;
                 String code = line.replaceAll("\\s//\\s.*$", ""); // komentar na kraju reda
@@ -54,6 +61,7 @@ public final class LangTest {
         }
         System.out.println("LangTest: " + checks + " provera prošlo, bez prevoda: " + missing);
         if (missing > 0) throw new AssertionError(missing + " tekstova nema red u app/src/main/assets/en.tsv (skill novi-tekst)");
+        if (bypass > 0) throw new AssertionError(bypass + " tekstova ide na ekran mimo prevoda (Ui.caps, Ui.cyr)");
     }
 
     private static void eq(String sr, String en) {

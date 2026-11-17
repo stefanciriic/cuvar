@@ -51,7 +51,7 @@ public abstract class SubActivity extends Activity {
         TextView back = Ui.text(this, "‹ Nazad", 15, Ui.ACCENT, true);
         back.setGravity(Gravity.CENTER_VERTICAL);
         back.setMinHeight(Ui.dp(this, 48));
-        back.setContentDescription("Nazad");
+        back.setContentDescription(Ui.cyr("Nazad"));
         back.setPadding(0, Ui.dp(this, 8), Ui.dp(this, 16), Ui.dp(this, 8));
         back.setOnClickListener(v -> finish());
         box.addView(back, new LinearLayout.LayoutParams(

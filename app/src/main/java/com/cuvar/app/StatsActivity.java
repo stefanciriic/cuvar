@@ -237,7 +237,7 @@ public class StatsActivity extends SubActivity {
             num.setGravity(Gravity.CENTER);
             b.addView(name, Ui.fill(this, 0));
             b.addView(num, Ui.fill(this, 4));
-            b.setContentDescription(UsageLog.dayLabel(key));
+            b.setContentDescription(Ui.cyr(UsageLog.dayLabel(key)));
             b.setOnClickListener(v -> {
                 pickedDay = key;
                 render();
@@ -421,9 +421,7 @@ public class StatsActivity extends SubActivity {
     }
 
     private TextView eyebrow(String title) {
-        TextView e = Ui.text(this, title.toUpperCase(Locale.ROOT), 12, Ui.MUTED, true);
-        e.setLetterSpacing(0.15f);
-        return e;
+        return Ui.caps(this, title, 12, Ui.MUTED);
     }
 
     /** Krug: koliko je vremena otišlo na koju aplikaciju, sa legendom ispod. */
@@ -456,7 +454,7 @@ public class StatsActivity extends SubActivity {
         if (rest > 0) {
             card.addView(legendRow(Charts.color(0, true), "Ostalo", rest, total), Ui.fill(this, 10));
         }
-        donut.setContentDescription(desc);
+        donut.setContentDescription(Ui.cyr(desc.toString()));
         return card;
     }
 
@@ -503,7 +501,7 @@ public class StatsActivity extends SubActivity {
             desc.append(UsageLog.dayLabel(dayKeys.get(d))).append(' ').append(Ui.fmt(dayTotal));
         }
         Charts.Columns chart = new Charts.Columns(this, cols, labels, dayKeys.size() - 1, avg);
-        chart.setContentDescription(desc);
+        chart.setContentDescription(Ui.cyr(desc.toString()));
         // Dodir na kolonu otvara taj dan.
         chart.setOnTouchListener((v, ev) -> {
             if (ev.getAction() != android.view.MotionEvent.ACTION_UP || v.getWidth() <= 0) return true;
@@ -544,8 +542,7 @@ public class StatsActivity extends SubActivity {
 
     private View barsCard(String title, List<Row> rows) {
         LinearLayout card = Ui.card(this);
-        TextView eyebrow = Ui.text(this, title.toUpperCase(Locale.ROOT), 12, Ui.MUTED, true);
-        eyebrow.setLetterSpacing(0.15f);
+        TextView eyebrow = Ui.caps(this, title, 12, Ui.MUTED);
         card.addView(eyebrow);
 
         if (rows.isEmpty()) {

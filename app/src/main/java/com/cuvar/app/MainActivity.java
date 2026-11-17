@@ -148,7 +148,7 @@ public class MainActivity extends Activity {
         TextView gear = Ui.text(this, "⚙", 26, Ui.MUTED, false);
         int p = Ui.dp(this, 8);
         gear.setPadding(p, p, p, p);
-        gear.setContentDescription("Podešavanja");
+        gear.setContentDescription(Ui.cyr("Podešavanja"));
         gear.setOnClickListener(v -> sheets.showSettings());
         top.addView(gear);
         col.addView(top);

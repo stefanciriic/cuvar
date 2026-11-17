@@ -59,8 +59,8 @@ public final class PinPad extends LinearLayout {
                 TextView b = Ui.text(c, label, small ? 17 : 24, small ? (dark ? Ui.NIGHT_ACCENT : Ui.ACCENT) : fg, true);
                 b.setGravity(Gravity.CENTER);
                 b.setFocusable(true);
-                if (BACK.equals(label)) b.setContentDescription("Obriši cifru");
-                else if (OK.equals(label)) b.setContentDescription("Potvrdi unos");
+                if (BACK.equals(label)) b.setContentDescription(Ui.cyr("Obriši cifru"));
+                else if (OK.equals(label)) b.setContentDescription(Ui.cyr("Potvrdi unos"));
                 b.setBackground(Ui.pressable(key, keyDown, size / 2f));
                 b.setOnClickListener(Safe.click("pinKey", v -> press(label)));
                 LayoutParams lp = new LayoutParams(size, size);
@@ -110,8 +110,8 @@ public final class PinPad extends LinearLayout {
     }
 
     private void render() {
-        dots.setContentDescription(showDigits ? "Odgovor: " + buf
-                : "Uneto cifara: " + buf.length());
+        dots.setContentDescription(Ui.cyr(showDigits ? "Odgovor: " + buf
+                : "Uneto cifara: " + buf.length()));
         if (buf.length() == 0) {
             dots.setText("––––");
             dots.setAlpha(0.35f);

@@ -183,7 +183,7 @@ public class FocusActivity extends SubActivity {
                 String host = Hosts.hostOf(raw.trim());
                 if (host == null || !host.contains(".")) {
                     if (!raw.trim().isEmpty()) {
-                        sitesInput.setError("Unesi domen, npr. github.com");
+                        sitesInput.setError(Ui.cyr("Unesi domen, npr. github.com"));
                         return;
                     }
                 } else {

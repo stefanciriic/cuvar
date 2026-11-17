@@ -410,7 +410,7 @@ public class ScheduleActivity extends SubActivity {
                 .primary("Sačuvaj", () -> {
                     String value = name.getText().toString().trim();
                     if (value.isEmpty()) {
-                        name.setError("Unesi naziv, npr. Spavanje");
+                        name.setError(Ui.cyr("Unesi naziv, npr. Spavanje"));
                         return false;
                     }
                     DailySchedule.Rule now = store.modes.schedule(id);
@@ -507,7 +507,7 @@ public class ScheduleActivity extends SubActivity {
                 .primary("Dodaj", () -> {
                     String host = Hosts.hostOf(address.getText().toString());
                     if (host == null || !host.contains(".") || !host.matches("[a-z0-9\\p{L}.-]+")) {
-                        address.setError("Unesi adresu sajta, npr. youtube.com");
+                        address.setError(Ui.cyr("Unesi adresu sajta, npr. youtube.com"));
                         return false;
                     }
                     store.modes.setScheduleSite(id, host, true);
