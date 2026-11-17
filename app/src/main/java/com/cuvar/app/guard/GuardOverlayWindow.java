@@ -19,9 +19,15 @@ import com.cuvar.app.rules.QuickCover;
 import com.cuvar.app.ui.Safe;
 import com.cuvar.app.ui.Ui;
 
-/** Owns the accessibility overlay window and pauses media while it is visible. */
+/**
+ * Owns the overlay window and pauses media while it is visible. Sa Pristupačnošću prozor Pristupačnosti,
+ * u lakom režimu (nije povezana) običan prikaz preko aplikacija.
+ */
 public final class GuardOverlayWindow {
     private final WindowManager windows;
+    /** WindowManager aplikacije (bez tokena Pristupačnosti), za TYPE_APPLICATION_OVERLAY. */
+    private final WindowManager appWindows;
+    private final java.util.function.BooleanSupplier connected;
     private final AudioManager audio;
     private final Context context;
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -33,9 +39,11 @@ public final class GuardOverlayWindow {
     private String musicOwner;
     private boolean musicSeen;
 
-    public GuardOverlayWindow(Context context) {
+    public GuardOverlayWindow(Context context, java.util.function.BooleanSupplier connected) {
         this.context = context;
+        this.connected = connected;
         windows = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
+        appWindows = (WindowManager) context.getApplicationContext().getSystemService(Context.WINDOW_SERVICE);
         audio = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
     }
 
@@ -61,13 +69,13 @@ public final class GuardOverlayWindow {
         WindowManager.LayoutParams params = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT,
-                WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                type(),
                 catchBack ? 0 : WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
                 PixelFormat.TRANSLUCENT);
         params.gravity = Gravity.TOP | Gravity.START;
         place(params, bounds);
         keepClearOfBars(view);
-        windows.addView(view, params);
+        managerOf(params).addView(view, params);
         if (!MusicOwner.belongsToOther(musicPlaying, musicOwner, front)) silenceMedia();
     }
 
@@ -104,13 +112,13 @@ public final class GuardOverlayWindow {
             WindowManager.LayoutParams params = new WindowManager.LayoutParams(
                     WindowManager.LayoutParams.MATCH_PARENT,
                     WindowManager.LayoutParams.MATCH_PARENT,
-                    WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                    type(),
                     WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
                     PixelFormat.OPAQUE);
             params.gravity = Gravity.TOP | Gravity.START;
             params.windowAnimations = 0; // bez animacije: zavesa mora da se vidi odmah
             place(params, null);
-            windows.addView(v, params);
+            managerOf(params).addView(v, params);
             shield = v;
             handler.postDelayed(Safe.task("coverTimeout", () -> {
                 if (shield == v) uncover();
@@ -130,7 +138,7 @@ public final class GuardOverlayWindow {
         if (v == null) return;
         shield = null;
         try {
-            windows.removeView(v);
+            managerOf(v).removeView(v);
         } catch (Throwable error) {
             GuardDiagnostics.report("uncover", error);
         }
@@ -171,10 +179,24 @@ public final class GuardOverlayWindow {
         try {
             WindowManager.LayoutParams params = (WindowManager.LayoutParams) view.getLayoutParams();
             place(params, bounds);
-            windows.updateViewLayout(view, params);
+            managerOf(params).updateViewLayout(view, params);
         } catch (Throwable error) {
             GuardDiagnostics.report("moveOverlay", error);
         }
+    }
+
+    private int type() {
+        return connected.getAsBoolean() ? WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
+                : WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
+    }
+
+    /** Prozor se skida istim WindowManager-om kojim je dodat (tip se mogao promeniti u međuvremenu). */
+    private WindowManager managerOf(WindowManager.LayoutParams params) {
+        return params.type == WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY ? windows : appWindows;
+    }
+
+    private WindowManager managerOf(View view) {
+        return managerOf((WindowManager.LayoutParams) view.getLayoutParams());
     }
 
     private static void place(WindowManager.LayoutParams params, android.graphics.Rect bounds) {
@@ -200,7 +222,7 @@ public final class GuardOverlayWindow {
 
     public void hide(View view) {
         try {
-            windows.removeView(view);
+            managerOf(view).removeView(view);
         } catch (Throwable error) {
             GuardDiagnostics.report("hideOverlay", error);
         } finally {

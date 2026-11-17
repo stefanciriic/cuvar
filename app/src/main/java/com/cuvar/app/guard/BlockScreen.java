@@ -107,7 +107,7 @@ public final class BlockScreen {
             GuardDiagnostics.report("leaveBlock", error);
             // Izlaz mora uvek da radi: početni ekran, pa nova provera (blokada se vraća ako i dalje važi).
             try {
-                svc.performGlobalAction(GuardService.GLOBAL_ACTION_HOME);
+                svc.globalAction(GuardService.GLOBAL_ACTION_HOME);
             } catch (Throwable ignored) {
                 // nema drugog izlaza; prozor se ipak skida ispod
             }
@@ -142,7 +142,7 @@ public final class BlockScreen {
             return;
         }
         hideOverlay();
-        svc.performGlobalAction(GuardService.GLOBAL_ACTION_HOME);
+        svc.globalAction(GuardService.GLOBAL_ACTION_HOME);
         svc.h.removeCallbacks(svc.recheckSoon);
         svc.h.postDelayed(svc.recheckSoon, 600);
     }
@@ -157,7 +157,7 @@ public final class BlockScreen {
     private void pressBack() {
         com.cuvar.app.ui.Safe.run("exitBack", () -> {
             try {
-                svc.performGlobalAction(GuardService.GLOBAL_ACTION_BACK);
+                svc.globalAction(GuardService.GLOBAL_ACTION_BACK);
             } finally {
                 svc.h.removeCallbacks(svc.recheckSoon);
                 svc.h.postDelayed(svc.recheckSoon, 700);
@@ -186,7 +186,7 @@ public final class BlockScreen {
                 pressBack();
             } else {
                 exitKey = null;
-                svc.performGlobalAction(GuardService.GLOBAL_ACTION_HOME);
+                svc.globalAction(GuardService.GLOBAL_ACTION_HOME);
             }
             return true;
         }
@@ -268,7 +268,7 @@ public final class BlockScreen {
             if (sitePage(key, kind) && !canUnlock(kind, cooling, code)
                     && !(key.equals(backedKey) && now - backedAt < BACK_RETRY_MS)) {
                 // Pregledač se odmah vraća na prethodnu stranicu u istoj kartici, bez nove kartice.
-                svc.performGlobalAction(GuardService.GLOBAL_ACTION_BACK);
+                svc.globalAction(GuardService.GLOBAL_ACTION_BACK);
                 backedKey = key;
                 backedAt = now;
                 notice = true;
@@ -347,6 +347,6 @@ public final class BlockScreen {
     }
 
     public void overlayGlobalBack() {
-        svc.performGlobalAction(GuardService.GLOBAL_ACTION_BACK);
+        svc.globalAction(GuardService.GLOBAL_ACTION_BACK);
     }
 }

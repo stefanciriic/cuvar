@@ -19,7 +19,11 @@ public final class ForegroundApp {
 
     private final UsageStatsManager usm;
     private long lastQuery;
+    // Posle vraćanja sata: stari događaji ("iz budućnosti", ts|paket) i najveće njihovo vreme.
+    private final java.util.Set<String> stale = new java.util.HashSet<>();
+    private long staleMax;
     private volatile String last;
+    private volatile String lastClass;
     private volatile long lastAt;
     private final ExecutorService worker = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "cuvar-usage-events");
@@ -60,6 +64,11 @@ public final class ForegroundApp {
         return last;
     }
 
+    /** Ekran (aktivnost) aplikacije iz current(), ili null; samo za prepoznavanje ekrana poziva u lakom režimu. */
+    public String currentClass() {
+        return lastClass;
+    }
+
     /** UsageStats IPC and event iteration can be slow on vendor builds; never run it on the service/UI thread. */
     public void refresh(Runnable onUpdated) {
         if (usm == null || worker.isShutdown() || !queryPending.compareAndSet(false, true)) return;
@@ -78,19 +87,36 @@ public final class ForegroundApp {
             // Sat telefona je ovde potreban: UsageStats beleži događaje po njemu (ne odlučuje o pravilima).
             long now = System.currentTimeMillis();
             long from = lastQuery == 0 ? now - 10 * 60000L : Math.min(lastQuery - 2000L, now - 1000L);
-            UsageEvents events = usm.queryEvents(from, now);
+            // Kraj bez granice: posle vraćanja sata unazad Android drži tekuće događaje u intervalu koji počinje
+            // "u budućnosti", pa ih upit do "sada" ne vraća i aplikacija napred ostaje nepoznata.
+            UsageEvents events = usm.queryEvents(from, Long.MAX_VALUE);
             UsageEvents.Event e = new UsageEvents.Event();
+            boolean jumped = lastQuery != 0 && now < lastQuery - 2000L;
+            // Stari događaji više ne mogu u prozor upita: zaborave se.
+            if (!jumped && from > staleMax) stale.clear();
             String found = old;
+            String foundClass = lastClass;
             long foundAt = lastAt;
             while (events != null && events.hasNextEvent()) {
                 events.getNextEvent(e);
-                if (e.getEventType() == UsageEvents.Event.MOVE_TO_FOREGROUND && e.getPackageName() != null) {
+                if (e.getEventType() != UsageEvents.Event.MOVE_TO_FOREGROUND || e.getPackageName() == null) continue;
+                long ts = e.getTimeStamp();
+                String key = jumped || !stale.isEmpty() ? ts + "|" + e.getPackageName() : null;
+                // Sat je vraćen: događaji posle "sada" su stari (pre vraćanja); preskaču se dok ih sat ne prestigne.
+                if (jumped && ts > now) {
+                    stale.add(key);
+                    staleMax = Math.max(staleMax, ts);
+                }
+                // Događaji iz "budućnosti" nisu sadašnje stanje; tolerancija samo koliko traje upit.
+                if (ts <= now + 5000L && (key == null || !stale.contains(key))) {
                     found = e.getPackageName();
-                    foundAt = e.getTimeStamp();
+                    foundClass = e.getClassName();
+                    foundAt = ts;
                 }
             }
             synchronized (this) {
                 last = found;
+                lastClass = foundClass;
                 lastAt = foundAt;
                 lastQuery = now;
             }

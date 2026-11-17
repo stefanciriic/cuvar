@@ -202,7 +202,11 @@ public final class ModeHoldsTest {
 
     private static EnforcedRules er(Map<String, AppRule> apps, Map<String, Integer> sites, List<Rule> schedules,
                                     boolean protect, Set<String> free, Set<String> links) {
-        return new EnforcedRules(apps, sites, schedules, false, protect, free, free, links);
+        return new EnforcedRules(apps, sites, schedules, false, protect, true, free, free, links);
+    }
+
+    private static EnforcedRules lightOf(EnforcedRules r) {
+        return new EnforcedRules(r.apps, r.sites, r.schedules, r.night, r.protect, false, r.nightFree, r.dayFree, r.links);
     }
 
     private static EnforcedRules er(List<Rule> schedules) {
@@ -255,6 +259,8 @@ public final class ModeHoldsTest {
                 "Blokiran sajt je pooštravanje");
         check(EnforcedRules.loosens(base, er(app(new AppRule(true, 30, 5, 20)), site(30), none, false, set("a"), set("p|d"))),
                 "Zaštita isključena");
+        check(EnforcedRules.loosens(base, lightOf(base)), "Laki režim");
+        check(!EnforcedRules.loosens(lightOf(base), base), "Povratak na pun rad je pooštravanje");
         check(EnforcedRules.loosens(base, er(app(new AppRule(true, 30, 5, 20)), site(30), none, true, set("a", "b"), set("p|d"))),
                 "Nov izuzetak");
         check(!EnforcedRules.loosens(base, er(app(new AppRule(true, 30, 5, 20)), site(30), none, true, set(), set("p|d"))),
@@ -295,6 +301,14 @@ public final class ModeHoldsTest {
         List<ModeHolds.Hold> fh = Collections.singletonList(new ModeHolds.Hold("20261117", ModeHolds.withDayFree(before, "a")));
         check(ModeHolds.morning(wanted, none, fh, "20261116", 6 * 60, 1).dayFree.contains("a"), "freeNow ostaje sutra");
         check(!before.dayFree.contains("a"), "withDayFree ne menja ulaz");
+        // Laki režim: danas pun rad iz zadržanog, sutra laki; withDayFree i carry ga ne menjaju.
+        List<ModeHolds.Hold> lh = Collections.singletonList(new ModeHolds.Hold("20261117", before));
+        check(ModeHolds.morning(lightOf(before), none, lh, "20261116", 6 * 60, 1).full, "Laki čeka sutra");
+        check(!ModeHolds.morning(lightOf(before), none, lh, "20261117", 6 * 60, 2).full, "Sutra laki");
+        check(!ModeHolds.withDayFree(lightOf(before), "a").full, "withDayFree čuva laki");
+        Rule night = rule(23 * 60, 8 * 60);
+        check(!ModeHolds.morning(lightOf(before), Collections.singletonList(night), new ArrayList<>(), "20261117",
+                6 * 60 + 30, 2).full, "Zadržan režim čuva laki");
     }
 
     private static void eq(String got, String want, String what) {

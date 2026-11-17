@@ -4,6 +4,7 @@ import com.cuvar.app.BuildConfig;
 import com.cuvar.app.GuardService;
 import com.cuvar.app.data.Store;
 import com.cuvar.app.guard.ErrorLog;
+import com.cuvar.app.guard.ForegroundApp;
 import com.cuvar.app.guard.GuardDiagnostics;
 import com.cuvar.app.guard.LoadMeter;
 import com.cuvar.app.i18n.Lang;
@@ -15,6 +16,9 @@ import com.cuvar.app.unlock.QuickGame;
 import com.cuvar.app.unlock.QuickGameView;
 
 import android.app.Activity;
+import android.content.Intent;
+import android.net.Uri;
+import android.provider.Settings;
 import android.view.Gravity;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -47,6 +51,10 @@ public final class SettingsSheets {
         Ui.groupRow(a, g, "Jezik", langName(Ui.langChoice(a)), v -> {
             sheet.dismiss();
             chooseScript();
+        });
+        Ui.groupRow(a, g, "Način rada", modeName(), v -> {
+            sheet.dismiss();
+            chooseMode();
         });
         Ui.groupRow(a, g, "Pre otključavanja", challengeName(Ui.unlockChallenge(a)), v -> {
             sheet.dismiss();
@@ -301,6 +309,74 @@ public final class SettingsSheets {
                 .show();
     }
 
+    private String modeName() {
+        if (store.lightNow()) return "Lak (bez Pristupačnosti)";
+        return store.lightWanted() ? "Pun · laki počinje sutra u 06:00" : "Pun (sa Pristupačnošću)";
+    }
+
+    /** Pun (Pristupačnost) ili laki režim: lak -> pun važi odmah, pun -> lak je popuštanje (06–10, važi sutra). */
+    public void chooseMode() {
+        boolean light = store.lightWanted();
+        LinearLayout box = Ui.column(a);
+        if (!ForegroundApp.granted(a)) {
+            TextView b = Ui.button(a, "Dozvoli pristup korišćenju", false);
+            b.setOnClickListener(Safe.click("modeUsage", v -> openUsageAccess(a)));
+            box.addView(b);
+        }
+        if (!Settings.canDrawOverlays(a)) {
+            TextView b = Ui.button(a, "Dozvoli prikaz preko drugih aplikacija", false);
+            b.setOnClickListener(Safe.click("modeOverlay", v -> openOverlay(a)));
+            box.addView(b, Ui.fill(a, box.getChildCount() == 0 ? 0 : 10));
+        }
+        Sheet sheet = new Sheet(a, "Način rada").message("Pun režim koristi Pristupačnost: blokira aplikacije i sajtove "
+                + "i može da štiti Čuvara od isključivanja.\n\n"
+                + "Laki režim radi bez Pristupačnosti, uz Pristup korišćenju i Prikaz preko drugih aplikacija. "
+                + "Aplikacije se blokiraju uz kratko kašnjenje, ali sajtovi u pregledaču ne, zaštita od isključivanja "
+                + "ne važi, troši malo više baterije i stalno se vidi obaveštenje. "
+                + "Ne vide se ni aplikacije u podeljenom ekranu ili plutajućem prozoru.\n\n"
+                + (light ? "Povratak na pun režim važi odmah. Do uključivanja Pristupačnosti Čuvar radi bez nje."
+                         : "Prelazak na laki režim je popuštanje: traži se samo od 06:00 do 10:00 i važi sutra u 06:00."));
+        if (box.getChildCount() > 0) sheet.view(box);
+        sheet.secondary("Zatvori", null);
+        sheet.primary(light ? "Vrati pun režim" : "Zatraži laki režim", () -> {
+            if (!store.setLight(!light)) {
+                Ui.toast(a, "Popuštanje pravila može da se zatraži samo od 06:00 do 10:00, a važi sutra u 06:00.");
+                return false;
+            }
+            boolean missing = !ForegroundApp.granted(a) || !Settings.canDrawOverlays(a);
+            if (!light && missing) Ui.toast(a, "Laki režim je zatražen, ali prvo dozvoli ono što fali.");
+            else if (!light) Ui.toast(a, store.lightNow() ? "Laki režim važi." : "Laki režim počinje sutra u 06:00.");
+            GuardService.startLight(a);
+            refresh.run();
+            return true;
+        });
+        sheet.show();
+    }
+
+    /** Ekran „Pristup korišćenju“; zaštita ga dva minuta ne zatvara. */
+    public static void openUsageAccess(Activity a) {
+        GuardService.usageSetupUntil = android.os.SystemClock.elapsedRealtime() + 2 * 60000L;
+        try {
+            a.startActivity(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS));
+        } catch (Throwable t) {
+            a.startActivity(new Intent(Settings.ACTION_SETTINGS));
+        }
+    }
+
+    /** Ekran „Prikaz preko drugih aplikacija“ za Čuvara; dok važi zaštita se ne otvara (zaštita bi ga zatvorila). */
+    public static void openOverlay(Activity a) {
+        // Bez izuzetka u guardsSelf: dozvola se daje tek kad laki režim važi (tada zaštita ne važi).
+        if (GuardService.connected && Store.get(a).protectNow()) {
+            Ui.toast(a, "Dozvola se daje kad laki režim počne. Do tada zaštita od isključivanja zatvara ovaj ekran.");
+            return;
+        }
+        try {
+            a.startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + a.getPackageName())));
+        } catch (Throwable t) {
+            a.startActivity(new Intent(Settings.ACTION_SETTINGS));
+        }
+    }
+
     /** Zaštita od isključivanja: uključivanje važi odmah, isključivanje se traži 06–10 i važi sutra u 06:00. */
     public void chooseProtect() {
         boolean on = store.protectSelf();
@@ -308,7 +384,8 @@ public final class SettingsSheets {
                 + "na kojima bi mogao da se isključi u Pristupačnosti, zaustavi, obriše mu se podaci ili da se deinstalira. "
                 + "Ažuriranje Čuvara i dalje radi.\n\n"
                 + (on ? "Isključivanje se traži samo od 06:00 do 10:00 i važi sutra u 06:00, pa tek tada Čuvar može da se ukloni."
-                      : "Uključivanje važi odmah. Isključivanje se traži samo od 06:00 do 10:00 i važi sutra u 06:00."))
+                      : "Uključivanje važi odmah. Isključivanje se traži samo od 06:00 do 10:00 i važi sutra u 06:00.")
+                + (store.lightNow() ? "\n\nU lakom režimu (bez Pristupačnosti) zaštita ne važi." : ""))
                 .secondary("Zatvori", null);
         sheet.primary(on ? "Zatraži isključivanje" : "Uključi", () -> {
             if (!store.setProtectSelf(!on)) {

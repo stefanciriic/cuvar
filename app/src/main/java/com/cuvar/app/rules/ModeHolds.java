@@ -96,14 +96,14 @@ public final class ModeHolds {
         }
         if (carried.isEmpty()) return out;
         return new EnforcedRules(out.apps, out.sites, DailySchedule.tighten(carried, out.schedules), out.night,
-                out.protect, out.nightFree, out.dayFree, out.links);
+                out.protect, out.full, out.nightFree, out.dayFree, out.links);
     }
 
     /** Snimak sa još jednim izuzetkom od ukupnog limita (izuzetak koji je već odmah važeći, DayLimit.freeNow). */
     public static EnforcedRules withDayFree(EnforcedRules r, String key) {
         java.util.Set<String> free = new java.util.HashSet<>(r.dayFree);
         free.add(key);
-        return new EnforcedRules(r.apps, r.sites, r.schedules, r.night, r.protect, r.nightFree, free, r.links);
+        return new EnforcedRules(r.apps, r.sites, r.schedules, r.night, r.protect, r.full, r.nightFree, free, r.links);
     }
 
     /** Zadržani snimci koji još važe na dan day. */

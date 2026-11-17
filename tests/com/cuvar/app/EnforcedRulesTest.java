@@ -70,6 +70,11 @@ public final class EnforcedRulesTest {
         check(tight(rules(false, false), rules(false, true)).protect, "Zaštita: uključivanje odmah");
         check(tight(rules(false, true), rules(false, false)).protect, "Zaštita: isključivanje čeka");
         check(!tight(rules(false, false), rules(false, false)).night, "Isključeno ostaje isključeno");
+        check(tight(light(), none()).full, "Pun rad: povratak iz lakog odmah");
+        check(tight(none(), light()).full, "Laki režim čeka");
+        check(!tight(light(), light()).full, "Laki ostaje laki");
+        check(EnforcedRules.loosens(none(), light()), "Pun -> lak je popuštanje");
+        check(!EnforcedRules.loosens(light(), none()), "Lak -> pun je pooštravanje");
     }
 
     private static void exemptions() {
@@ -124,7 +129,7 @@ public final class EnforcedRulesTest {
         Map<String, Integer> s = new HashMap<>();
         s.put("youtube.com", 0);
         EnforcedRules now = new EnforcedRules(map("yt", new AppRule(true, 0, 0, 0)), s, list(work),
-                false, false, set(), set(), set());
+                false, false, true, set(), set(), set());
         DailySchedule.Rule emptied = rule("m1", true, 9 * 60, 17 * 60, set(), set());
         EnforcedRules r = tight(now, mode(emptied));
         check(r.apps.containsKey("yt") && r.apps.get("yt").lock, "Uklonjena aplikacija ostaje zaključana do 06:00");
@@ -138,7 +143,7 @@ public final class EnforcedRulesTest {
     private static void inputsUnchanged() {
         DailySchedule.Rule work = rule("m1", true, 9 * 60, 17 * 60, set("yt"), set());
         EnforcedRules now = new EnforcedRules(map("yt", new AppRule(false, 30, 0, 0)), new HashMap<>(), list(work),
-                true, false, set(), set(), set());
+                true, false, true, set(), set(), set());
         DailySchedule.Rule fewer = rule("m1", true, 9 * 60, 17 * 60, set(), set());
         EnforcedRules wanted = mode(fewer);
         EnforcedRules.tighten(now, wanted, true);
@@ -172,29 +177,33 @@ public final class EnforcedRulesTest {
     }
 
     private static EnforcedRules rules(boolean night, boolean protect) {
-        return new EnforcedRules(new HashMap<>(), new HashMap<>(), new ArrayList<>(), night, protect, set(), set(), set());
+        return new EnforcedRules(new HashMap<>(), new HashMap<>(), new ArrayList<>(), night, protect, true, set(), set(), set());
+    }
+
+    private static EnforcedRules light() {
+        return new EnforcedRules(new HashMap<>(), new HashMap<>(), new ArrayList<>(), false, false, false, set(), set(), set());
     }
 
     private static EnforcedRules apps(String pkg, AppRule r) {
-        return new EnforcedRules(map(pkg, r), new HashMap<>(), new ArrayList<>(), false, false, set(), set(), set());
+        return new EnforcedRules(map(pkg, r), new HashMap<>(), new ArrayList<>(), false, false, true, set(), set(), set());
     }
 
     private static EnforcedRules sites(String dom, int limit) {
         Map<String, Integer> s = new HashMap<>();
         s.put(dom, limit);
-        return new EnforcedRules(new HashMap<>(), s, new ArrayList<>(), false, false, set(), set(), set());
+        return new EnforcedRules(new HashMap<>(), s, new ArrayList<>(), false, false, true, set(), set(), set());
     }
 
     private static EnforcedRules with(Set<String> nightFree, Set<String> links) {
-        return new EnforcedRules(new HashMap<>(), new HashMap<>(), new ArrayList<>(), false, false, nightFree, set(), links);
+        return new EnforcedRules(new HashMap<>(), new HashMap<>(), new ArrayList<>(), false, false, true, nightFree, set(), links);
     }
 
     private static EnforcedRules dayFree(Set<String> dayFree) {
-        return new EnforcedRules(new HashMap<>(), new HashMap<>(), new ArrayList<>(), false, false, set(), dayFree, set());
+        return new EnforcedRules(new HashMap<>(), new HashMap<>(), new ArrayList<>(), false, false, true, set(), dayFree, set());
     }
 
     private static EnforcedRules mode(DailySchedule.Rule r) {
-        return new EnforcedRules(new HashMap<>(), new HashMap<>(), list(r), false, false, set(), set(), set());
+        return new EnforcedRules(new HashMap<>(), new HashMap<>(), list(r), false, false, true, set(), set(), set());
     }
 
     private static DailySchedule.Rule rule(String id, boolean enabled, int start, int end, Set<String> apps, Set<String> sites) {

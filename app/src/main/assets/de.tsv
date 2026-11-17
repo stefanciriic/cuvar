@@ -859,3 +859,32 @@ Pooštravanje važi odmah. Popuštanje se traži samo od 06:00 do 10:00 i važi 
 Isključivanje se traži samo od 06:00 do 10:00 i važi sutra u 06:00, pa tek tada Čuvar može da se ukloni.	Das Ausschalten kann nur von 06:00 bis 10:00 angefordert werden und gilt morgen um 06:00; erst dann kann Čuvar entfernt werden.
 Uključivanje važi odmah. Isključivanje se traži samo od 06:00 do 10:00 i važi sutra u 06:00.	Einschalten gilt sofort. Ausschalten kann nur von 06:00 bis 10:00 angefordert werden und gilt morgen um 06:00.
 Zatraži isključivanje	Ausschalten anfordern
+Laki režim	Leichter Modus
+Čuvar radi u lakom režimu	Čuvar läuft im leichten Modus
+Bez Pristupačnosti: aplikacije se blokiraju, sajtovi ne.	Ohne Bedienungshilfen: Apps werden blockiert, Websites nicht.
+Laki režim (bez Pristupačnosti) počinje	Leichter Modus (ohne Bedienungshilfen) beginnt
+Način rada	Betriebsart
+Lak (bez Pristupačnosti)	Leicht (ohne Bedienungshilfen)
+Pun · laki počinje sutra u 06:00	Voll · leicht beginnt morgen um 06:00
+Pun (sa Pristupačnošću)	Voll (mit Bedienungshilfen)
+Pun režim koristi Pristupačnost: blokira aplikacije i sajtove 	Der volle Modus nutzt Bedienungshilfen: Er blockiert Apps und Websites 
+i može da štiti Čuvara od isključivanja.\n\n	und kann Čuvar vor dem Ausschalten schützen.\n\n
+Laki režim radi bez Pristupačnosti, uz Pristup korišćenju i Prikaz preko drugih aplikacija. 	Der leichte Modus funktioniert ohne Bedienungshilfen, mit Nutzungszugriff und Über anderen Apps einblenden. 
+Aplikacije se blokiraju uz kratko kašnjenje, ali sajtovi u pregledaču ne, zaštita od isključivanja 	Apps werden mit kurzer Verzögerung blockiert, Websites im Browser aber nicht, der Schutz vor dem Ausschalten 
+ne važi, troši malo više baterije i stalno se vidi obaveštenje. 	gilt nicht, es braucht etwas mehr Akku und eine Benachrichtigung ist immer sichtbar. 
+Povratak na pun režim važi odmah. Do uključivanja Pristupačnosti Čuvar radi bez nje.	Die Rückkehr zum vollen Modus gilt sofort. Bis die Bedienungshilfe eingeschaltet ist, arbeitet Čuvar ohne sie.
+Prelazak na laki režim je popuštanje: traži se samo od 06:00 do 10:00 i važi sutra u 06:00.	Der Wechsel zum leichten Modus ist eine Lockerung: Er kann nur von 06:00 bis 10:00 beantragt werden und gilt morgen um 06:00.
+Vrati pun režim	Zurück zum vollen Modus
+Zatraži laki režim	Leichten Modus beantragen
+Laki režim važi.	Der leichte Modus gilt.
+Laki režim počinje sutra u 06:00.	Der leichte Modus beginnt morgen um 06:00.
+\n\nU lakom režimu (bez Pristupačnosti) zaštita ne važi.	\n\nIm leichten Modus (ohne Bedienungshilfen) gilt der Schutz nicht.
+Bez Pristupačnosti (lako)	Ohne Bedienungshilfen (leicht)
+Dozvoli prikaz preko drugih aplikacija	Über anderen Apps einblenden erlauben
+U lakom režimu Čuvar tako prikazuje ekran blokade preko aplikacije. Pronađi „Čuvar“ i uključi dozvolu.	Im leichten Modus zeigt Čuvar so den Sperrbildschirm über einer App. Suche „Čuvar“ und schalte die Berechtigung ein.
+Ne važi u lakom režimu (bez Pristupačnosti)	Gilt nicht im leichten Modus (ohne Bedienungshilfen)
+●  Čuvar radi (lako)	●  Čuvar läuft (leicht)
+Laki režim (bez Pristupačnosti): sajtovi u pregledaču se ne blokiraju, samo aplikacije.	Leichter Modus (ohne Bedienungshilfen): Websites im Browser werden nicht blockiert, nur Apps.
+Ne vide se ni aplikacije u podeljenom ekranu ili plutajućem prozoru.\n\n	Apps im geteilten Bildschirm oder in einem schwebenden Fenster werden ebenfalls nicht erkannt.\n\n
+Laki režim je zatražen, ali prvo dozvoli ono što fali.	Der leichte Modus ist angefordert, aber erlaube zuerst, was noch fehlt.
+Dozvola se daje kad laki režim počne. Do tada zaštita od isključivanja zatvara ovaj ekran.	Die Berechtigung kann erteilt werden, sobald der leichte Modus beginnt. Bis dahin schließt der Schutz vor dem Ausschalten diesen Bildschirm.

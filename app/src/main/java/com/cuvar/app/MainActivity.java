@@ -90,6 +90,7 @@ public class MainActivity extends Activity {
             return;
         }
         Safe.screen(this, "dashboard", this::showDashboard);
+        Safe.run("startLight", () -> GuardService.startLight(this));
     }
 
     @Override
@@ -163,18 +164,29 @@ public class MainActivity extends Activity {
         LinearLayout col = titled("Čuvar", shownDate);
 
         boolean enabled = GuardService.isEnabled(this);
-        if (!enabled) {
-            col.addView(setupCard("Uključi Čuvara",
+        boolean light = store.lightWanted() || store.lightNow();
+        if (!enabled && !store.lightWanted()) {
+            LinearLayout card = (LinearLayout) setupCard("Uključi Čuvara",
                     "U Pristupačnosti pronađi „Čuvar“ (na Samsungu pod Instalirane aplikacije, na drugim telefonima pod Preuzete aplikacije) i uključi ga. "
                             + "Bez toga merenje vremena i blokiranje ne rade. "
                             + "Čuvar tako vidi samo koja je aplikacija i koji sajt otvoren; ništa ne šalje sa telefona.\n\n"
                             + "Ako je prekidač siv ili piše „Ograničeno podešavanje“: Podešavanja → Aplikacije → Čuvar → "
                             + "meni ⋮ gore desno → „Dozvoli ograničena podešavanja“, pa ponovo ovde.",
                     "Otvori Pristupačnost", v -> openAccessibility(),
-                    "Opcija je siva ili piše da je ograničena?", v -> showRestrictedHelp()), Ui.fill(this, 14));
+                    "Opcija je siva ili piše da je ograničena?", v -> showRestrictedHelp());
+            TextView lightButton = Ui.button(this, "Bez Pristupačnosti (lako)", false);
+            lightButton.setOnClickListener(Safe.click("lightMode", v -> sheets.chooseMode()));
+            card.addView(lightButton, Ui.fill(this, 6));
+            col.addView(card, Ui.fill(this, 14));
         }
 
-        if (enabled && !ForegroundApp.granted(this)) {
+        if (light && !Settings.canDrawOverlays(this)) {
+            col.addView(setupCard("Dozvoli prikaz preko drugih aplikacija",
+                    "U lakom režimu Čuvar tako prikazuje ekran blokade preko aplikacije. Pronađi „Čuvar“ i uključi dozvolu.",
+                    "Otvori podešavanje", Safe.click("openOverlay", v -> SettingsSheets.openOverlay(this)), null, null), Ui.fill(this, 14));
+        }
+
+        if ((enabled || light) && !ForegroundApp.granted(this)) {
             col.addView(setupCard("Dozvoli pristup korišćenju",
                     "Tako Čuvar od samog telefona saznaje koja je aplikacija otvorena, pa ne opterećuje aplikacije "
                             + "bez pravila (mape, pozive, kameru). Pronađi „Čuvar“ na listi i uključi dozvolu.",
@@ -189,7 +201,7 @@ public class MainActivity extends Activity {
 
         col.addView(Ui.section(this, "Danas"), Ui.fill(this, 24));
         todaySlot = Ui.column(this);
-        todaySlot.addView(todayCard(enabled));
+        todaySlot.addView(todayCard(enabled || GuardService.running));
         col.addView(todaySlot, Ui.fill(this, 8));
         codeSlot = Ui.column(this);
         codeSlot.addView(codeCard());
@@ -213,7 +225,8 @@ public class MainActivity extends Activity {
         Ui.groupRow(this, whole, "Ukupni dnevni limit", sheets.dayLimitSummary(), v -> sheets.chooseDayLimit());
         Ui.groupRow(this, whole, "Fokus · dozvoli samo izabrano", focusSummary(),
                 v -> startActivity(new Intent(this, FocusActivity.class)));
-        Ui.groupRow(this, whole, "Zaštita od isključivanja", store.protectNow()
+        Ui.groupRow(this, whole, "Zaštita od isključivanja", store.lightNow() ? "Ne važi u lakom režimu (bez Pristupačnosti)"
+                : store.protectNow()
                 ? "Uključena · Čuvar ne može da se isključi ni obriše"
                     + (store.protectSelf() ? "" : " · isključivanje je zakazano")
                 : "Isključena", v -> sheets.chooseProtect());
@@ -285,7 +298,9 @@ public class MainActivity extends Activity {
         nowBox.removeAllViews();
 
         boolean enabled = GuardService.isEnabled(this);
-        if (enabled && GuardService.running) {
+        if (GuardService.running && !GuardService.connected) {
+            nowLine("●  Čuvar radi (lako)", null, Charts.good());
+        } else if (enabled && GuardService.running) {
             nowLine("●  Čuvar radi", null, Charts.good());
         } else if (enabled) {
             View v = nowLine("●  Čuvar trenutno ne radi",
@@ -374,12 +389,7 @@ public class MainActivity extends Activity {
     }
 
     private void openUsageAccess() {
-        GuardService.usageSetupUntil = android.os.SystemClock.elapsedRealtime() + 2 * 60000L;
-        try {
-            startActivity(new Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS));
-        } catch (Throwable t) {
-            startActivity(new Intent(android.provider.Settings.ACTION_SETTINGS));
-        }
+        SettingsSheets.openUsageAccess(this);
     }
 
     /** Koje prečice Pristupačnosti su dodeljene Čuvaru: [0] tasteri za jačinu, [1] dugme ili pokret. */
