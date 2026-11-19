@@ -16,8 +16,7 @@ GitHub Actions secrets for the APK:
 - `RELEASE_KEYSTORE_B64`, `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_PASSWORD`,
   `RELEASE_KEY_ALIAS` — the new private key.
 
-For a Google Play AAB, `UPLOAD_KEYSTORE_B64`, `UPLOAD_STORE_PASSWORD`,
-`UPLOAD_KEY_PASSWORD` and `UPLOAD_KEY_ALIAS` can optionally be added.
+CI currently does not use the `UPLOAD_*` secrets (Google Play AAB); Play release is postponed.
 
 Keystore files should not be in the repository. `app/cuvar.keystore` is a
 historically compromised key and the workflow no longer uses it; it stays only as

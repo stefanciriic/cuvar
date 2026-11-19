@@ -16,8 +16,7 @@ GitHub Actions secrets za APK:
 - `RELEASE_KEYSTORE_B64`, `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_PASSWORD`,
   `RELEASE_KEY_ALIAS` — novi privatni ključ.
 
-Za Google Play AAB, opciono se dodaju `UPLOAD_KEYSTORE_B64`,
-`UPLOAD_STORE_PASSWORD`, `UPLOAD_KEY_PASSWORD` i `UPLOAD_KEY_ALIAS`.
+`UPLOAD_*` tajne (Google Play AAB) CI trenutno ne koristi; Play izdanje je odloženo.
 
 Keystore fajlovi ne treba da budu u repozitorijumu. `app/cuvar.keystore` je
 istorijski kompromitovan ključ i workflow ga više ne koristi; ostaje samo kao
