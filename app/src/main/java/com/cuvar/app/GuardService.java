@@ -21,6 +21,7 @@ import com.cuvar.app.rules.BlockKind;
 import com.cuvar.app.rules.CallOwner;
 import com.cuvar.app.rules.DailySchedule;
 import com.cuvar.app.rules.DayLimit;
+import com.cuvar.app.rules.LightMode;
 import com.cuvar.app.rules.QuickCover;
 import com.cuvar.app.rules.UsageTracker;
 import com.cuvar.app.ui.Safe;
@@ -31,6 +32,11 @@ import com.cuvar.app.web.BrowserMonitor;
 import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.AccessibilityServiceInfo;
 import android.app.KeyguardManager;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.content.pm.ServiceInfo;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
@@ -65,6 +71,14 @@ import com.cuvar.app.rules.BlockKind.Block;
 public class GuardService extends AccessibilityService {
 
     public static volatile boolean running;
+    /** Pristupačnost je povezana (pun rad); false = laki režim ili servis ne radi. */
+    public static volatile boolean connected;
+    /** Servis radi kao foreground "laki" servis (vidi LightMode). */
+    public static volatile boolean lightRunning;
+    private boolean systemOn;        // prijemnici i otkucaj su pokrenuti (init je idempotentan)
+    private long lightTriedAt, lightCheckedAt;
+    private static final String LIGHT_CHANNEL = "light";
+    private static final int LIGHT_NOTIFICATION = 1;
     private static final long TICK_MS = 5000L;
     /** Povratak u istu aplikaciju za manje od ovoga ne računa se kao novo otvaranje. */
     private static final long OPEN_GRACE_MS = 15000L;
@@ -157,6 +171,7 @@ public class GuardService extends AccessibilityService {
     private long lastLeftAt;
     private boolean leftBlocked, leftPending, leftPause;
     private long protectToastAt;
+    private String lightClass;       // laki režim: poslednji provereni ekran aplikacije napred
 
     private final Runnable tick = new Runnable() {
         @Override
@@ -173,6 +188,7 @@ public class GuardService extends AccessibilityService {
                     if (usageOk || !(currentQuiet && screen.overlay == null && kinds.handsOff(rawPkg))) safeCheck();
                 });
                 guarded("heartbeat", () -> store.guardLog.guardBeat(false));
+                guarded("lightSync", GuardService.this::syncLight);
             } finally {
                 h.postDelayed(this, TICK_MS);
             }
@@ -187,7 +203,9 @@ public class GuardService extends AccessibilityService {
                 if (usageOk && foreground != null && power != null && power.isInteractive()) {
                     foreground.refresh(() -> h.post(() -> {
                         String fg = foreground == null ? null : foreground.current();
-                        if (fg != null && !fg.equals(rawPkg) && !TRANSPARENT.contains(fg)) safeCheck();
+                        // Bez Pristupačnosti i nov ekran iste aplikacije (dolazni poziv) traži proveru.
+                        if (fg != null && !TRANSPARENT.contains(fg) && (!fg.equals(rawPkg)
+                                || (!connected && !java.util.Objects.equals(foreground.currentClass(), lightClass)))) safeCheck();
                     }));
                 }
             } catch (Throwable error) {
@@ -274,7 +292,7 @@ public class GuardService extends AccessibilityService {
 
     /** Da li je korisnik uključio Čuvara u Pristupačnosti. */
     public static boolean isEnabled(Context c) {
-        if (running) {
+        if (connected) {
             return true;
         }
         try {
@@ -295,35 +313,140 @@ public class GuardService extends AccessibilityService {
     @Override
     protected void onServiceConnected() {
         super.onServiceConnected();
-        // Pokretanje ne sme da padne: pad ovde se ponavlja pri svakom pokušaju i Android gasi Pristupačnost.
-        // Bez Store-a servis ostaje živ i ništa ne blokira, a greška se vidi u dijagnostici.
-        guarded("script", () -> Ui.loadScript(this));
-        try {
-            store = Store.get(this);
-            Store s = store;
-            GuardDiagnostics.useClock(s::now);
-        } catch (Throwable error) {
-            GuardDiagnostics.report("store", error);
+        connected = true;
+        // Prozor lakog režima je drugog tipa: skida se, sledeća provera ga vraća kao prozor Pristupačnosti.
+        guarded("connectOverlay", screen::hideOverlay);
+        init();
+        guarded("lightSync", this::syncLight);
+    }
+
+    /**
+     * Pokretanje (Pristupačnost ili laki režim), samo jednom: servis može biti i pokrenut i povezan.
+     * Pokretanje ne sme da padne: pad ovde se ponavlja pri svakom pokušaju i Android gasi Pristupačnost.
+     * Bez Store-a servis ostaje živ i ništa ne blokira, a greška se vidi u dijagnostici.
+     */
+    private void init() {
+        if (store == null) {
+            guarded("script", () -> Ui.loadScript(this));
+            try {
+                store = Store.get(this);
+                Store s = store;
+                GuardDiagnostics.useClock(s::now);
+            } catch (Throwable error) {
+                GuardDiagnostics.report("store", error);
+            }
+            guarded("unlockSince", () -> store.unlock.unlockSince()); // otključavanja se broje od prvog pokretanja ove verzije
         }
-        guarded("unlockSince", () -> store.unlock.unlockSince()); // otključavanja se broje od prvog pokretanja ove verzije
-        try {
-            connectParts();
-        } catch (Throwable error) {
-            GuardDiagnostics.report("connect", error);
+        if (overlayWindow == null) {
+            try {
+                connectParts();
+            } catch (Throwable error) {
+                GuardDiagnostics.report("connect", error);
+            }
         }
         connectSystem();
+    }
+
+    /** Pokreće laki servis (foreground) kad treba (LightMode); greška (npr. pokretanje iz pozadine) se samo beleži. */
+    public static boolean startLight(Context c) {
+        try {
+            Context app = c.getApplicationContext();
+            Store s = Store.get(app);
+            if (!LightMode.foreground(s.lightNow(), connected, ForegroundApp.granted(app), Settings.canDrawOverlays(app))) {
+                return false;
+            }
+            app.startForegroundService(new Intent(app, GuardService.class));
+            return true;
+        } catch (Throwable error) {
+            GuardDiagnostics.report("startLight", error);
+            return false;
+        }
+    }
+
+    @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        // startForeground odmah: posle startForegroundService Android inače gasi proces.
+        try {
+            showLightNotification();
+            lightRunning = true;
+        } catch (Throwable error) {
+            GuardDiagnostics.report("lightForeground", error);
+            Safe.run("lightStop", this::stopSelf);
+            return START_NOT_STICKY;
+        }
+        guarded("lightInit", this::init);
+        guarded("lightSync", this::syncLight);
+        return START_STICKY;
+    }
+
+    private void showLightNotification() {
+        NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        NotificationChannel ch = new NotificationChannel(LIGHT_CHANNEL, Ui.cyr("Laki režim"), NotificationManager.IMPORTANCE_LOW);
+        ch.setShowBadge(false);
+        nm.createNotificationChannel(ch);
+        PendingIntent open = PendingIntent.getActivity(this, 0,
+                new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), PendingIntent.FLAG_IMMUTABLE);
+        Notification n = new Notification.Builder(this, LIGHT_CHANNEL)
+                .setSmallIcon(R.drawable.ic_launcher_fg)
+                .setContentTitle(Ui.cyr("Čuvar radi u lakom režimu"))
+                .setContentText(Ui.cyr("Bez Pristupačnosti: aplikacije se blokiraju, sajtovi ne."))
+                .setContentIntent(open)
+                .setOngoing(true)
+                .build();
+        if (Build.VERSION.SDK_INT >= 34) {
+            startForeground(LIGHT_NOTIFICATION, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
+        } else {
+            startForeground(LIGHT_NOTIFICATION, n);
+        }
+    }
+
+    /**
+     * Laki servis po LightMode: povezan servis u lakom režimu sam postaje foreground (da nastavi i kad se
+     * Pristupačnost isključi), a u punom režimu sa Pristupačnošću foreground se gasi (povezana instanca ostaje).
+     */
+    private void syncLight() {
+        if (store == null) return;
+        boolean light = store.lightNow();
+        if (connected ? !light && !lightRunning : !lightRunning) return; // pun rad sa Pristupačnošću: bez upita sistemu
+        long now = SystemClock.elapsedRealtime();
+        boolean leaveForFull = connected && !light; // povezan u punom režimu: foreground se gasi bez provere dozvola
+        // Dozvole (upit sistemu) najviše na 30 s.
+        if (!leaveForFull && lightRunning && now - lightCheckedAt < 30000L) return;
+        lightCheckedAt = now;
+        boolean want = !leaveForFull && LightMode.foreground(light, connected, ForegroundApp.granted(this),
+                Settings.canDrawOverlays(this));
+        if (want && !lightRunning && now - lightTriedAt > 60000L) {
+            lightTriedAt = now; // neuspeh (pokretanje iz pozadine) se ne ponavlja na svaki otkucaj
+            startLight(this);
+        } else if (!want && lightRunning) {
+            // Pun rad sa Pristupačnošću, ili laki bez dozvole (korisnik ju je povukao): obaveštenje i servis se gase.
+            lightRunning = false;
+            if (!connected) guarded("lightStopped", () -> store.guardLog.guardStopped());
+            stopForeground(STOP_FOREGROUND_REMOVE);
+            stopSelf();
+        }
+    }
+
+    /** NAZAD / POČETNI EKRAN; bez Pristupačnosti (laki režim) oba vode na početni ekran. */
+    public void globalAction(int action) {
+        if (connected) {
+            performGlobalAction(action);
+            return;
+        }
+        guarded("home", () -> startActivity(new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)));
     }
 
     /** Delovi servisa koji crtaju i čitaju ekran. */
     private void connectParts() {
         browserMonitor = new BrowserMonitor(this);
-        overlayWindow = new GuardOverlayWindow(this);
+        overlayWindow = new GuardOverlayWindow(this, () -> connected);
         pauseOverlayContent = new PauseOverlayContent(this, h, store, new PauseOverlayContent.Actions() {
             @Override public boolean isVisible(View view) { return screen.overlay == view; }
             @Override public String appLabel(String packageName) { return GuardService.this.appLabel(packageName); }
             @Override public void close() {
                 pausePkg = null;
-                performGlobalAction(GLOBAL_ACTION_HOME);
+                globalAction(GLOBAL_ACTION_HOME);
                 h.removeCallbacks(recheckSoon);
                 h.postDelayed(recheckSoon, 600L);
             }
@@ -368,7 +491,7 @@ public class GuardService extends AccessibilityService {
     /** Događaji, prijemnici i otkucaj; otkucaj se zakazuje i kad neki korak pre njega pukne. */
     private void connectSystem() {
         try {
-            AccessibilityServiceInfo info = getServiceInfo();
+            AccessibilityServiceInfo info = connected ? getServiceInfo() : null;
             if (info != null) {
                 info.eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
                         | AccessibilityEvent.TYPE_WINDOWS_CHANGED;
@@ -381,6 +504,12 @@ public class GuardService extends AccessibilityService {
         } catch (Throwable error) {
             GuardDiagnostics.report("serviceInfo", error);
         }
+        watched = null; // spisak paketa se ponovo šalje Pristupačnosti
+        if (systemOn) {
+            safeCheck();
+            return;
+        }
+        systemOn = true;
 
         try {
             IntentFilter f = new IntentFilter();
@@ -438,6 +567,7 @@ public class GuardService extends AccessibilityService {
             usageOk = ForegroundApp.granted(this);
             usageCheckedAt = now;
         }
+        if (!connected) return; // laki režim: Pristupačnosti se nema šta poslati
         Set<String> want = new HashSet<>();
         if (!usageOk || store.focus.focusActive()) {
             // Bez zapisa o korišćenju (ili tokom fokusa) prate se sve aplikacije sa ikonom i sistemski ekrani, ali ne i navigacija.
@@ -485,9 +615,7 @@ public class GuardService extends AccessibilityService {
             CharSequence p = event.getPackageName(), cls = event.getClassName();
             if (p != null && store != null && !kinds.quiet(p.toString())) ruledSeenAt = System.currentTimeMillis();
             if (p != null && cls != null) {
-                String c = cls.toString();
-                // Pamti se samo ekran aplikacije, ne sistemski dijalozi i delovi ekrana.
-                if (c.contains(".") && !c.startsWith("android.") && !c.startsWith("androidx.")) activityOf.put(p.toString(), c);
+                rememberActivity(p.toString(), cls.toString());
             }
             if (p != null && !p.toString().equals(rawPkg) && !TRANSPARENT.contains(p.toString()) && store != null) {
                 // Nova aplikacija napred: zavesa odmah ako će biti blokirana, i provera bez čekanja.
@@ -610,6 +738,13 @@ public class GuardService extends AccessibilityService {
 
     @Override
     public boolean onUnbind(Intent intent) {
+        connected = false;
+        // Laki servis (ili pun režim sa dozvolama za laki) radi dalje bez Pristupačnosti.
+        if (lightRunning || startLight(this)) {
+            guarded("unbindOverlay", screen::hideOverlay);
+            if (overlayWindow != null) guarded("unbindCover", overlayWindow::uncover);
+            return false;
+        }
         if (store != null) {
             store.guardLog.guardStopped();
         }
@@ -625,6 +760,9 @@ public class GuardService extends AccessibilityService {
 
     private void shutdown() {
         running = false;
+        connected = false;
+        lightRunning = false;
+        systemOn = false;
         h.removeCallbacksAndMessages(null);
         unwatchCallMode();
         if (foreground != null) {
@@ -709,6 +847,11 @@ public class GuardService extends AccessibilityService {
         return callOwner.passes(pkg, callScreen, inCall);
     }
 
+    /** Pamti se samo ekran aplikacije, ne sistemski dijalozi i delovi ekrana. */
+    private void rememberActivity(String p, String c) {
+        if (p != null && c != null && c.contains(".") && !c.startsWith("android.") && !c.startsWith("androidx.")) activityOf.put(p, c);
+    }
+
     /** Glavna odluka: šta je na ekranu i da li to treba blokirati. */
     private void check() {
         observationValid = false;
@@ -741,7 +884,14 @@ public class GuardService extends AccessibilityService {
         // Dok je zavesa gore upravo se otvara aplikacija sa pravilom: prozor se mora pročitati.
         boolean covering = overlayWindow != null && overlayWindow.covered();
         boolean fromForeground = false; // paket od Androida, prozor nije čitan
-        if (usageOk && foreground != null && screen.overlay == null && !covering) {
+        if (!connected && usageOk && foreground != null) {
+            // Laki režim: bez Pristupačnosti prozor se ne čita, aplikaciju napred uvek javlja Android.
+            pkg = foreground.current();
+            fromForeground = pkg != null;
+            lightClass = foreground.currentClass();
+            rememberActivity(pkg, lightClass); // ekran poziva (callPasses) i bez Pristupačnosti
+        }
+        if (pkg == null && usageOk && foreground != null && screen.overlay == null && !covering) {
             String fg = foreground.current();
             // Android ponekad kasni sa zapisom: ako je posle njega javila aplikacija sa pravilom, čita se prozor.
             if (fg != null && !TRANSPARENT.contains(fg) && kinds.quiet(fg)
@@ -750,7 +900,7 @@ public class GuardService extends AccessibilityService {
                 fromForeground = true;
             }
         }
-        if (pkg == null) {
+        if (pkg == null && connected) {
             // Prvo se uzme samo vrh ekrana, bez ostatka sadržaja: za aplikacije bez pravila to je sve što treba.
             root = Build.VERSION.SDK_INT >= 33 ? getRootInActiveWindow(0) : getRootInActiveWindow();
             pkg = root == null || root.getPackageName() == null ? null : root.getPackageName().toString();
@@ -782,7 +932,7 @@ public class GuardService extends AccessibilityService {
             return;
         }
         boolean quiet = screen.overlay == null && kinds.quiet(pkg) && (kinds.handsOff(pkg) || windows.appWindowCount() < 2);
-        if (!quiet && root == null) {
+        if (!quiet && root == null && connected) {
             blockOtherWindows(frontId);
             return;
         }
@@ -798,7 +948,8 @@ public class GuardService extends AccessibilityService {
         visibleHosts.clear();
         secondaryContentPackages.clear();
         String raw = pkg;
-        if (screen.overlay != null && pkg.equals(getPackageName())) {
+        // Bez Pristupačnosti Android javlja samo aktivnosti, ne naš prozor: naš paket napred je ekran Čuvara.
+        if (connected && screen.overlay != null && pkg.equals(getPackageName())) {
             if (currentPkg == null) return;
             pkg = currentPkg; // ponovo proveri pravila i dok je naš ekran preko aplikacije
             raw = rawPkg != null ? rawPkg : currentPkg;
@@ -855,11 +1006,11 @@ public class GuardService extends AccessibilityService {
             return;
         }
 
-        if (store.protectNow() && kinds.guardsSelf(root, pkg)) {
+        if (connected && store.protectNow() && kinds.guardsSelf(root, pkg)) {
             // Ekran na kome bi Čuvar mogao da se isključi, zaustavi ili obriše: zatvori ga.
             screen.hideOverlay();
-            performGlobalAction(GLOBAL_ACTION_BACK);
-            performGlobalAction(GLOBAL_ACTION_HOME);
+            globalAction(GLOBAL_ACTION_BACK);
+            globalAction(GLOBAL_ACTION_HOME);
             long nowEl = SystemClock.elapsedRealtime();
             if (nowEl - protectToastAt > 5000L) {
                 protectToastAt = nowEl;
@@ -881,8 +1032,9 @@ public class GuardService extends AccessibilityService {
             return;
         }
 
-        String urlBarId = BrowserMonitor.addressViewId(raw);
-        boolean inApp = urlBarId == null && kinds.inAppBrowser(raw);
+        // Bez Pristupačnosti adresa se ne vidi: pregledač je obična aplikacija (sajtovi se ne blokiraju).
+        String urlBarId = connected ? BrowserMonitor.addressViewId(raw) : null;
+        boolean inApp = connected && urlBarId == null && kinds.inAppBrowser(raw);
         String apkHost = urlBarId == null && !inApp ? kinds.webApkHost(raw) : null;
         if (inApp != currentInApp) {
             currentInApp = inApp;
@@ -1028,7 +1180,7 @@ public class GuardService extends AccessibilityService {
      * Čuvar ih ne prima, pa ni aplikacije (npr. mape koje se stalno iscrtavaju) ne moraju da ih šalju.
      */
     private void setContentEvents(boolean on) {
-        if (on == contentEvents) return;
+        if (on == contentEvents || !connected) return;
         try {
             AccessibilityServiceInfo info = getServiceInfo();
             if (info == null) return;

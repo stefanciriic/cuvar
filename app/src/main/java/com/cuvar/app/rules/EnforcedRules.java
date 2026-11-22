@@ -20,6 +20,8 @@ public final class EnforcedRules {
     public final List<DailySchedule.Rule> schedules;
     public final boolean night;
     public final boolean protect;
+    /** pun rad sa Pristupačnošću; false = laki režim (strože = true) */
+    public final boolean full;
     /** aplikacije bez noćne blokade */
     public final Set<String> nightFree;
     /** aplikacije van ukupnog dnevnog limita */
@@ -28,7 +30,7 @@ public final class EnforcedRules {
     public final Set<String> links;
 
     public EnforcedRules(Map<String, AppRule> apps, Map<String, Integer> sites, List<DailySchedule.Rule> schedules,
-                         boolean night, boolean protect, Set<String> nightFree, Set<String> dayFree,
+                         boolean night, boolean protect, boolean full, Set<String> nightFree, Set<String> dayFree,
                          Set<String> links) {
         this.apps = Collections.unmodifiableMap(new HashMap<>(apps));
         this.sites = Collections.unmodifiableMap(new HashMap<>(sites));
@@ -37,6 +39,7 @@ public final class EnforcedRules {
         this.schedules = Collections.unmodifiableList(copies);
         this.night = night;
         this.protect = protect;
+        this.full = full;
         this.nightFree = Collections.unmodifiableSet(new HashSet<>(nightFree));
         this.dayFree = Collections.unmodifiableSet(new HashSet<>(dayFree));
         this.links = Collections.unmodifiableSet(new HashSet<>(links));
@@ -84,6 +87,7 @@ public final class EnforcedRules {
         return new EnforcedRules(apps, sites, schedules,
                 now.night || wanted.night,
                 now.protect || wanted.protect,
+                now.full || wanted.full,
                 RuleMerge.stricterExempt(now.nightFree, wanted.nightFree),
                 RuleMerge.stricterExempt(now.dayFree, wanted.dayFree),
                 links);
@@ -105,7 +109,8 @@ public final class EnforcedRules {
         for (DailySchedule.Rule r : before.schedules) {
             if (ModeHolds.loosens(r, byId(after.schedules, r.id))) return true;
         }
-        if ((before.night && !after.night) || (before.protect && !after.protect)) return true;
+        if ((before.night && !after.night) || (before.protect && !after.protect)
+                || (before.full && !after.full)) return true;
         if (!before.nightFree.containsAll(after.nightFree) || !before.dayFree.containsAll(after.dayFree)) return true;
         return !after.links.containsAll(before.links);
     }

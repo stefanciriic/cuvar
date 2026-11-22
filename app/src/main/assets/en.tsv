@@ -860,3 +860,32 @@ Pooštravanje važi odmah. Popuštanje se traži samo od 06:00 do 10:00 i važi 
 Isključivanje se traži samo od 06:00 do 10:00 i važi sutra u 06:00, pa tek tada Čuvar može da se ukloni.	Turning off can only be requested from 06:00 to 10:00 and applies tomorrow at 06:00; only then can Čuvar be removed.
 Uključivanje važi odmah. Isključivanje se traži samo od 06:00 do 10:00 i važi sutra u 06:00.	Turning on applies right away. Turning off can only be requested from 06:00 to 10:00 and applies tomorrow at 06:00.
 Zatraži isključivanje	Request turning off
+Laki režim	Light mode
+Čuvar radi u lakom režimu	Čuvar is running in light mode
+Bez Pristupačnosti: aplikacije se blokiraju, sajtovi ne.	Without Accessibility: apps are blocked, websites are not.
+Laki režim (bez Pristupačnosti) počinje	Light mode (without Accessibility) starts
+Način rada	Mode
+Lak (bez Pristupačnosti)	Light (without Accessibility)
+Pun · laki počinje sutra u 06:00	Full · light starts tomorrow at 06:00
+Pun (sa Pristupačnošću)	Full (with Accessibility)
+Pun režim koristi Pristupačnost: blokira aplikacije i sajtove 	Full mode uses Accessibility: it blocks apps and websites 
+i može da štiti Čuvara od isključivanja.\n\n	and can protect Čuvar from being turned off.\n\n
+Laki režim radi bez Pristupačnosti, uz Pristup korišćenju i Prikaz preko drugih aplikacija. 	Light mode works without Accessibility, using Usage access and Display over other apps. 
+Aplikacije se blokiraju uz kratko kašnjenje, ali sajtovi u pregledaču ne, zaštita od isključivanja 	Apps are blocked with a short delay, but websites in the browser are not, protection from turning off 
+ne važi, troši malo više baterije i stalno se vidi obaveštenje. 	does not apply, it uses a bit more battery and a notification is always shown. 
+Povratak na pun režim važi odmah. Do uključivanja Pristupačnosti Čuvar radi bez nje.	Going back to full mode applies right away. Until Accessibility is turned on, Čuvar works without it.
+Prelazak na laki režim je popuštanje: traži se samo od 06:00 do 10:00 i važi sutra u 06:00.	Switching to light mode is a loosening: it can only be requested from 06:00 to 10:00 and applies tomorrow at 06:00.
+Vrati pun režim	Back to full mode
+Zatraži laki režim	Request light mode
+Laki režim važi.	Light mode is on.
+Laki režim počinje sutra u 06:00.	Light mode starts tomorrow at 06:00.
+\n\nU lakom režimu (bez Pristupačnosti) zaštita ne važi.	\n\nIn light mode (without Accessibility) the protection does not apply.
+Bez Pristupačnosti (lako)	Without Accessibility (light)
+Dozvoli prikaz preko drugih aplikacija	Allow display over other apps
+U lakom režimu Čuvar tako prikazuje ekran blokade preko aplikacije. Pronađi „Čuvar“ i uključi dozvolu.	In light mode this is how Čuvar shows the block screen over an app. Find “Čuvar” and turn the permission on.
+Ne važi u lakom režimu (bez Pristupačnosti)	Does not apply in light mode (without Accessibility)
+●  Čuvar radi (lako)	●  Čuvar is running (light)
+Laki režim (bez Pristupačnosti): sajtovi u pregledaču se ne blokiraju, samo aplikacije.	Light mode (without Accessibility): websites in the browser are not blocked, only apps.
+Ne vide se ni aplikacije u podeljenom ekranu ili plutajućem prozoru.\n\n	Apps in split screen or a floating window are not seen either.\n\n
+Laki režim je zatražen, ali prvo dozvoli ono što fali.	Light mode is requested, but first allow what is missing.
+Dozvola se daje kad laki režim počne. Do tada zaštita od isključivanja zatvara ovaj ekran.	The permission can be granted once light mode starts. Until then, protection from turning off closes this screen.

@@ -105,6 +105,17 @@ became looser.
 - **Uninstall protection** (optional): closes the settings screens where Čuvar
   could be turned off in Accessibility, force-stopped or uninstalled. It never
   closes network, VPN or battery screens.
+- **Mode: full or light** (Settings → Mode). Full (default) works through
+  Accessibility. Light works without it, with only "Usage access" and "Display over
+  other apps", so there is no Android "full control" warning. In light mode all app
+  rules, modes, focus, the overall limit, the daily code and statistics work, but
+  **not** website blocking, uninstall protection, or apps in split screen and
+  picture-in-picture; blocking takes up to ~2 s, uses
+  a bit more battery and a permanent notification is shown. Switching full → light
+  is a loosening (06–10, effective tomorrow at 06:00); light → full applies
+  immediately. While Accessibility is off but these two permissions are granted,
+  Čuvar runs the light way in full mode too (after Čuvar is opened or the phone
+  restarts).
 
 ### 4. Order (what is shown when several rules apply)
 
@@ -215,7 +226,9 @@ unlocking. Settings → Language: Serbian Latin, Serbian Cyrillic, English or Ge
 
 1. On the [Releases](https://github.com/stefanciriic/cuvar/releases) page,
    download `cuvar.apk` from the latest release and install it.
-2. Open Čuvar and enable it in Settings → Accessibility.
+2. Open Čuvar and enable it in Settings → Accessibility. Or, without
+   Accessibility: "Without Accessibility (light)", then grant "Usage access" and
+   "Display over other apps" (light mode, see 3.).
 3. Recommended: grant "Usage access". Then Čuvar follows only apps with a rule and
    browsers, so it uses less battery.
 4. Turn off battery optimization for Čuvar so the phone does not kill it.

@@ -72,6 +72,10 @@ public class RulesActivity extends SubActivity {
                 + "7. Kod svake stavke pod „Ceo dan“ piše šta važi sada i ceo današnji dan, od 06:00 do 06:00.")
                 .secondary("Zatvori", null).show());
         content.addView(how, Ui.fill(this, 4));
+        if (store.lightNow()) {
+            content.addView(Ui.text(this, "Laki režim (bez Pristupačnosti): sajtovi u pregledaču se ne blokiraju, samo aplikacije.",
+                    13, Ui.MUTED, false), Ui.fill(this, 4));
+        }
 
         List<DailySchedule.Rule> rules = store.modes.schedulesNow();
         List<DailySchedule.Rule> next = store.modes.schedules();

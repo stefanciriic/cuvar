@@ -14,6 +14,8 @@ Poslednja izmena: 9. oktobar 2026.
 Kod ugrađenih pregledača proverava ograničen broj tekstualnih čvorova pri vrhu ekrana da bi pronašao domen,
 a na ekranima podešavanja traži samo naziv Čuvara radi zaštite od isključivanja.
 
+U lakom režimu (bez Pristupačnosti) Čuvar od Androida preko "Pristupa korišćenju" saznaje samo koja je aplikacija trenutno otvorena, a ekran za blokadu prikazuje uz dozvolu "Prikaz preko drugih aplikacija"; sadržaj prozora i adrese sajtova tada ne vidi.
+
 Ovo služi samo da bi Čuvar merio vreme po aplikacijama i sajtovima i prikazao ekran za blokadu preko onoga što si sam izabrao da blokiraš. Čuvar ne čuva niti šalje poruke, lozinke ili sadržaj stranica, ne snima ekran i ne izvršava radnje umesto tebe, osim povratka na početni ekran ili korak nazad sa blokiranog sadržaja i pauziranja zvuka dok je ekran za blokadu prikazan.
 
 ## Šta Čuvar čuva
@@ -42,7 +44,7 @@ Last updated: October 9, 2026.
 
 Čuvar is a self-control screen-time app. It is built so that no data leaves the phone.
 
-**What it accesses.** With your explicit in-app consent, Čuvar uses Android's AccessibilityService to inspect the active window. It uses the foreground app, supported browser address bars, a limited set of text nodes near the top of embedded browsers, and the Čuvar label on settings screens when protection is enabled. This is used only to measure time per app and site and to show a block screen over content you chose to block. It does not store or send page, message, or password text, does not record the screen, and performs no actions on your behalf other than going Home or Back from blocked content and pausing media while the block screen is shown.
+**What it accesses.** With your explicit in-app consent, Čuvar uses Android's AccessibilityService to inspect the active window. It uses the foreground app, supported browser address bars, a limited set of text nodes near the top of embedded browsers, and the Čuvar label on settings screens when protection is enabled. This is used only to measure time per app and site and to show a block screen over content you chose to block. It does not store or send page, message, or password text, does not record the screen, and performs no actions on your behalf other than going Home or Back from blocked content and pausing media while the block screen is shown. In light mode (without Accessibility) Čuvar learns only the foreground app from Android's "Usage access" and shows the block screen with the "Display over other apps" permission; it then sees no window content and no site addresses.
 
 **What it stores.** Time per app and site for the last 14 days, your rules, and a random secret key used to compute the daily code. All of it stays in the app's private storage on your phone, is excluded from cloud backup and device transfer, and is deleted when you uninstall the app.
 

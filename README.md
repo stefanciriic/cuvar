@@ -96,6 +96,16 @@ pri prvom pokretanju nove verzije svaka stavka takvog uključenog režima dobija
 - **Zaštita od isključivanja** (opciono): zatvara ekrane podešavanja na kojima bi
   se Čuvar isključio u Pristupačnosti, zaustavio ili obrisao. Nikad ne zatvara
   ekrane za mrežu, VPN ni bateriju.
+- **Način rada: pun ili laki** (Podešavanja → Način rada). Pun (podrazumevano) radi
+  preko Pristupačnosti. Laki radi bez nje, samo uz "Pristup korišćenju" i "Prikaz
+  preko drugih aplikacija", pa nema Androidovog upozorenja o "punoj kontroli". U
+  lakom režimu rade sva pravila za aplikacije, režimi, fokus, ukupni limit, šifra i
+  statistika, ali **ne** blokiranje sajtova, zaštita od isključivanja ni aplikacije
+  u podeljenom ekranu i plutajućem prozoru (slika u slici); blokada
+  kasni do ~2 s, troši malo više baterije i stalno se vidi obaveštenje. Prelazak
+  pun → laki je popuštanje (06–10, važi sutra u 06:00); laki → pun važi odmah. Dok
+  Pristupačnost nije uključena, a ove dve dozvole jesu, Čuvar radi na laki način
+  i u punom režimu (posle otvaranja Čuvara ili restarta telefona).
 
 ### 4. Redosled (šta se prikazuje kad važi više pravila)
 
@@ -194,7 +204,9 @@ otključavanja. Podešavanja → Jezik: srpski latinica, srpski ćirilica ili en
 
 1. Na stranici [Releases](https://github.com/stefanciriic/cuvar/releases)
    preuzmi `cuvar.apk` iz najnovijeg izdanja i instaliraj ga.
-2. Otvori Čuvara i uključi ga u Podešavanja → Pristupačnost.
+2. Otvori Čuvara i uključi ga u Podešavanja → Pristupačnost. Ili, bez
+   Pristupačnosti: "Bez Pristupačnosti (lako)" pa dozvoli "Pristup korišćenju" i
+   "Prikaz preko drugih aplikacija" (laki režim, vidi 3.).
 3. Preporučeno: dozvoli "Pristup korišćenju" (Usage access). Tada Čuvar prati
    samo aplikacije sa pravilom i pregledače, pa manje troši bateriju.
 4. Isključi optimizaciju baterije za Čuvara, da ga telefon ne gasi.

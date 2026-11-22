@@ -44,3 +44,4 @@ app/src/main/java/com/cuvar/app/rules/CodeRegimeMigration.java
 app/src/main/java/com/cuvar/app/rules/DayPlan.java
 app/src/main/java/com/cuvar/app/rules/ZoneSwitch.java
 app/src/main/java/com/cuvar/app/rules/CallOwner.java
+app/src/main/java/com/cuvar/app/rules/LightMode.java

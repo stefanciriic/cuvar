@@ -70,6 +70,8 @@ public final class Store {
     String eDay;
     boolean eNight;
     boolean eProtect;
+    /** Pun rad (sa Pristupačnošću) sada važi; false = laki režim. */
+    boolean eFull = true;
     /** Aplikacije koje noćna blokada ne zaključava, kako sada važi. */
     final Set<String> eNightFree = new HashSet<>();
     /** Aplikacije van ukupnog dnevnog limita, kako sada važi. */
@@ -240,10 +242,28 @@ public final class Store {
         return change(() -> sp.edit().putBoolean("protect", on).apply());
     }
 
-    /** Da li zaštita sada važi. */
+    /** Da li zaštita sada važi (u lakom režimu ne važi: bez Pristupačnosti ne može ni da radi). */
     public synchronized boolean protectNow() {
         roll();
-        return eApps == null ? protectSelf() : eProtect;
+        return (eApps == null ? protectSelf() : eProtect) && !lightNow();
+    }
+
+    // ---------- Laki režim (bez Pristupačnosti) ----------
+
+    /** Podešen laki režim. */
+    public synchronized boolean lightWanted() {
+        return sp.getBoolean("light", false);
+    }
+
+    /** Lak -> pun važi odmah; pun -> lak se traži 06:00–10:00 i važi sutra (inače false). */
+    public synchronized boolean setLight(boolean on) {
+        return change(() -> sp.edit().putBoolean("light", on).apply());
+    }
+
+    /** Da li laki režim sada važi. */
+    public synchronized boolean lightNow() {
+        roll();
+        return eApps == null ? lightWanted() : !eFull;
     }
 
     // Servis ova pravila pita više puta pri svakoj proveri ekrana, a menjaju se retko: računaju se jednom
@@ -560,6 +580,7 @@ public final class Store {
         eSites = parse(sp.getString("eSites", "{}"));
         eNight = sp.getBoolean("eNight", true);
         eProtect = sp.getBoolean("eProtect", false);
+        eFull = sp.getBoolean("eFull", true);
         eNightFree.clear();
         eNightFree.addAll(sp.getStringSet("eNightFree", Collections.emptySet()));
         eDayFree.clear();
@@ -628,7 +649,7 @@ public final class Store {
     void saveEnforced() {
         sp.edit().putString("eApps", eApps.toString()).putString("eSites", eSites.toString())
                 .putString("eSchedules", Modes.schedulesJson(eSchedules)).putString("eDay", eDay)
-                .putBoolean("eNight", eNight).putBoolean("eProtect", eProtect)
+                .putBoolean("eNight", eNight).putBoolean("eProtect", eProtect).putBoolean("eFull", eFull)
                 .putStringSet("eNightFree", new HashSet<>(eNightFree))
                 .putStringSet("eDayFree", new HashSet<>(eDayFree))
                 .putString("eLinks", new JSONArray(eLinks).toString()).apply();
@@ -665,7 +686,7 @@ public final class Store {
         for (Map.Entry<String, Integer> e : r.sites.entrySet()) s.put(e.getKey(), new JSONObject().put("limit", e.getValue()));
         return new JSONObject().put("apps", a).put("sites", s)
                 .put("schedules", new JSONArray(Modes.schedulesJson(r.schedules)))
-                .put("night", r.night).put("protect", r.protect)
+                .put("night", r.night).put("protect", r.protect).put("full", r.full)
                 .put("nightFree", new JSONArray(r.nightFree)).put("dayFree", new JSONArray(r.dayFree))
                 .put("links", new JSONArray(r.links));
     }
@@ -677,6 +698,7 @@ public final class Store {
         Modes.parseSchedules(sch == null ? "[]" : sch.toString(), schedules);
         return new EnforcedRules(appMap(a == null ? new JSONObject() : a), siteMap(s == null ? new JSONObject() : s),
                 schedules, o.optBoolean("night", false), o.optBoolean("protect", false),
+                o.optBoolean("full", true), // stari hold (pre lakog režima) = pun rad
                 stringSet(o.optJSONArray("nightFree")), stringSet(o.optJSONArray("dayFree")),
                 stringSet(o.optJSONArray("links")));
     }
@@ -700,6 +722,7 @@ public final class Store {
         final String apps0 = apps.toString(), sites0 = sites.toString(), links0 = links.toString();
         final List<DailySchedule.Rule> schedules0 = modes.schedules();
         final boolean protect0 = sp.getBoolean("protect", false);
+        final boolean light0 = sp.getBoolean("light", false);
         final boolean night0 = sp.getBoolean("night", false);
         final boolean hasNight0 = sp.contains("night");
         final Set<String> nightFree0 = nightFree(), dayFree0 = dayFree();
@@ -712,7 +735,7 @@ public final class Store {
             modes.schedules.addAll(schedules0);
             SharedPreferences.Editor ed = sp.edit().putString("apps", apps0).putString("sites", sites0)
                     .putString("links", links0).putString("schedules", modes.schedulesJson())
-                    .putBoolean("protect", protect0)
+                    .putBoolean("protect", protect0).putBoolean("light", light0)
                     .putStringSet("nightFree", nightFree0).putStringSet("dayFree", dayFree0);
             if (hasNight0) ed.putBoolean("night", night0); else ed.remove("night");
             ed.apply();
@@ -787,12 +810,12 @@ public final class Store {
 
     /** Ono što sada važi. */
     EnforcedRules nowRules() {
-        return new EnforcedRules(appMap(eApps), siteMap(eSites), eSchedules, eNight, eProtect, eNightFree, eDayFree, eLinks);
+        return new EnforcedRules(appMap(eApps), siteMap(eSites), eSchedules, eNight, eProtect, eFull, eNightFree, eDayFree, eLinks);
     }
 
     /** Ono što je podešeno. */
     EnforcedRules wantedRules() {
-        return new EnforcedRules(appMap(apps), siteMap(sites), modes.schedules, nightBlock(), protectSelf(),
+        return new EnforcedRules(appMap(apps), siteMap(sites), modes.schedules, nightBlock(), protectSelf(), !lightWanted(),
                 nightFree(), dayFree(), new HashSet<>(linkPairs()));
     }
 
@@ -810,6 +833,7 @@ public final class Store {
         for (DailySchedule.Rule s : r.schedules) eSchedules.add(DailySchedule.copy(s));
         eNight = r.night;
         eProtect = r.protect;
+        eFull = r.full;
         eNightFree.clear();
         eNightFree.addAll(r.nightFree);
         eDayFree.clear();
@@ -1120,6 +1144,7 @@ public final class Store {
         List<String> out = new ArrayList<>();
         if (eApps == null) return out;
         if (eProtect && !protectSelf()) out.add("Zaštita Čuvara od isključivanja se isključuje");
+        if (eFull && lightWanted()) out.add("Laki režim (bez Pristupačnosti) počinje");
         for (String pkg : nightFree()) {
             if (eNightFree.contains(pkg)) continue;
             String name = AppLabels.of(pm, pkg);
@@ -1231,7 +1256,7 @@ public final class Store {
             // put sa ispravnim ključem i vrednošću ne baca grešku; podaci ostaju kakvi su bili
         }
         sp.edit().putString("apps", apps.toString()).putString("sites", sites.toString()).putString("links", links.toString())
-                .putString("schedules", modes.schedulesJson()).putBoolean("night", eNight).putBoolean("protect", eProtect)
+                .putString("schedules", modes.schedulesJson()).putBoolean("night", eNight).putBoolean("protect", eProtect).putBoolean("light", !eFull)
                 .putStringSet("nightFree", new HashSet<>(eNightFree))
                 .putStringSet("dayFree", new HashSet<>(eDayFree))
                 .apply();
