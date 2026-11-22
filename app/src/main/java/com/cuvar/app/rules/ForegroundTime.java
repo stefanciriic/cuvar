@@ -81,6 +81,15 @@ public final class ForegroundTime {
         return out;
     }
 
+    /**
+     * Da li keširan zbir za dan treba ponovo računati: nema keša, ili keš ne pokriva ceo dan
+     * (računat je dok je dan trajao) i stariji je od freshMs. Ceo dan se ne računa ponovo.
+     */
+    public static boolean needsReload(boolean cached, long cachedUntil, long dayEnd, long ageMs, long freshMs) {
+        if (!cached) return true;
+        return cachedUntil < dayEnd && ageMs > freshMs;
+    }
+
     private static void add(Map<String, Long> out, String pkg, long start, long end, long from) {
         long s = Math.max(start, from);
         if (end <= s) return;

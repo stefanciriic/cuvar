@@ -31,6 +31,7 @@ public final class AndroidUsage {
     private static final long TODAY_FRESH_MS = 30000L;
     private static final Map<String, Map<String, Long>> CACHE = new HashMap<>();
     private static final Map<String, Long> CACHED_AT = new HashMap<>();
+    private static final Map<String, Long> CACHED_UNTIL = new HashMap<>();
     private static final Set<String> PENDING = new HashSet<>();
     private static final ExecutorService WORKER = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "cuvar-usage-day");
@@ -48,8 +49,11 @@ public final class AndroidUsage {
         synchronized (CACHE) {
             Map<String, Long> m = CACHE.get(dayKey);
             Long at = CACHED_AT.get(dayKey);
-            boolean stale = m == null || (dayKey.equals(todayKey) && at != null
-                    && SystemClock.elapsedRealtime() - at > TODAY_FRESH_MS);
+            Long until = CACHED_UNTIL.get(dayKey);
+            // Dan računat dok je trajao ne pokriva ceo dan: posle ponoći se računa ponovo.
+            boolean stale = m == null || at == null || until == null
+                    || ForegroundTime.needsReload(true, until, dayEnd(dayKey),
+                    SystemClock.elapsedRealtime() - at, TODAY_FRESH_MS);
             if (stale && PENDING.add(dayKey)) {
                 try {
                     WORKER.execute(() -> load(app, dayKey, onReady));
@@ -61,15 +65,27 @@ public final class AndroidUsage {
         }
     }
 
+    /** Kraj dana "yyyyMMdd" (početak sledećeg) u ms. */
+    private static long dayEnd(String dayKey) {
+        try {
+            Calendar cal = Calendar.getInstance();
+            cal.setTime(new SimpleDateFormat("yyyyMMdd", Locale.US).parse(dayKey));
+            cal.add(Calendar.DAY_OF_MONTH, 1);
+            return cal.getTimeInMillis();
+        } catch (java.text.ParseException bad) {
+            return Long.MIN_VALUE; // neispravan ključ: smatra se pokrivenim, bez ponovnog računanja
+        }
+    }
+
     private static void load(Context c, String dayKey, Runnable onReady) {
         boolean ok = false;
         try {
             Calendar cal = Calendar.getInstance();
             cal.setTime(new SimpleDateFormat("yyyyMMdd", Locale.US).parse(dayKey));
             long from = cal.getTimeInMillis();
-            cal.add(Calendar.DAY_OF_MONTH, 1);
+            long end = dayEnd(dayKey);
             // Sat telefona je ovde potreban: Android beleži događaje po njemu (samo prikaz, ne pravila).
-            long to = Math.min(cal.getTimeInMillis(), System.currentTimeMillis());
+            long to = Math.min(end, System.currentTimeMillis());
             Map<String, Long> result = Collections.emptyMap();
             if (to > from) {
                 UsageStatsManager usm = (UsageStatsManager) c.getSystemService(Context.USAGE_STATS_SERVICE);
@@ -91,6 +107,7 @@ public final class AndroidUsage {
             synchronized (CACHE) {
                 CACHE.put(dayKey, result);
                 CACHED_AT.put(dayKey, SystemClock.elapsedRealtime());
+                CACHED_UNTIL.put(dayKey, to);
             }
             ok = true;
         } catch (Throwable error) {

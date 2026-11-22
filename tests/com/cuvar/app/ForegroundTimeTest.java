@@ -37,6 +37,11 @@ public final class ForegroundTimeTest {
                 new Event(0, ForegroundTime.PAUSED, "a", "X"),
                 new Event(150, ForegroundTime.RESUMED, "b", "X")), 0, 100);
         check(m.isEmpty(), "pauza bez početka i događaj posle kraja se ne broje");
+
+        check(ForegroundTime.needsReload(false, 0, 1000, 0, 30), "nema keša: računa se");
+        check(ForegroundTime.needsReload(true, 500, 1000, 31, 30), "delimičan i star: ponovo");
+        check(!ForegroundTime.needsReload(true, 500, 1000, 10, 30), "delimičan i svež: ne");
+        check(!ForegroundTime.needsReload(true, 1000, 1000, 999999, 30), "ceo dan pokriven: nikad ponovo");
         System.out.println("Prošlo: " + checks + " provera ForegroundTime.");
     }
 
